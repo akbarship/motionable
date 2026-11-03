@@ -73,6 +73,14 @@ export const compose = ({plan: r, base, manifests, scripts, css = {}, gsap = GSA
     const start = x.cut - x.before;
     instances.push({id: `tr-${x.id}`, ref: x.component, kind: 'transition', start: sec(start), end: sec(x.cut + x.after), props: timedProps(x.component, x.props, start), ctx: {cut: sec(x.cut)}});
   }
+  // motion shots: the scene covers the frame for the shot, with the words spoken in it in absolute seconds
+  for (const s of r.shots) {
+    if (!s.scene) continue;
+    const c = s.scene;
+    if (!scripts[c.component]) throw new Error(`shot ${s.id}: scene ${c.component} has no component.js`);
+    instances.push({id: `sc-${s.id}`, ref: c.component, kind: 'scene', start: sec(s.start), end: sec(s.end), props: timedProps(c.component, c.props, s.start),
+      ctx: {words: c.words.map((wd) => ({text: wd.text, start: sec(s.start + wd.start), end: sec(s.start + wd.end)}))}});
+  }
 
   // b-roll shots: the clip covers the frame for the shot (muted, its own grade and crop), inside #fx so transitions move it too
   const brolls = r.shots.filter((s) => s.broll).map((s) => {
@@ -95,7 +103,8 @@ export const compose = ({plan: r, base, manifests, scripts, css = {}, gsap = GSA
   };
   const used = [...new Set(instances.map((i) => i.ref))];
   const fonts = tokenFonts(r.tokens.type);
-  const z = {caption: 20, overlay: 30, transition: 40} as Record<string, number>;
+  const z = {scene: 10, caption: 20, overlay: 30, transition: 40} as Record<string, number>;
+  const div = (i: Instance) => `<div id="${i.id}" class="clip mc mc-${i.kind}" data-start="${i.start}" data-duration="${r4(i.end - i.start)}" data-track-index="${z[i.kind] / 10}" style="z-index:${z[i.kind]}"></div>`;
 
   return `<!doctype html>
 <html>
@@ -123,12 +132,13 @@ ${fonts.css}
 <div id="root" data-composition-id="main" data-start="0" data-duration="${dur}" data-width="${w}" data-height="${h}" data-fps="${fps}" data-layout-allow-overflow>
 ${fonts.html}
 <div id="fx"><div id="cam"><video id="base" class="clip" src="${base}" data-start="0" data-duration="${dur}" data-track-index="0" playsinline data-has-audio="true"${r.audio.fadeOut ? ` data-fade-out="${r.audio.fadeOut}"` : ''}></video></div>
-${brolls}</div>
+${brolls}
+${instances.filter((i) => i.kind === 'scene').map(div).join('\n')}</div>
 ${sounds}
 <div id="captions" data-track-kind="captions">
 ${debug.map((b) => b.html).join('\n')}
 </div>
-${instances.map((i) => `<div id="${i.id}" class="clip mc mc-${i.kind}" data-start="${i.start}" data-duration="${r4(i.end - i.start)}" data-track-index="${z[i.kind] / 10}" style="z-index:${z[i.kind]}"></div>`).join('\n')}
+${instances.filter((i) => i.kind !== 'scene').map(div).join('\n')}
 </div>
 <script>
 const PAGE=${JSON.stringify(page)};

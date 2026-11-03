@@ -1,8 +1,10 @@
 {
   "name": "motionable",
-  "version": "0.1.0",
-  "description": "Edit talking-head footage into reels in your own style: Claude directs, the Motionable app shows and renders.",
+  "version": "0.3.0",
+  "description": "Type /motionable: the local Studio opens, you describe the video, Claude proposes a plan and edits it in your style.",
   "author": {
     "name": "akbarship"
-  }
+  },
+  "license": "MIT",
+  "repository": "https://github.com/akbarship/motionable"
 }

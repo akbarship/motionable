@@ -256,7 +256,15 @@ export type JobManifest = {
   title?: string;
   createdAt?: string;
   note?: string; // a sidecar note, e.g. which effect a reference shows
+  brief?: Brief;
   assets: Record<string, AssetEntry>;
+};
+/** What the user said the video is, from the Studio's new-video wizard: Claude's proposal is built on it. */
+export type Brief = {
+  about: string;
+  script?: string;
+  mode: 'edit' | 'voiceover'; // edit = talking-head footage; voiceover = a voice track, the picture is all motion/b-roll
+  style?: string; // name@version, or a style name still being built from references
 };
 
 // ---------- operations ----------

@@ -1,10 +1,11 @@
 // "Uslublar": the user's own design systems. A card per style: the brief, colours, type in its own fonts, the rules,
 // where every value came from (a reference moment, a lesson, or a guess), the studied references, the gated
 // components, the lessons, and a specimen on one of the user's projects. New styles start from reference reels;
-// Claude builds them (the prompt is one click away).
+// the user's Claude in chat builds them (a request from here; see Requests.tsx).
 import {useEffect, useRef, useState} from 'react';
 import {api, type Lesson, type StyleDetail, type StyleListItem} from './api';
 import {pick, useT, type Lang} from './i18n';
+import {RequestCard, useRequests} from './Requests';
 import {Lessons} from './Lessons';
 
 const fontsLink = (families: string[]) => families.length
@@ -214,8 +215,9 @@ const NewStyle = ({name, refresh, onError}: {name: string; refresh: number; onEr
     setBusy(null);
     api.styleRefs(name).then(setPending, () => {});
   };
-  const prompt = `Motionable: "${name}" uslubini studied referenslardan qur (${pending.join(', ')}). look {style: "${name}", ref} bilan har birini o'rgan, ` +
-    `save_style (refs va sources bilan), keyin kerakli komponentlarni write_component bilan yoz (har biri gate'dan o'tsin) va specimen ko'rsat.`;
+  // Claude in chat builds it: one request, its reply shows here
+  const {last, ask, cancel} = useRequests({style: name}, onError);
+  const busyReq = last?.status === 'queued' || last?.status === 'taken';
   return (
     <div className="scontent">
       <header className="shead"><h2>{name} <small>{t('noVersion')}</small></h2><p className="muted">{t('newStyleHint')}</p></header>
@@ -230,8 +232,11 @@ const NewStyle = ({name, refresh, onError}: {name: string; refresh: number; onEr
       {pending.length > 0 && (
         <div className="sec">
           <h3>{t('buildWithClaude')}</h3>
-          <code className="cmd">{prompt}</code>
-          <div className="btnrow"><button className="btn primary" onClick={() => navigator.clipboard.writeText(prompt).catch(() => {})}>{t('copyPrompt')}</button></div>
+          <p className="hint">{t('buildStyleHint')}</p>
+          <div className="btnrow">
+            <button className="btn primary" onClick={() => ask('style')} disabled={!!busy || busyReq}>{t('buildStyleGo')}</button>
+          </div>
+          {last && <RequestCard r={last} onCancel={cancel} />}
         </div>
       )}
     </div>

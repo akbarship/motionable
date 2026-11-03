@@ -43,7 +43,8 @@ export const scaffold = (dir: string, styleRef: string, home = HOME) => {
     sfx: [],
     audio: {loudness: style.rules.sound?.loudness ?? -14},
     notes: [],
-    camera: manifest.assets.trk_main ? {mode: 'track'} : {mode: 'fixed', why: 'no face track for this video'},
+    camera: manifest.brief?.mode === 'voiceover' ? {mode: 'off', why: 'voiceover: the picture is motion and b-roll'}
+      : manifest.assets.trk_main ? {mode: 'track'} : {mode: 'fixed', why: 'no face track for this video'},
   };
   const ctx = {style, transcript, track: doc.inputs.track ? readJson(path.join(dir, assetResolver(dir, manifest)(doc.inputs.track).path)) as never : null,
     components: loadComponents(styleRef, home), asset: assetResolver(dir, manifest)};

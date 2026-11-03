@@ -1,8 +1,9 @@
 // Projects on disk and their compact state for Claude (rule: diffs, not full plans).
 import fs from 'node:fs';
 import path from 'node:path';
-import {buildTimeline, lessonsFor, notesOf, parseAnchor, proposeCuts, resolveAnchor, resolvePlan, wordsOf, type Batch, type EditPlan, type Range, type Word} from '@motionable/plan';
+import {buildTimeline, lessonsFor, notesOf, parseAnchor, proposeCuts, resolveAnchor, resolvePlan, wordsOf, type Batch, type EditPlan, type JobManifest, type Range, type Word} from '@motionable/plan';
 import type {Job} from '@motionable/plan/store';
+import {currentProposal} from './proposal';
 import {HOME, commitBatch, loadJob, loadLessons, readJson, undo} from '@motionable/plan/store';
 
 export const projectsDir = (home = HOME) => path.join(home, 'projects');
@@ -57,7 +58,12 @@ const nextStep = (dir: string, analysis: ReturnType<typeof analysisSummary>, bus
   if (busy || Object.values(st).some((v) => v === 'running')) return 'analysis is running; check again shortly';
   if (st.sheet !== 'done') return 'analysis not finished (POST analyze)';
   if (!fs.existsSync(path.join(dir, 'analysis', 'transcript.json'))) return 'transcribe (paid, the user\'s ElevenLabs key): ask the user first';
-  if (!fs.existsSync(planFile(dir))) return 'choose a style and scaffold the plan; look at the contact sheet to pick a camera mode';
+  if (!fs.existsSync(planFile(dir))) {
+    const p = currentProposal(dir);
+    if (!p || p.status === 'revise') return p ? `revise the proposal: ${p.feedback ?? ''}`.trim() : 'write the proposal with propose_plan; the user approves it in the Studio';
+    if (p.status === 'proposed') return 'the user is reading the proposal: wait_for_studio';
+    return `approved: scaffold_plan {style: ${p.style ?? 'the brief\'s style'}}, then build it scene by scene`;
+  }
   return 'edit with apply_ops';
 };
 
@@ -86,16 +92,20 @@ const projectFiles = (dir: string) => {
   return files.length ? files : undefined;
 };
 
+/** The wizard's brief: Claude asks for it once (the MCP shim remembers), never again in the diffs after it. */
+const briefOf = (dir: string) => readJson<JobManifest>(path.join(dir, 'job.json')).brief;
+
 /** A compact summary: counts and the timeline length, never the whole plan. */
-export const projectState = (id: string, since = 0, busy = false, home = HOME) => {
+export const projectState = (id: string, since = 0, busy = false, home = HOME, withBrief = false) => {
   const dir = projectDir(id, home);
   const analysis = analysisSummary(dir);
-  if (!fs.existsSync(planFile(dir))) return {id, version: 0, style: null, analysis, next: nextStep(dir, analysis, busy)};
+  const brief = withBrief ? briefOf(dir) : undefined;
+  if (!fs.existsSync(planFile(dir))) return {id, version: 0, style: null, ...(brief ? {brief} : {}), analysis, next: nextStep(dir, analysis, busy), files: projectFiles(dir)};
   const plan = readJson<EditPlan>(planFile(dir));
   const fps = plan.canvas.fps;
   const frames = plan.timeline.segments.reduce((n, g) => n + Math.round((g.out - g.in) * fps), 0);
   return {
-    id, version: plan.version, style: plan.style, durationS: +(frames / fps).toFixed(2),
+    id, version: plan.version, style: plan.style, durationS: +(frames / fps).toFixed(2), ...(brief ? {brief} : {}),
     counts: {segments: plan.timeline.segments.length, removed: plan.timeline.removed.length, suggested: plan.timeline.suggested.length,
       shots: plan.shots.length, lines: plan.captions.lines.length, overlays: plan.overlays.length, transitions: plan.transitions.length, sfx: plan.sfx.length},
     camera: plan.camera?.mode ?? (plan.inputs.track ? 'track' : 'fixed'),

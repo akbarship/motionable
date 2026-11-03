@@ -17,9 +17,9 @@ export type PlayerHandle = {seek(t: number): void};
 
 const SETTLE_MS = 300; // page events closer than this make one reload
 
-type Props = {project: string; page: number; hold?: boolean; onTime(t: number): void};
+type Props = {project: string; page: number; onTime(t: number): void};
 
-export const Player = forwardRef<PlayerHandle, Props>(({project, page, hold = false, onTime}, ref) => {
+export const Player = forwardRef<PlayerHandle, Props>(({project, page, onTime}, ref) => {
   const el = useRef<HfPlayer>(null);
   const loaded = useRef<string | null>(null); // the src the player has, so the same one is never set twice
 
@@ -35,7 +35,7 @@ export const Player = forwardRef<PlayerHandle, Props>(({project, page, hold = fa
 
   useEffect(() => {
     const p = el.current;
-    if (!p || hold) return; // a drag in progress: reload when it's over
+    if (!p) return;
     const src = `/p/${project}/index.html?v=${page}`;
     if (loaded.current === src) return;
     const first = loaded.current === null || !loaded.current.startsWith(`/p/${project}/`);
@@ -52,7 +52,7 @@ export const Player = forwardRef<PlayerHandle, Props>(({project, page, hold = fa
       p.setAttribute('src', src);
     }, first ? 0 : SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [project, page, hold]);
+  }, [project, page]);
 
   return <hyperframes-player ref={el} controls className="player" />;
 });

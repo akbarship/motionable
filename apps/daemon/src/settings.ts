@@ -1,12 +1,9 @@
-// Settings: the user's keys, language and data folder in <state>/config.json, plus the Claude Code connection (is
-// the CLI there, is the motionable MCP added). Keys never leave the daemon in full: the Studio sees them masked.
-import {spawn} from 'node:child_process';
+// Settings: the user's keys, language and data folder in <state>/config.json. Keys never leave the daemon in full:
+// the Studio sees them masked.
 import fs from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {HOME, STATE, readJson, writeJson} from '@motionable/plan/store';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const KEYS = ['elevenlabs', 'gemini'] as const;
 
 export type Config = {keys?: Partial<Record<(typeof KEYS)[number], string>>; lang?: 'uz' | 'en'; home?: string};
@@ -51,32 +48,4 @@ export const saveSettings = (change: {keys?: Record<string, string | null>; lang
   }
   writeJson(configFile(state), next);
   return publicSettings(state);
-};
-
-// ---------- Claude Code ----------
-const run = (args: string[], timeoutMs = 15000) => new Promise<{code: number | null; out: string}>((resolve) => {
-  const p = spawn('claude', args, {stdio: ['ignore', 'pipe', 'pipe'], env: process.env});
-  let out = '';
-  const timer = setTimeout(() => p.kill('SIGTERM'), timeoutMs);
-  p.stdout.on('data', (d) => (out += d));
-  p.stderr.on('data', (d) => (out += d));
-  p.on('error', (e) => { clearTimeout(timer); resolve({code: null, out: e.message}); });
-  p.on('close', (code) => { clearTimeout(timer); resolve({code, out: out.trim()}); });
-});
-
-/** The command that adds the Motionable MCP server to the user's Claude Code (all folders). */
-export const mcpAddArgs = () => ['mcp', 'add', '-s', 'user', 'motionable', '--', path.join(REPO, 'node_modules/.bin/tsx'), path.join(REPO, 'apps/mcp/src/main.ts')];
-
-export const claudeCodeStatus = async () => {
-  const v = await run(['--version'], 8000);
-  if (v.code !== 0) return {cli: false, version: null, mcp: 'unknown', command: `claude ${mcpAddArgs().join(' ')}`};
-  const m = await run(['mcp', 'get', 'motionable']);
-  const status = /Status:\s*(.+)/.exec(m.out)?.[1]?.trim();
-  return {cli: true, version: v.out.split('\n')[0], mcp: m.code === 0 ? (status ?? 'added') : 'missing', command: `claude ${mcpAddArgs().join(' ')}`};
-};
-
-export const connectClaudeCode = async () => {
-  const r = await run(mcpAddArgs());
-  if (r.code !== 0 && !/already exists/i.test(r.out)) throw new Error(r.out.slice(-300) || 'claude mcp add failed');
-  return claudeCodeStatus();
 };

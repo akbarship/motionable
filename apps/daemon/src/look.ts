@@ -10,7 +10,7 @@ import {HOME, commitBatch, loadJob, writeJson} from '@motionable/plan/store';
 import {scaffold} from '@motionable/plan/scaffold';
 import {frameStrip} from '@motionable/engine';
 import {buildPage} from './build';
-import {readReport} from './analyze';
+import {isVoiceover, readReport} from './analyze';
 import {projectDir} from './projects';
 import {referenceFile} from './styles';
 
@@ -75,6 +75,7 @@ export const look = async (a: LookArgs, home = HOME): Promise<Picture> => {
   if (a.project) {
     const dir = projectDir(a.project, home);
     if (!span) {
+      if (isVoiceover(dir)) throw new Error('a voiceover has no footage to look at: look {project, plan: true} shows the edit');
       const file = path.join(dir, 'analysis', 'contact.jpg');
       if (!fs.existsSync(file)) throw new Error('no contact sheet yet: the analysis is still running');
       return {file, info: {kind: 'sheet', columns: 8, tileSeconds: readReport(dir).sheetTimes ?? []}};

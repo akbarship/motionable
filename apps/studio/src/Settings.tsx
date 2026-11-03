@@ -1,21 +1,20 @@
-// Settings: the user's own keys (stored whole on this computer, shown masked), language, data folder, and the link
-// to their Claude Code: is the CLI there, is the Motionable MCP added, add it with one click.
-import {useEffect, useState} from 'react';
-import {api, type ClaudeCode, type SettingsInfo} from './api';
+// Settings: the user's own keys (stored whole on this computer, shown masked), language, data folder, and whether
+// Claude in chat is connected (it connects itself with /motionable).
+import {useContext, useEffect, useState} from 'react';
+import {api, type SettingsInfo} from './api';
+import {ClaudePill, PresenceContext} from './Requests';
 import {useT, type Lang} from './i18n';
 
-export const Settings = ({setLang, lastClaudeError, onError}: {setLang(l: Lang): void; lastClaudeError: string | null; onError(m: string): void}) => {
+export const Settings = ({setLang, onError}: {setLang(l: Lang): void; onError(m: string): void}) => {
   const t = useT();
   const [s, setS] = useState<SettingsInfo | null>(null);
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [home, setHome] = useState('');
-  const [cc, setCc] = useState<ClaudeCode | null>(null);
-  const [busy, setBusy] = useState(false);
+  const presence = useContext(PresenceContext);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api.settings().then((x) => { setS(x); setHome(x.home); }, (e) => onError(e.message));
-    api.claudeCode().then(setCc, () => setCc(null));
   }, [onError]);
 
   const save = async (change: Parameters<typeof api.saveSettings>[0]) => {
@@ -29,18 +28,7 @@ export const Settings = ({setLang, lastClaudeError, onError}: {setLang(l: Lang):
       onError((e as Error).message);
     }
   };
-  const connect = async () => {
-    setBusy(true);
-    try {
-      setCc(await api.connectClaudeCode());
-    } catch (e) {
-      onError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
   if (!s) return <main className="setup" />;
-  const oauth = lastClaudeError && /oauth|authenticat|login/i.test(lastClaudeError);
 
   return (
     <main className="setup">
@@ -82,24 +70,9 @@ export const Settings = ({setLang, lastClaudeError, onError}: {setLang(l: Lang):
         </div>
 
         <div className="sec">
-          <h3>Claude Code</h3>
-          {!cc && <p className="hint">{t('running')}</p>}
-          {cc && (
-            <>
-              <ul className="checks">
-                <li className={cc.cli ? 'ok' : 'bad'}>{cc.cli ? `✓ ${t('ccFound')} (${cc.version})` : `✕ ${t('ccMissing')}`}</li>
-                <li className={/connected|added/i.test(cc.mcp) ? 'ok' : 'bad'}>
-                  {/connected|added/i.test(cc.mcp) ? `✓ ${t('ccConnected')} (${cc.mcp})` : `✕ ${t('ccNotConnected')}`}
-                </li>
-                {oauth && <li className="bad">✕ {t('ccLogin')}</li>}
-              </ul>
-              {cc.cli && !/connected|added/i.test(cc.mcp) && (
-                <div className="btnrow"><button className="btn primary" onClick={connect} disabled={busy}>{busy ? t('running') : t('ccConnect')}</button></div>
-              )}
-              <p className="hint">{t('ccCommand')}</p>
-              <code className="cmd">{cc.command}</code>
-            </>
-          )}
+          <h3>Claude</h3>
+          <ClaudePill p={presence} />
+          {presence.status === 'offline' && <p className="hint">{t('claudeOfflineHint')}</p>}
         </div>
       </div>
     </main>

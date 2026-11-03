@@ -4,14 +4,20 @@ export type ViewRange = {k: number; from?: number; to?: number; kind: string; wh
 export type ViewLine = {id: string; words: number[]; role: string; hidden: boolean; component: string | null; props: Record<string, unknown> | null};
 export type Note = {id: string; text: string; status: 'open' | 'done'; at?: string; to?: string; by?: string; reply?: string; t?: number; tEnd?: number};
 export type FileEntry = {id: string; kind: string; name: string; bytes: number; durationS?: number; w?: number; h?: number; thumb?: string};
-export type ClaudeRun = {status: 'running' | 'done' | 'failed' | 'stopped'; startedAt: string; steps: string[]; result?: string; costUsd?: number};
+export type Brief = {about: string; script?: string; mode: 'edit' | 'voiceover'; style?: string};
+export type Proposal = {v: number; at: string; status: 'proposed' | 'approved' | 'revise'; feedback?: string; summary: string; style?: string;
+  durationS: number; cutS: number; scenes: {from: number; to: number; title: string; what: string; why: string}[];
+  cuts?: {from: number; to: number; why: string}[]; audio?: string; delivery?: string};
+export type RequestKind = 'plan' | 'revise' | 'approve' | 'notes' | 'style';
+export type StudioRequest = {id: string; kind: RequestKind; project?: string; style?: string; text?: string; at: string;
+  status: 'queued' | 'taken' | 'done' | 'cancelled'; takenAt?: string; doneAt?: string; reply?: string};
+export type Presence = {status: 'ready' | 'working' | 'offline'; request?: string; lastSeen?: string};
 export type Lesson = {id: string; scope: string; text: string; rule?: {kind: string; [k: string]: unknown}; source?: string; seen?: number; last?: string; at: string};
 export type Video = {project: string; file: string; kind: 'export' | 'draft' | 'looks' | 'delivery'; version: number; bytes: number; at: string; srt?: string};
-export type ProjectState = {id: string; version: number; style: string | null; next?: string; durationS?: number;
+export type ProjectState = {id: string; version: number; style: string | null; next?: string; durationS?: number; brief?: Brief;
   analysis?: {steps?: Record<string, string>; warnings?: string[]}};
 export type StyleListItem = {name: string; versions: number[]; refs: number; components: string[]};
 export type SettingsInfo = {keys: Record<string, string | null>; lang: 'uz' | 'en'; home: string; restart: boolean};
-export type ClaudeCode = {cli: boolean; version: string | null; mcp: string; command: string};
 type TypeTok = {font: string; weight: number; size: number; caps?: boolean; fill?: string};
 export type StyleDetail = {
   ref: string; brief: string;
@@ -60,8 +66,6 @@ export const api = {
   specimen: (project: string, style: string) => post<{image: string; mime: string}>('/api/look', {project, style, from: 0, to: 8}),
   settings: () => fetch('/api/settings').then((r) => json<SettingsInfo>(r)),
   saveSettings: (change: {keys?: Record<string, string | null>; lang?: string; home?: string}) => post<SettingsInfo>('/api/settings', change),
-  claudeCode: () => fetch('/api/claude-code').then((r) => json<ClaudeCode>(r)),
-  connectClaudeCode: () => post<ClaudeCode>('/api/claude-code/connect'),
   state: (id: string) => fetch(`/api/projects/${id}/state`).then((r) => json<ProjectState>(r)),
   styles: () => fetch('/api/styles').then((r) => json<StyleListItem[]>(r)),
   /** One video into the inbox, with upload progress; the project is created from inbox paths afterwards. */
@@ -77,7 +81,8 @@ export const api = {
     x.onerror = () => reject(new Error('upload failed'));
     x.send(file);
   }),
-  createProject: (files: string[], title?: string) => post<{id: string}>('/api/projects', {files, title}),
+  createProject: (files: string[], o: {title?: string; brief?: Brief; then?: {transcribe?: boolean; plan?: boolean}} = {}) =>
+    post<{id: string}>('/api/projects', {files, ...o}),
   transcribe: (id: string) => post<{words: number; lowConfidence: number; warnings: string[]}>(`/api/projects/${id}/transcribe`, {}),
   scaffold: (id: string, style: string) => post<{version: number}>(`/api/projects/${id}/scaffold`, {style}),
   files: (id: string) => fetch(`/api/projects/${id}/files`).then((r) => json<FileEntry[]>(r)),
@@ -98,9 +103,13 @@ export const api = {
   lessons: (style: string) => fetch(`/api/lessons?style=${encodeURIComponent(style)}`).then((r) => json<Lesson[]>(r)),
   addLesson: (l: Omit<Lesson, 'id' | 'at'>) => post<Lesson>('/api/lessons', l),
   removeLesson: (id: string) => fetch(`/api/lessons/${id}`, {method: 'DELETE'}).then((r) => json<{removed: string}>(r)),
-  claude: (id: string) => fetch(`/api/projects/${id}/claude`).then((r) => json<{prompt: string; run: ClaudeRun | null}>(r)),
-  startClaude: (id: string) => post<ClaudeRun>(`/api/projects/${id}/claude`),
-  stopClaude: (id: string) => fetch(`/api/projects/${id}/claude`, {method: 'DELETE'}).then((r) => json<{stopped: boolean}>(r)),
+  proposals: (id: string) => fetch(`/api/projects/${id}/proposal`).then((r) => json<Proposal[]>(r)),
+  // the bridge to Claude in chat: is it here, what was asked, ask it something
+  presence: () => fetch('/api/claude').then((r) => json<Presence>(r)),
+  requests: (q: {project?: string; style?: string}) =>
+    fetch(`/api/requests?${new URLSearchParams(q as Record<string, string>)}`).then((r) => json<StudioRequest[]>(r)),
+  ask: (req: {kind: RequestKind; project?: string; style?: string; text?: string}) => post<StudioRequest>('/api/requests', req),
+  cancelRequest: (id: string) => fetch(`/api/requests/${id}`, {method: 'DELETE'}).then((r) => json<StudioRequest>(r)),
 };
 
 export const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;

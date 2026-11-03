@@ -1,0 +1,13 @@
+{
+  "name": "motionable",
+  "owner": {"name": "akbarship"},
+  "metadata": {"description": "Motionable: edit talking-head footage and voiceovers into reels in your own style."},
+  "plugins": [
+    {
+      "name": "motionable",
+      "source": "./",
+      "description": "Type /motionable: the local Studio opens, you describe the video, Claude proposes a plan and edits it in your style.",
+      "category": "productivity"
+    }
+  ]
+}

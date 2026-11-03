@@ -6,20 +6,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Fastify from 'fastify';
-import type {Batch} from '@motionable/plan';
+import type {Batch, Brief} from '@motionable/plan';
 import {HOME, STATE, deleteLesson, loadComponents, loadLessons, saveLesson} from '@motionable/plan/store';
 import {lessonsFor, type Lesson} from '@motionable/plan';
 import {buildPage} from './build';
 import {analyzeFree, createProject, readReport, transcribe} from './analyze';
 import {applyOps, cutCandidates, listProjects, projectDir, projectState, srtOf, studioView, undoLast} from './projects';
 import {listVideos} from './videos';
-import {claudeCodeStatus, connectClaudeCode, publicSettings, saveSettings} from './settings';
+import {publicSettings, saveSettings} from './settings';
 import {normalizeLoudness} from '@motionable/engine';
 import {scaffold} from '@motionable/plan/scaffold';
 import type {ComponentManifest, Style} from '@motionable/plan';
 import {look, type LookArgs} from './look';
 import {deleteFile, listFiles, saveUpload} from './files';
-import {claudeCommand, claudeStatus, notesPrompt, startClaude, stopClaude} from './claude';
+import {createQueue, forClaude} from './requests';
+import {decide, proposals, saveProposal, type ProposalInput} from './proposal';
 import {guard} from './guard';
 import {addReferences, listStyles, pendingRefs, saveStyle, styleDetail, stylesDir, writeComponent} from './styles';
 
@@ -59,12 +60,13 @@ const rebuild = (id: string) => {
 };
 
 const tasks = new Map<string, Promise<unknown>>(); // analysis tasks per project (see below)
+const requests = createQueue(undefined, emit); // the bridge to Claude in chat (see below)
 
 // ---------- API ----------
 app.get('/api/health', () => ({ok: true, pid: process.pid, home: HOME}));
 app.get('/api/projects', () => listProjects());
-app.get<{Params: {id: string}; Querystring: {since?: string}}>('/api/projects/:id/state', (req) =>
-  projectState(req.params.id, Number(req.query.since ?? 0), tasks.has(req.params.id)));
+app.get<{Params: {id: string}; Querystring: {since?: string; brief?: string}}>('/api/projects/:id/state', (req) =>
+  projectState(req.params.id, Number(req.query.since ?? 0), tasks.has(req.params.id), undefined, req.query.brief === '1'));
 app.post<{Params: {id: string}; Body: Batch}>('/api/projects/:id/ops', (req, reply) => {
   try {
     const r = applyOps(req.params.id, req.body);
@@ -130,13 +132,18 @@ app.put<{Params: {name: string}}>('/api/inbox/:name', async (req, reply) => {
     return fail400(reply, e);
   }
 });
-app.post<{Body: {files: string[]; id?: string; title?: string}}>('/api/projects', async (req, reply) => {
+// from the wizard: the brief rides along, and `then` runs the rest without the page: the paid transcript (the user
+// agreed in the wizard) and the plan request for Claude in chat
+app.post<{Body: {files: string[]; id?: string; title?: string; brief?: Brief; then?: {transcribe?: boolean; plan?: boolean}}}>('/api/projects', async (req, reply) => {
   const files = req.body.files ?? [];
   try {
-    const id = await createProject(files, {id: req.body.id, title: req.body.title});
+    const id = await createProject(files, {id: req.body.id, title: req.body.title, brief: req.body.brief});
     // the project has its own copies now: uploads waiting in the inbox go
     for (const f of files) if (path.dirname(path.dirname(path.resolve(f))) === INBOX) fs.rmSync(path.dirname(f), {recursive: true, force: true});
+    const then = req.body.then ?? {};
     void queue(id, () => analyzeFree(projectDir(id), onStep(id)));
+    if (then.transcribe) void queue(id, () => transcribe(projectDir(id), onStep(id)));
+    if (then.plan) void queue(id, async () => requests.add({kind: 'plan', project: id}));
     return {id, status: 'analyzing'};
   } catch (e) {
     return fail400(reply, e);
@@ -171,19 +178,56 @@ app.get<{Params: {id: string}}>('/api/projects/:id/sheet', (req, reply) => {
   return {image: fs.readFileSync(file).toString('base64'), mime: 'image/jpeg', times: readReport(dir).sheetTimes ?? [], columns: 8};
 });
 
-// ---------- Claude on the notes: the prompt to copy, or the user's Claude Code headless in the background ----------
-app.get<{Params: {id: string}}>('/api/projects/:id/claude', (req) =>
-  ({prompt: notesPrompt(req.params.id), run: claudeStatus(req.params.id), command: claudeCommand(req.params.id)}));
-app.post<{Params: {id: string}}>('/api/projects/:id/claude', (req, reply) => {
+// ---------- the bridge to Claude in chat: the Studio queues requests, Claude long-polls for them (wait_for_studio) ----------
+app.get('/api/claude', () => requests.presence());
+app.get<{Querystring: {project?: string; style?: string}}>('/api/requests', (req) => requests.list(req.query));
+app.post<{Body: {kind: string; project?: string; style?: string; text?: string}}>('/api/requests', (req, reply) => {
   try {
-    return startClaude(req.params.id, emit);
+    const b = req.body ?? {};
+    // the user's answer to the proposal is kept on it, then Claude is told
+    if ((b.kind === 'approve' || b.kind === 'revise') && b.project) {
+      if (b.kind === 'revise' && !b.text?.trim()) throw new Error('say what to change');
+      decide(projectDir(b.project), b.kind === 'approve' ? 'approved' : 'revise', b.text);
+      emit({type: 'proposal', project: b.project});
+    }
+    return requests.add(b);
   } catch (e) {
     return fail400(reply, e);
   }
 });
-app.delete<{Params: {id: string}}>('/api/projects/:id/claude', (req, reply) => {
+app.delete<{Params: {id: string}}>('/api/requests/:id', (req, reply) => {
   try {
-    return stopClaude(req.params.id);
+    return requests.cancel(req.params.id);
+  } catch (e) {
+    return fail400(reply, e);
+  }
+});
+// Claude's side: close the last request (done + reply), then wait up to `wait` seconds for the next one
+app.post<{Body: {done?: string; reply?: string; wait?: number}}>('/api/requests/next', async (req, reply) => {
+  try {
+    if (req.body?.done) requests.done(req.body.done, req.body.reply);
+    const gone = new AbortController();
+    reply.raw.on('close', () => gone.abort()); // the client went away (req.raw's close fires once the body is read)
+    const r = await requests.next(Math.min(Math.max(Number(req.body?.wait ?? 240), 0), 600) * 1000, gone.signal);
+    return r ? {request: forClaude(r)} : {idle: true, url: `http://127.0.0.1:${PORT}`};
+  } catch (e) {
+    return fail400(reply, e);
+  }
+});
+
+// ---------- the proposal: Claude writes it (propose_plan), the Studio shows every version ----------
+app.get<{Params: {id: string}}>('/api/projects/:id/proposal', (req, reply) => {
+  try {
+    return proposals(projectDir(req.params.id));
+  } catch (e) {
+    return fail400(reply, e);
+  }
+});
+app.post<{Params: {id: string}; Body: ProposalInput}>('/api/projects/:id/proposal', (req, reply) => {
+  try {
+    const p = saveProposal(projectDir(req.params.id), req.body ?? ({} as ProposalInput));
+    emit({type: 'proposal', project: req.params.id, v: p.v});
+    return {v: p.v, durationS: p.durationS, cutS: p.cutS, scenes: p.scenes.length};
   } catch (e) {
     return fail400(reply, e);
   }
@@ -219,7 +263,7 @@ app.delete<{Params: {id: string; key: string}}>('/api/projects/:id/files/:key', 
 app.get<{Params: {id: string; '*': string}}>('/api/projects/:id/media/*', (req, reply) =>
   sendFile(inside(path.join(projectDir(req.params.id), 'media'), req.params['*']), req.headers.range, reply));
 
-// ---------- settings: keys (masked), language, data folder; the Claude Code connection ----------
+// ---------- settings: keys (masked), language, data folder ----------
 app.get('/api/settings', () => publicSettings());
 app.post<{Body: {keys?: Record<string, string | null>; lang?: string; home?: string}}>('/api/settings', (req, reply) => {
   try {
@@ -228,15 +272,6 @@ app.post<{Body: {keys?: Record<string, string | null>; lang?: string; home?: str
     return fail400(reply, e);
   }
 });
-app.get('/api/claude-code', () => claudeCodeStatus());
-app.post('/api/claude-code/connect', async (req, reply) => {
-  try {
-    return await connectClaudeCode();
-  } catch (e) {
-    return fail400(reply, e);
-  }
-});
-
 // ---------- lessons: what the user rejected, kept (rule 2) ----------
 app.get<{Querystring: {style?: string}}>('/api/lessons', (req) => {
   const all = loadLessons();

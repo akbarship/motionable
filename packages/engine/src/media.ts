@@ -146,6 +146,15 @@ export const buildSource = async (files: string[], out: string, work: string) =>
   return {reasons, infos};
 };
 
+/** A voiceover's master source: the canvas as one flat colour, with the voice as its sound. Compose, build and
+ *  render then work as for footage (a base video the sound comes from); the picture is covered by motion and b-roll. */
+export const audioSource = async (audio: string, out: string, {w = 1080, h = 1920, fps = 30, color = '#000000'} = {}) => {
+  await ffmpeg(['-f', 'lavfi', '-i', `color=c=${color.replace('#', '0x')}:s=${w}x${h}:r=${fps}`, '-i', audio,
+    '-map', '0:v', '-map', '1:a', '-shortest', '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'stillimage', '-pix_fmt', 'yuv420p',
+    '-g', String(fps), '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', `${out}.part.mp4`]);
+  fs.renameSync(`${out}.part.mp4`, out);
+};
+
 /** Mono MP3 for transcription. */
 export const voiceAudio = async (src: string, out: string) => {
   await ffmpeg(['-i', src, '-vn', '-ac', '1', '-ar', '44100', '-b:a', '128k', `${out}.part.mp3`]);

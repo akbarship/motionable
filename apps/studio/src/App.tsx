@@ -1,19 +1,21 @@
 // The Studio's Montaj screen: files, preview, the inspector (transcript, cuts, captions, notes) and the timeline over
 // one project. The daemon's live events keep it in step with Claude: a plan change reloads the view, a rebuilt page
-// reloads the player, a background Claude run reports its steps.
+// reloads the player; the Claude pill says whether Claude in chat is waiting for the Studio.
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {api, type ClaudeRun, type ComponentInfo, type FileEntry, type Lesson, type Op, type View} from './api';
+import {api, type ComponentInfo, type FileEntry, type Lesson, type Op, type View} from './api';
 import {LangContext, useT, type Lang} from './i18n';
+import {ClaudePill, PresenceContext, usePresence} from './Requests';
 import {Player, type PlayerHandle} from './Player';
 import type {Sel} from './Transcript';
-import {Inspector, type Item, type Tab} from './Inspector';
+import {Inspector, type Tab} from './Inspector';
+import type {Item} from './Elements';
 import {Files} from './Files';
 import {Videos} from './Videos';
-import {NewProject} from './NewProject';
+import {NewVideo} from './NewVideo';
 import {Setup} from './Setup';
+import {Proposal, useProposals} from './Proposal';
 import {Settings} from './Settings';
 import {Styles} from './Styles';
-import {Timeline} from './Timeline';
 
 const stored = (k: string) => {
   try {
@@ -54,16 +56,16 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('transcript');
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [claude, setClaude] = useState<ClaudeRun | null>(null);
+  const presence = usePresence();
   const [item, setItem] = useState<Item | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [screen, setScreen] = useState<'edit' | 'styles' | 'videos' | 'settings'>('edit');
-  const [creating, setCreating] = useState(false);
+  const [screen, setScreen] = useState<'edit' | 'new' | 'styles' | 'videos' | 'settings'>('edit');
   const [setup, setSetup] = useState(false); // the project has no plan yet
   const [tick, setTick] = useState(0);
+  const [proposalAt, setProposalAt] = useState(0);
   const [stylesAt, setStylesAt] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const [videosAt, setVideosAt] = useState(0);
+  const proposals = useProposals(id, proposalAt);
   const player = useRef<PlayerHandle>(null);
   const idRef = useRef(id);
   idRef.current = id;
@@ -96,7 +98,6 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
       if (s.version > 0) reload(id);
     }, (e) => say(e.message));
     api.files(id).then(setFiles, () => setFiles([]));
-    api.claude(id).then((c) => setClaude(c.run), () => setClaude(null));
   }, [id, reload, say]);
 
   const loadLessons = useCallback((style: string) => api.lessons(style).then(setLessons, () => setLessons([])), []);
@@ -120,6 +121,7 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
       if (ev.type === 'lessons' && styleRef.current) return void loadLessons(styleRef.current);
       if (ev.project !== idRef.current) return;
       if (ev.type === 'analysis') setTick(Date.now());
+      if (ev.type === 'proposal') setProposalAt(Date.now());
       if (ev.type === 'plan') { setSetup(false); reload(ev.project); setStatus({kind: 'building'}); }
       if (ev.type === 'page') { setPage(Date.now()); setStatus({kind: 'idle'}); }
       if (ev.type === 'page-same') setStatus({kind: 'idle'}); // nothing on screen changed: the player keeps going
@@ -131,11 +133,6 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
       }
       if (ev.type === 'error') { setStatus({kind: 'error', text: ev.message}); say(ev.message); }
       if (ev.type === 'files') api.files(ev.project).then(setFiles, () => {});
-      if (ev.type === 'claude') {
-        setClaude((c) => ({status: ev.status, startedAt: c?.startedAt ?? new Date().toISOString(),
-          steps: ev.step ? [...(c?.status === 'running' ? c.steps : []), ev.step].slice(-30) : ev.status === 'running' && c?.status !== 'running' ? [] : c?.steps ?? [],
-          result: ev.result ?? (ev.status === 'running' ? undefined : c?.result)}));
-      }
     };
     return () => es.close();
   }, [reload, say, loadLessons]);
@@ -171,25 +168,6 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
     if (r) apply('studio: restore', [{op: 'range.restore', from: r.anchors[0], to: r.anchors[1]}]);
     setSel(null);
   };
-  const sendClaude = async () => {
-    if (!view || !window.confirm(t('sendConfirm'))) return;
-    try {
-      setClaude(await api.startClaude(view.id));
-    } catch (e) {
-      say((e as Error).message);
-    }
-  };
-  const stopClaude = () => view && api.stopClaude(view.id).catch((e) => say(e.message));
-  const copyPrompt = async () => {
-    if (!view) return;
-    try {
-      const {prompt} = await api.claude(view.id);
-      await navigator.clipboard.writeText(prompt);
-      say(t('copied'));
-    } catch (e) {
-      say((e as Error).message);
-    }
-  };
   const undo = async () => {
     if (!view) return;
     try {
@@ -215,6 +193,7 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
     : status.kind === 'rendered' ? `${t('rendered')} · ${status.text}` : status.kind === 'error' ? status.text : online ? t('live') : t('offline');
 
   return (
+    <PresenceContext.Provider value={presence}>
     <div className="app">
       <header className="top">
         <div className="brand"><i />Motionable</div>
@@ -223,10 +202,10 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
           <button role="tab" aria-selected={screen === 'styles'} className={screen === 'styles' ? 'on' : ''} onClick={() => setScreen('styles')}>{t('styles')}</button>
           <button role="tab" aria-selected={screen === 'videos'} className={screen === 'videos' ? 'on' : ''} onClick={() => setScreen('videos')}>{t('myVideos')}</button>
         </div>
-        <button className="iconbtn strong" onClick={() => setCreating(true)}>+ {t('newProject')}</button>
+        <button className={`iconbtn${screen === 'new' ? '' : ' strong'}`} onClick={() => setScreen('new')}>+ {t('newVideo')}</button>
         <button className={`iconbtn${screen === 'settings' ? ' strong' : ''}`} onClick={() => setScreen('settings')} aria-label={t('settings')} title={t('settings')}>⚙</button>
         {/* the project's own controls only where the project is open */}
-        {screen === 'edit' && (
+        {screen === 'edit' && !!projects?.length && (
           <label className="job">
             <span className="sr">{t('project')}</span>
             <select className="inp slim" value={id ?? ''} onChange={(e) => setId(e.target.value)} disabled={!projects?.length}>
@@ -236,6 +215,7 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
         )}
         {screen === 'edit' && view && <span className="pill">{view.style} · {t('plan')} v{view.version}</span>}
         <span className={`pill status ${status.kind}${online ? '' : ' off'}`} aria-live="polite"><span className="dot" />{statusText}</span>
+        <ClaudePill p={presence} />
         <div className="spacer" />
         {screen === 'edit' && view && (
           <>
@@ -258,32 +238,32 @@ const Studio = ({lang, setLang}: {lang: Lang; setLang(l: Lang): void}) => {
         )}
       </header>
 
-      {projects && !projects.length && <p className="empty">{t('noProjects')}</p>}
+      {screen === 'edit' && projects && !projects.length && (
+        <main className="setup"><div className="sheet hero">
+          <h2>{t('newVideo')}</h2><p className="muted">{t('noProjects')}</p>
+          <div className="btnrow"><button className="btn primary" onClick={() => setScreen('new')}>+ {t('newVideo')}</button></div>
+        </div></main>
+      )}
       {screen === 'styles' && <Styles lang={lang} projects={(projects ?? []).filter((p) => p.version > 0).map((p) => p.id)} refresh={stylesAt} onError={say} />}
-      {screen === 'settings' && <Settings setLang={setLang} lastClaudeError={claude?.status === 'failed' ? claude.result ?? null : null} onError={say} />}
+      {screen === 'settings' && <Settings setLang={setLang} onError={say} />}
       {screen === 'videos' && <Videos refresh={videosAt} onOpen={(p) => { setId(p); setScreen('edit'); }} />}
-      {creating && <NewProject onClose={() => setCreating(false)} onCreated={(nid) => {
-        setCreating(false); setScreen('edit'); refreshProjects().then(() => setId(nid));
-      }} />}
-      {screen === 'edit' && setup && id && <Setup project={id} tick={tick} onReady={() => { setSetup(false); refreshProjects(); reload(id); }}
-        onSettings={() => setScreen('settings')} onError={say} />}
+      {screen === 'new' && <NewVideo onError={say} onCreated={(nid) => { setScreen('edit'); refreshProjects().then(() => setId(nid)); }} />}
+      {screen === 'edit' && setup && id && proposals.length > 0 && <Proposal project={id} list={proposals} onError={say} />}
+      {screen === 'edit' && setup && id && !proposals.length && <Setup project={id} tick={tick} onSettings={() => setScreen('settings')} onError={say} />}
       {screen === 'edit' && !setup && view && id && (
         <>
           <main className="main">
             <Files project={id} files={files} onError={say} />
             <div className="stage">
-              <Player ref={player} project={id} page={page} hold={dragging} onTime={setNow} />
+              <Player ref={player} project={id} page={page} onTime={setNow} />
             </div>
             <Inspector view={view} lang={lang} components={components} line={line} item={item} lessons={lessons} onError={say} sel={sel} now={now} tab={tab} setTab={setTab}
-              onPick={pickWord} onCut={cut} onRestore={restore} seek={seek} claude={claude} sendClaude={sendClaude} stopClaude={stopClaude}
-              copyPrompt={copyPrompt} apply={apply} />
+              onPick={pickWord} onCut={cut} onRestore={restore} seek={seek} apply={apply} onItem={setItem} />
           </main>
-          <Timeline view={view} now={now} line={line} item={item} onSeek={seek} onLine={(l) => { setLine(l); setItem(null); setTab('captions'); }}
-            onItem={(kind, iid) => { setItem({kind, id: iid}); setTab('captions'); }} apply={apply} onDragging={setDragging}
-            onNote={() => setTab('notes')} />
         </>
       )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
+    </PresenceContext.Provider>
   );
 };

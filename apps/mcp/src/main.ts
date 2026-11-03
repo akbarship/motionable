@@ -53,6 +53,7 @@ const tool = <T>(fn: (a: T) => Promise<unknown>) => async (a: T) => {
 
 // the plan version Claude last saw per project, so get_project_state returns only what changed since then
 const seen = new Map<string, number>();
+const briefed = new Set<string>(); // projects whose brief Claude has read (it comes once)
 
 const server = new McpServer({name: 'motionable', version: '0.1.0'});
 
@@ -60,10 +61,11 @@ server.registerTool('list', {description: 'List projects (style, plan version) a
   tool(async () => call('GET', '/api/list')));
 
 server.registerTool('get_project_state', {
-  description: 'Compact state: changes since your last look, the user\'s files, open notes (do these first) and lessons; cuts: true adds retake/filler candidates.',
+  description: 'Compact state: the brief (first read only), changes since your last look, the user\'s files, open notes (do these first) and lessons; cuts: true adds retake/filler candidates.',
   inputSchema: {project: z.string(), since: z.number().int().optional(), cuts: z.boolean().optional().describe('add cut candidates: range.cut the sure ones, range.suggest the rest')},
 }, tool(async ({project, since, cuts}: {project: string; since?: number; cuts?: boolean}) => {
-  const s = await call('GET', `/api/projects/${project}/state?since=${since ?? seen.get(project) ?? 0}`);
+  const s = await call('GET', `/api/projects/${project}/state?since=${since ?? seen.get(project) ?? 0}${briefed.has(project) ? '' : '&brief=1'}`);
+  briefed.add(project);
   seen.set(project, s.version);
   return cuts ? {...s, cuts: await call('GET', `/api/projects/${project}/cuts`)} : s;
 }));
@@ -159,13 +161,35 @@ server.registerTool('render', {
   inputSchema: {project: z.string(), quality: z.enum(['draft', 'looks', 'delivery', 'export']).optional().describe('export: delivery render, −14 LUFS, SRT, into My videos')},
 }, tool(async ({project, quality}: {project: string; quality?: string}) => call('POST', `/api/projects/${project}/render`, {quality})));
 
-// the core set stays at 12 tools (rule 4); the rest only with MOTIONABLE_MCP_FULL=1
-if (process.env.MOTIONABLE_MCP_FULL === '1') {
-  server.registerTool('open_studio', {description: 'Return the Studio URL for the user to open.', inputSchema: {}},
-    tool(async () => {
-      await ensureDaemon();
-      return {url: base()};
-    }));
-}
+server.registerTool('propose_plan', {
+  description: 'Before editing: the proposal the user approves in the Studio (scenes in output seconds, cuts in source seconds, each with why).',
+  inputSchema: {
+    project: z.string(), summary: z.string().describe('2-3 sentences: what the user gets'), style: z.string().optional().describe('name@version'),
+    scenes: z.array(z.object({from: z.number(), to: z.number(), title: z.string(), what: z.string(), why: z.string()})).min(1),
+    cuts: z.array(z.object({from: z.number(), to: z.number(), why: z.string()})).optional(),
+    audio: z.string().optional().describe('music and SFX, one line'), delivery: z.string().optional().describe('format and length, one line'),
+  },
+}, tool(async ({project, ...p}: {project: string} & Record<string, unknown>) => call('POST', `/api/projects/${project}/proposal`, p)));
+
+// The bridge: the Studio queues requests (plan, revise, approve, notes, style); Claude waits here in chunks, does one,
+// and closes it with `done` + a one-line `reply` on the next call. Progress pings keep the client from timing out.
+const WAIT_S = Number(process.env.MOTIONABLE_WAIT_S ?? 240);
+server.registerTool('wait_for_studio', {
+  description: 'Wait for the next Studio request (first call starts the app and returns its URL); pass done + reply to close the last one.',
+  inputSchema: {done: z.string().optional().describe('id of the request you finished'), reply: z.string().optional().describe('one sentence for the Studio')},
+}, async ({done, reply}: {done?: string; reply?: string}, extra) => {
+  const token = extra._meta?.progressToken;
+  let n = 0;
+  const ping = token === undefined ? undefined : setInterval(() => {
+    extra.sendNotification({method: 'notifications/progress', params: {progressToken: token, progress: ++n}}).catch(() => {});
+  }, 20000);
+  try {
+    return out(await call('POST', '/api/requests/next', {done, reply, wait: WAIT_S}));
+  } catch (e) {
+    return fail(e);
+  } finally {
+    clearInterval(ping);
+  }
+});
 
 await server.connect(new StdioServerTransport());

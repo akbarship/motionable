@@ -1,6 +1,6 @@
 ---
 name: motionable
-description: Edit a talking-head video into a reel in the user's own style with the Motionable app (MCP). Use when the user asks to edit, cut, caption or animate a video, or to make a style from reference reels, in Motionable.
+description: Edit a talking-head video into a reel in the user's own style with the Motionable app (MCP). Use on /motionable, or when the user asks to edit, cut, caption or animate a video, or to make a style from reference reels, in Motionable.
 ---
 
 # Motionable
@@ -16,21 +16,40 @@ You direct; the app shows and renders. The plan (`edit-plan.json`) is the only t
 - The user edits in the Studio too. Call `get_project_state` before every batch and build on their changes.
 - Every op gets a short `why`.
 
+## /motionable (start here)
+1. `npm run -s setup` in the Motionable folder (the plugin folder, or the clone). `next` not `done` (an `optional:` step
+   counts as done): follow `references/onboarding.md`, then come back.
+2. `wait_for_studio` → first call starts the app and returns `{idle, url}`. Open the URL for the user
+   (`xdg-open` / `open` / `start`; in Claude Desktop the built-in browser beside the chat). Say in one line:
+   "Studio ochiq: yangi video boshlang, men shu yerdan kuzatyapman."
+3. Loop: `wait_for_studio` → a request `{id, kind, project|style, text, todo}` → do it → next call
+   `wait_for_studio {done: id, reply}` (one sentence the Studio shows) → it waits for the next one.
+   - Say each step in one line in the chat. `idle` back: just wait again, quietly.
+   - The user can press Esc and talk to you; when they're done, call `wait_for_studio` again.
+   - Paid steps (transcribe) the Studio has already confirmed with the user.
+
 ## Styles
 No style yet, or the user brings references: follow `references/style.md` (study → save_style →
 write_component → specimen → the user's OK).
 
-## New project
-1. `create_project {files}` (clips join in order) → poll `get_project_state` until `next` changes.
-2. `transcribe` is paid: ask the user first.
-3. `look {project}` once, then pick the camera with a one-line `why`:
-   - speaker centred and still → `fixed` (set `center` on the face);
-   - speaker moves, sits off-centre, or the video is landscape → `track`;
-   - screen recording or no face → `off`.
-4. `scaffold_plan {style}`, then `camera.set` with your pick. An older plan without `inputs.track` while the analysis has
-   one (`trk_main`): `input.set {key: 'track', asset: 'asset:trk_main@<v>'}`, so captions can keep off the face.
-5. `get_project_state {cuts: true}`: `range.cut` the sure ones (`kind`, `evidence`, `why` from the candidate), `range.suggest` the rest.
-   Never cut a discourse marker yourself; the user decides.
+## Requests from the Studio
+- `plan` (a new video from the wizard): `get_project_state {cuts: true}` once: the `brief` (about, script, mode, style)
+  comes on the first read only. Analysis running: wait. No transcript: ask in the chat (paid), `transcribe` on their OK.
+  `brief.style` without `@version` is still being built (its `style` request comes first): use its newest version.
+  1. A script: compare it with the transcript and fix misheard words with `word.setText` after scaffolding; build the
+     scenes on the script's beats (hook, points, CTA).
+  2. `look {project}` once (edit mode) and pick the camera with a one-line `why`:
+     speaker centred and still → `fixed` (set `center`); moves, off-centre or landscape → `track`; no face → `off`.
+  3. `propose_plan`: a 2–3 sentence `summary`, `scenes` in output seconds (`title`, `what` happens on screen,
+     `why`: the reference, the script or a lesson), `cuts` in source seconds with `why`, `audio`, `delivery`.
+     No edits yet. Reply: "Reja tayyor: N sahna, ~X s."
+- `revise`: `text` is the user's change in their words. A new `propose_plan`; `add_lesson` if it's a taste rule.
+- `approve`: `scaffold_plan {style}` (the proposal's), `camera.set` with your pick, then build it scene by scene:
+  `range.cut` the proposed cuts (`kind`, `evidence`, `why`), `range.suggest` the unsure ones (never cut a discourse
+  marker yourself), then captions, shots, overlays, transitions, sound. One `apply_ops` per idea. Never render.
+- `notes`: the Loop below. `style`: `references/style.md`.
+- Voiceover (`mode: voiceover`): the source is a flat picture under the voice; the camera is off. Every second
+  needs a shot that isn't the base: `motion` shots, `broll` from the user's files, overlays. `look` the plan, not the sheet.
 
 ## Loop
 1. `get_project_state` → what changed since your last look. Open `notes` (the user's, at second `t`) come first:

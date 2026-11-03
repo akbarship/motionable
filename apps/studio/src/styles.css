@@ -16,7 +16,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 button:disabled { opacity: .4; cursor: default }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0) }
-.app { display: grid; grid-template-rows: auto minmax(0,1fr) auto; height: 100vh; min-height: 640px }
+.app { display: grid; grid-template-rows: auto minmax(0,1fr); height: 100vh; min-height: 640px }
 .empty { color: var(--dim); padding: 40px; text-align: center }
 .hint { color: var(--dim); line-height: 1.45; margin: 0 }
 .hint.pad { padding: 10px 16px 0 }
@@ -240,35 +240,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 .tag.rule { background: var(--ink); color: #fff }
 .lmeta .link { margin: 0 0 0 auto }
 
-/* timeline */
-.tl { border-top: 1px solid var(--line); background: var(--panel); display: grid; grid-template-columns: 110px minmax(0,1fr); height: 240px; min-height: 0 }
-.labels { border-right: 1px solid var(--line) }
-.labels div { height: var(--lh); display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--line) }
-.labels div i { width: 8px; height: 8px; border-radius: 3px }
-.labels .ruler, .lane.ruler { height: 24px }
-.scroller { overflow-x: auto; overflow-y: hidden; position: relative }
-.lanes { position: relative; user-select: none; cursor: pointer }
-.lane { height: var(--lh); border-bottom: 1px solid var(--line); position: relative }
-.tick { position: absolute; top: 0; height: 100%; border-left: 1px solid var(--line2); font-size: 10px; color: var(--faint); padding: 5px 0 0 3px }
-.tick.minor { height: 30%; top: 70%; border-color: var(--line) }
-.chip { position: absolute; top: 4px; bottom: 4px; border-radius: 8px; padding: 0 7px; font-style: normal; font-size: 11px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff }
-.chip.word { background: var(--c-word); color: var(--dim); padding: 0 3px }
-.chip.cap { background: #CFE0FD; color: #0B3D91 }
-.chip.cap.key { background: var(--red); color: #fff }
-.chip.cap.sel, .chip.sel { outline: 2px solid var(--blue); outline-offset: 1px; z-index: 2 }
-.chip.grab { cursor: grab; touch-action: none }
-.chip.grab::before, .chip.grab::after, .chip.grab-start::before { content: ""; position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize }
-.chip.grab::before, .chip.grab-start::before { left: 0 }
-.chip.grab::after { right: 0 }
-.chip.grab-start { touch-action: none; overflow: visible }
-.chip.dragging { overflow: visible; opacity: .85; outline: 2px dashed var(--blue); outline-offset: 1px; z-index: 4; cursor: grabbing }
-.dragtime { position: absolute; top: -18px; left: 0; background: var(--ink); color: #fff; border-radius: 6px; padding: 0 6px; font-size: 10px; line-height: 16px; font-weight: 600 }
-.lane { overflow: visible }
-.pin { position: absolute; top: 7px; height: 16px; min-width: 12px; border-radius: 999px; background: var(--blue); box-shadow: 0 0 0 2px #fff; cursor: pointer }
-.pin.done { background: var(--teal) }
-.playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--ink); pointer-events: none; z-index: 5 }
-
-.toast { position: fixed; left: 50%; bottom: 260px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 500; max-width: 80vw; z-index: 20; box-shadow: 0 8px 30px rgba(15,15,16,.25) }
+.toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 500; max-width: 80vw; z-index: 20; box-shadow: 0 8px 30px rgba(15,15,16,.25) }
 
 @media (max-width: 1180px) {
   .main { grid-template-columns: 220px minmax(0,1fr) 300px }
@@ -280,6 +252,63 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 }
 @media (max-width: 960px) {
   .main { grid-template-columns: 200px minmax(0,1fr) 290px }
-  .top .pill:not(.status) { display: none }
+  .top .pill:not(.status):not(.claude) { display: none }
   .tabs button { padding: 6px 9px }
 }
+/* the Claude pill: is Claude in chat waiting for the Studio */
+.pill.claude.ready .dot { background: var(--teal-ink) }
+.pill.claude.working .dot { background: var(--blue) }
+.pill.claude.offline { color: var(--dim) }
+.pill.claude.offline .dot { background: var(--dim) }
+.run.queued { background: var(--panel2) }
+.run.taken { background: var(--blue-soft) }
+/* the new-video wizard */
+.wizard .sec { display: grid; gap: 10px }
+.wizard .sec h3 { margin: 6px 0 0 }
+.wzsteps { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap }
+.wzsteps li .link { padding: 5px 12px; border-radius: 999px; background: var(--panel2); color: var(--dim); text-decoration: none }
+.wzsteps li.on .link { background: var(--ink); color: #fff }
+.wzsteps li.done .link { color: var(--text) }
+.stack { display: grid; gap: 6px; color: var(--dim) }
+.stack textarea { resize: vertical; font: inherit; color: var(--text) }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px }
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.pick { display: grid; gap: 4px; text-align: left; padding: 12px; border-radius: 14px; background: var(--panel2); border: 1.5px solid transparent; color: var(--dim); line-height: 1.35 }
+.pick b { color: var(--text) }
+.pick:hover { border-color: var(--line2) }
+.pick.on { border-color: var(--ink); background: #fff }
+.pick.new { border-style: dashed; border-color: var(--line2) }
+.pick.new.on { border-color: var(--ink) }
+.chips { display: flex; gap: 4px; min-height: 18px }
+.chips i { width: 18px; height: 18px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08) }
+.newstyle { display: grid; gap: 8px }
+.check { display: flex; gap: 8px; align-items: center }
+.btnrow .spacer { flex: 1 }
+.sheet.hero { text-align: center; justify-items: center }
+@media (max-width: 560px) { .cards.two { grid-template-columns: 1fr } }
+/* Claude's proposal */
+.proposal h2 select { margin-left: auto; width: auto }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px }
+.stats div { background: var(--panel2); border-radius: 14px; padding: 10px 12px; display: grid; gap: 2px }
+.stats b { font-size: 20px }
+.stats span { color: var(--dim); font-size: 12px }
+.scenes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.scenes li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start }
+.scenes .tc { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 2px }
+.scenes p { margin: 2px 0 0; line-height: 1.45 }
+.scenes .why { color: var(--dim) }
+.proposal .sec { display: grid; gap: 8px }
+.proposal textarea { resize: vertical; font: inherit }
+@media (max-width: 560px) { .scenes li { grid-template-columns: 1fr; gap: 2px } }
+.proposal > p, .proposal .sec > p { margin: 0; line-height: 1.45 }
+/* the Elements tab: shots, overlays and transitions as rows */
+.elements { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
+.elements li { border-radius: 10px; background: var(--panel2) }
+.elements li.here { box-shadow: inset 3px 0 0 var(--blue) }
+.elements li.on { background: var(--blue-soft) }
+.elements .row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; padding: 7px 10px; text-align: left }
+.elements .row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500 }
+.elements .tc { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px }
+.elements small { color: var(--faint) }
+.elements .acts { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; align-items: center }
+.btn.slim { padding: 3px 9px; font-size: 12px }

@@ -16,6 +16,7 @@
     "build": "npm run build -w @motionable/studio",
     "dev": "npm run dev -w @motionable/studio",
     "connect": "node scripts/connect-claude.mjs",
+    "setup": "node scripts/setup.mjs",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
   },

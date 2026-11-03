@@ -1,20 +1,22 @@
 // Right panel: the transcript, cut suggestions (accept or dismiss), the picked caption line (role, hidden, component
 // and its props), and timed notes for Claude. Every change goes out as one ops batch.
 import {useEffect, useState} from 'react';
-import {clock, type ClaudeRun, type ComponentInfo, type Lesson, type Op, type PropSpec, type View} from './api';
+import {clock, type ComponentInfo, type Lesson, type Op, type PropSpec, type View} from './api';
 import {Dislike} from './Dislike';
+import {Elements, type Item} from './Elements';
 import {Lessons} from './Lessons';
+import {RequestCard, useRequests} from './Requests';
 import {pick, useT, type Lang} from './i18n';
 import {Transcript, type Sel} from './Transcript';
 
-export type Tab = 'transcript' | 'cuts' | 'captions' | 'notes';
-export type Item = {kind: 'overlay' | 'transition'; id: string};
+export type Tab = 'transcript' | 'cuts' | 'captions' | 'elements' | 'notes';
 type Props = {
   view: View;
   lang: Lang;
   components: Record<string, ComponentInfo>;
   line: string | null;
   item: Item | null;
+  onItem(i: Item): void;
   lessons: Lesson[];
   onError(m: string): void;
   sel: Sel;
@@ -25,10 +27,6 @@ type Props = {
   onCut(): void;
   onRestore(k: number): void;
   seek(s: number): void;
-  claude: ClaudeRun | null;
-  sendClaude(): void;
-  stopClaude(): void;
-  copyPrompt(): void;
   apply(why: string, ops: Op[]): void;
 };
 
@@ -39,7 +37,7 @@ export const Inspector = (props: Props) => {
   return (
     <aside className="insp">
       <div className="tabs" role="tablist">
-        {(['transcript', 'cuts', 'captions', 'notes'] as Tab[]).map((k) => (
+        {(['transcript', 'cuts', 'captions', 'elements', 'notes'] as Tab[]).map((k) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             {t(k)}
             {k === 'cuts' && view.suggested.length ? <span className="badge">{view.suggested.length}</span> : null}
@@ -49,9 +47,8 @@ export const Inspector = (props: Props) => {
       </div>
       {tab === 'transcript' && <Transcript view={view} sel={sel} now={now} onPick={props.onPick} onCut={props.onCut} onRestore={props.onRestore} />}
       {tab === 'cuts' && <Cuts view={view} apply={apply} />}
-      {tab === 'captions' && (props.item
-        ? <Picked view={view} item={props.item} apply={apply} onError={props.onError} />
-        : <Captions view={view} lang={lang} components={components} line={line} apply={apply} onError={props.onError} />)}
+      {tab === 'captions' && <Captions view={view} lang={lang} components={components} line={line} apply={apply} onError={props.onError} />}
+      {tab === 'elements' && <Elements view={view} item={props.item} now={now} onItem={props.onItem} seek={props.seek} apply={apply} onError={props.onError} />}
       {tab === 'notes' && <Notes {...props} />}
     </aside>
   );
@@ -93,25 +90,6 @@ const Cuts = ({view, apply}: {view: View; apply: Props['apply']}) => {
         ))}
       </div>
     </>
-  );
-};
-
-/** An overlay or a transition picked on the timeline: what it is, take it out, or say it's wrong. */
-const Picked = ({view, item, apply, onError}: Pick<Props, 'view' | 'apply' | 'onError'> & {item: Item}) => {
-  const t = useT();
-  const span = (item.kind === 'overlay' ? view.lanes.overlays : view.lanes.transitions).find((x) => x.id === item.id);
-  if (!span) return <div className="sec"><p className="hint">{t('pickLine')}</p></div>;
-  const w = view.words.filter((x) => x.out !== null && x.out <= span.start + 0.01).at(-1);
-  return (
-    <div className="sec">
-      <h3>{t(item.kind)} <span>{item.id}</span></h3>
-      <p className="linetext">{span.component}</p>
-      <div className="field"><label>{t('span')}</label><span>{clock(span.start)}–{clock(span.end)}</span></div>
-      <div className="btnrow wrap">
-        <button className="btn danger" onClick={() => apply(`studio: remove ${item.kind}`, [{op: `${item.kind}.remove`, id: item.id}])}>{t('removeItem')}</button>
-        <Dislike style={view.style} what={`${item.kind} ${item.id}`} component={span.component ?? null} at={w ? `word:${w.i}` : undefined} apply={apply} onError={onError} />
-      </div>
-    </div>
   );
 };
 
@@ -210,7 +188,7 @@ const PropField = ({name, spec, lang, value, onChange}: {name: string; spec: Pro
 const wordAt = (view: View, s: number) => view.words.filter((w) => w.out !== null && w.out <= s + 0.01).at(-1) ?? view.words.find((w) => w.out !== null);
 
 const Notes = (props: Props) => {
-  const {view, sel, now, seek, claude, sendClaude, stopClaude, copyPrompt, apply} = props;
+  const {view, sel, now, seek, apply} = props;
   const t = useT();
   const [note, setNote] = useState('');
   const lo = sel ? Math.min(sel.a, sel.b) : null;
@@ -223,7 +201,9 @@ const Notes = (props: Props) => {
     setNote('');
   };
   const open = view.notes.filter((n) => n.status === 'open');
-  const running = claude?.status === 'running';
+  // the open notes go to Claude in chat as one request; its reply shows here and on each note
+  const {last, ask, cancel} = useRequests({project: view.id}, props.onError);
+  const busy = last?.kind === 'notes' && (last.status === 'queued' || last.status === 'taken');
   const notes = [...view.notes].reverse();
   return (
     <div className="notespane">
@@ -235,19 +215,10 @@ const Notes = (props: Props) => {
       </div>
       <div className="sec claude">
         <div className="btnrow wrap">
-          {running
-            ? <button className="btn" onClick={stopClaude}>{t('stop')}</button>
-            : <button className="btn primary" disabled={!open.length} onClick={sendClaude}>{t('sendClaude')}{open.length ? ` · ${open.length}` : ''}</button>}
-          <button className="btn" onClick={copyPrompt}>{t('copyPrompt')}</button>
+          <button className="btn primary" disabled={!open.length || busy} onClick={() => ask('notes')}>{t('sendClaude')}{open.length ? ` · ${open.length}` : ''}</button>
         </div>
-        {!open.length && !claude && <p className="hint">{t('noOpen')}</p>}
-        {claude && (
-          <div className={`run ${claude.status}`} aria-live="polite">
-            <b>{claude.status === 'running' ? t('claudeWorking') : claude.status === 'done' ? t('claudeDone') : claude.status === 'failed' ? t('claudeFailed') : t('stop')}</b>
-            <ul>{claude.steps.slice(-6).map((s, i) => <li key={i}>{s}</li>)}</ul>
-            {claude.result && claude.status !== 'running' && <p className="muted">{claude.result}</p>}
-          </div>
-        )}
+        {!open.length && !last && <p className="hint">{t('noOpen')}</p>}
+        {last && <RequestCard r={last} onCancel={cancel} />}
       </div>
       <ul className="notes">
         {notes.map((n) => (
