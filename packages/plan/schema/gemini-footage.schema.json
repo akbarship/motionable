@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:gemini-footage:1",
+  "title": "Gemini footage timeline (docs/gemini-timeline.md §3). Word ranges are [first, last] word ids, inclusive.",
+  "type": "object",
+  "required": ["summary", "tone", "scene", "beats", "hookCandidates", "emphasis", "numbers", "lists", "retakes", "filler",
+               "brollIdeas", "termHints", "problems"],
+  "properties": {
+    "summary": {"type": "string", "description": "One sentence: what the video says."},
+    "tone": {"type": "string", "description": "A few words: how it's said."},
+    "scene": {
+      "type": "object",
+      "required": ["framing", "setting", "light", "subject", "onScreenText", "logos"],
+      "properties": {
+        "framing": {"type": "string", "description": "e.g. 'wide, full body, standing' or 'medium, seated'"},
+        "setting": {"type": "string"},
+        "light": {"type": "string"},
+        "subject": {"type": "object", "required": ["position", "faceVisible"], "properties": {
+          "position": {"type": "string", "enum": ["left", "center", "right", "moves"]},
+          "faceVisible": {"type": "number", "minimum": 0, "maximum": 1, "description": "share of the video where the face is visible"}}},
+        "onScreenText": {"type": "array", "items": {"type": "string"}},
+        "logos": {"type": "array", "items": {"type": "object", "required": ["approxT", "what", "where"], "properties": {
+          "approxT": {"type": "number"}, "what": {"type": "string"}, "where": {"type": "string"}}}}
+      }
+    },
+    "beats": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "words", "why"], "properties": {
+      "id": {"type": "string"},
+      "kind": {"type": "string", "enum": ["hook", "setup", "claim", "proof", "list", "story", "cta", "aside"]},
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "why": {"type": "string"}}}},
+    "hookCandidates": {"type": "array", "items": {"type": "object", "required": ["words", "score", "why"], "properties": {
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "score": {"type": "number", "minimum": 0, "maximum": 1}, "why": {"type": "string"}}}},
+    "emphasis": {"type": "array", "items": {"type": "object", "required": ["word", "strength", "why"], "properties": {
+      "word": {"type": "integer"}, "strength": {"type": "integer", "minimum": 1, "maximum": 3}, "why": {"type": "string"}}}},
+    "numbers": {"type": "array", "items": {"type": "object", "required": ["words", "value", "kind"], "properties": {
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "value": {"type": "string"}, "kind": {"type": "string", "enum": ["price", "count", "percent", "duration", "date", "other"]}}}},
+    "lists": {"type": "array", "items": {"type": "object", "required": ["id", "items", "why"], "properties": {
+      "id": {"type": "string"},
+      "items": {"type": "array", "items": {"type": "object", "required": ["words", "label"], "properties": {
+        "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2}, "label": {"type": "string"}}}},
+      "why": {"type": "string"}}}},
+    "retakes": {"type": "array", "items": {"type": "object", "required": ["drop", "keep", "kind", "confidence", "why"], "properties": {
+      "drop": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "keep": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "kind": {"type": "string", "enum": ["restart", "repeat", "flub"]},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "why": {"type": "string"}}}},
+    "filler": {"type": "array", "items": {"type": "object", "required": ["words", "kind", "confidence", "why"], "properties": {
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "kind": {"type": "string", "enum": ["stumble", "filler-word", "false-start"]},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "why": {"type": "string"}}}},
+    "brollIdeas": {"type": "array", "items": {"type": "object", "required": ["words", "show", "queries", "why"], "properties": {
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "show": {"type": "string"}, "queries": {"type": "array", "items": {"type": "string"}}, "why": {"type": "string"}}}},
+    "termHints": {"type": "array", "items": {"type": "object", "required": ["words", "heard", "note"], "properties": {
+      "words": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+      "heard": {"type": "string"}, "likely": {"type": "string"}, "note": {"type": "string"}}}},
+    "problems": {"type": "array", "items": {"type": "object", "required": ["approxT", "what"], "properties": {
+      "approxT": {"type": "number"}, "what": {"type": "string"}}}}
+  }
+}

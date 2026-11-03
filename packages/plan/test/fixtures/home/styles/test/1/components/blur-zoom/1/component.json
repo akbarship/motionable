@@ -1,0 +1,64 @@
+{
+  "name": "blur-zoom",
+  "version": 1,
+  "kind": "transition",
+  "title": {
+    "uz": "Xira yaqinlashish",
+    "en": "Blur zoom"
+  },
+  "description": "A fast push-in with blur that peaks on the cut and settles after it. For a change of topic.",
+  "tags": [
+    "transition",
+    "zoom",
+    "blur",
+    "topic-change"
+  ],
+  "props": {
+    "strength": {
+      "type": "number",
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.5,
+      "step": 0.01,
+      "default": 0.12,
+      "label": {
+        "uz": "Kuch",
+        "en": "Strength"
+      }
+    },
+    "blur": {
+      "type": "number",
+      "unit": "px",
+      "min": 0,
+      "max": 40,
+      "default": 10,
+      "label": {
+        "uz": "Xiralik",
+        "en": "Blur"
+      }
+    }
+  },
+  "needs": [],
+  "frames": {
+    "before": 4,
+    "after": 4
+  },
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "public",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "passedAt": "2026-10-19T15:15:13.311Z",
+    "gemini": false
+  }
+}

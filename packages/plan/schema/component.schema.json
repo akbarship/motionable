@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:component:1",
+  "title": "Component manifest (docs/components.md §2)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "kind", "title", "description", "tags", "props", "needs", "madeFrom", "author", "owner",
+               "status", "compatibleWith", "ae"],
+  "definitions": {
+    "label": {"type": "object", "required": ["en"], "additionalProperties": {"type": "string"}},
+    "prop": {
+      "type": "object", "additionalProperties": false, "required": ["type"],
+      "properties": {
+        "type": {"enum": ["number", "integer", "boolean", "enum", "text", "color", "gradient", "textStyle", "font", "anchor",
+                          "duration", "asset", "array", "object"]},
+        "default": {}, "label": {"$ref": "#/definitions/label"}, "description": {"type": "string"},
+        "min": {"type": "number"}, "max": {"type": "number"}, "step": {"type": "number"}, "unit": {"type": "string"},
+        "options": {"type": "array", "items": {"type": "object", "required": ["value"],
+          "properties": {"value": {"type": "string"}, "label": {"$ref": "#/definitions/label"}}}},
+        "maxLength": {"type": "integer"}, "multiline": {"type": "boolean"},
+        "items": {"$ref": "#/definitions/prop"}, "maxItems": {"type": "integer"},
+        "fields": {"type": "object", "additionalProperties": {"$ref": "#/definitions/prop"}},
+        "accept": {"type": "array", "items": {"enum": ["image", "video", "svg"]}}, "editor": {"type": "boolean"}
+      }
+    }
+  },
+  "properties": {
+    "name": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "version": {"type": "integer", "minimum": 1},
+    "kind": {"enum": ["caption", "overlay", "transition", "scene"]},
+    "title": {"$ref": "#/definitions/label"},
+    "description": {"type": "string", "minLength": 1},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "props": {"type": "object", "additionalProperties": {"$ref": "#/definitions/prop"}},
+    "needs": {"type": "array", "items": {"enum": ["face", "matte"]}},
+    "fullFrame": {"type": "boolean"},
+    "frames": {"type": "object", "additionalProperties": false, "required": ["before", "after"],
+      "properties": {"before": {"type": "integer", "minimum": 0}, "after": {"type": "integer", "minimum": 0}}},
+    "madeFrom": {"type": "object", "required": ["kind"], "properties": {"kind": {"enum": ["reference", "request", "manual"]}}},
+    "author": {"type": "object", "required": ["kind"], "properties": {"kind": {"enum": ["us", "coder"]}}},
+    "owner": {"type": ["string", "null"]},
+    "status": {"enum": ["draft", "private", "public", "deprecated", "blocked"]},
+    "compatibleWith": {"type": ["integer", "null"]},
+    "gate": {},
+    "bundle": {"type": "string"},
+    "ae": {"type": "object", "required": ["mode"], "properties": {"mode": {"enum": ["layers", "native"]}}}
+  }
+}

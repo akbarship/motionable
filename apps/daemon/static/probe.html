@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Motionable probe</title>
+<script src="/player.js"></script>
+<style>
+  :root{color-scheme:dark;--bg:#111;--fg:#eee;--mute:#999;--accent:#FA5602}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;display:flex;gap:24px;padding:20px}
+  aside{width:280px;display:flex;flex-direction:column;gap:10px}
+  select,button{background:#222;color:var(--fg);border:1px solid #333;border-radius:8px;padding:8px}
+  #log{font:12px/1.5 ui-monospace,monospace;color:var(--mute);white-space:pre-wrap;max-height:60vh;overflow:auto}
+  .v{color:var(--accent);font-weight:600}
+  hyperframes-player{width:405px;height:720px;display:block;background:#000;border-radius:12px;overflow:hidden}
+</style>
+</head>
+<body>
+<aside>
+  <strong>Motionable · probe</strong>
+  <select id="project"></select>
+  <div>plan <span class="v" id="ver">–</span> · page <span class="v" id="page">–</span></div>
+  <button id="build">Rebuild page</button>
+  <div id="log"></div>
+</aside>
+<hyperframes-player id="player" controls></hyperframes-player>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (m) => { $('log').textContent = new Date().toLocaleTimeString() + ' ' + m + '\n' + $('log').textContent; };
+let planAt = 0;
+const load = (keepTime) => {
+  const p = $('player'), id = $('project').value;
+  if (!id) return;
+  const t = keepTime ? p.currentTime || 0 : 0;
+  p.setAttribute('src', `/p/${id}/index.html?v=${Date.now()}`);
+  if (t) p.addEventListener('ready', () => p.seek(t), {once: true});
+};
+fetch('/api/projects').then((r) => r.json()).then((list) => {
+  for (const p of list) $('project').add(new Option(`${p.id} · v${p.version}`, p.id));
+  $('ver').textContent = list[0] ? 'v' + list[0].version : '–';
+  load(false);
+});
+$('project').onchange = () => load(false);
+$('build').onclick = () => fetch(`/api/projects/${$('project').value}/build`, {method: 'POST'});
+const es = new EventSource('/api/events');
+es.onmessage = (e) => {
+  const ev = JSON.parse(e.data);
+  if (ev.project !== $('project').value) return;
+  if (ev.type === 'plan') { planAt = performance.now(); $('ver').textContent = 'v' + ev.version; log(`plan v${ev.version} by ${ev.by}`); }
+  if (ev.type === 'page') {
+    $('page').textContent = 'v' + ev.version;
+    log(`page v${ev.version} built in ${ev.ms} ms` + (planAt ? `, ${Math.round(performance.now() - planAt)} ms after the change` : ''));
+    load(true);
+  }
+  if (ev.type === 'render') log(`render v${ev.version} ${ev.quality}: ${ev.status}`);
+  if (ev.type === 'error') log('error: ' + ev.message);
+};
+</script>
+</body>
+</html>

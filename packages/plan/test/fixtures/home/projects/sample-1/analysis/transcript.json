@@ -1,0 +1,761 @@
+{
+ "provider": "elevenlabs/scribe_v1",
+ "language": "uz-Latn",
+ "words": [
+  {
+   "i": 0,
+   "text": "Sasuze",
+   "start": 0.0,
+   "end": 0.14,
+   "conf": 0.768
+  },
+  {
+   "i": 1,
+   "text": "nilomi.",
+   "start": 0.2,
+   "end": 0.5,
+   "conf": 0.531
+  },
+  {
+   "i": 2,
+   "text": "Sharavo",
+   "start": 0.68,
+   "end": 1.3,
+   "conf": 0.998
+  },
+  {
+   "i": 3,
+   "text": "chilooʻl",
+   "start": 1.38,
+   "end": 1.76,
+   "conf": 0.964
+  },
+  {
+   "i": 4,
+   "text": "nelomi",
+   "start": 1.8,
+   "end": 2.2,
+   "conf": 0.774,
+   "corrected_by": "user"
+  },
+  {
+   "i": 5,
+   "text": "Yayami",
+   "start": 2.32,
+   "end": 2.86,
+   "conf": 0.555
+  },
+  {
+   "i": 6,
+   "text": "bomi",
+   "start": 2.92,
+   "end": 3.18,
+   "conf": 1.0
+  },
+  {
+   "i": 7,
+   "text": "shaya.",
+   "start": 3.26,
+   "end": 3.68,
+   "conf": 0.999
+  },
+  {
+   "i": 8,
+   "text": "Lochira",
+   "start": 3.94,
+   "end": 4.66,
+   "conf": 0.995
+  },
+  {
+   "i": 9,
+   "text": "bomi",
+   "start": 4.7,
+   "end": 5.24,
+   "conf": 1.0
+  },
+  {
+   "i": 10,
+   "text": "boni",
+   "start": 5.44,
+   "end": 5.56,
+   "conf": 0.967
+  },
+  {
+   "i": 11,
+   "text": "nichi,",
+   "start": 5.64,
+   "end": 5.76,
+   "conf": 0.999
+  },
+  {
+   "i": 12,
+   "text": "lochi",
+   "start": 5.88,
+   "end": 6.1,
+   "conf": 0.996
+  },
+  {
+   "i": 13,
+   "text": "nichi",
+   "start": 6.16,
+   "end": 6.34,
+   "conf": 1.0
+  },
+  {
+   "i": 14,
+   "text": "chizelo",
+   "start": 6.4,
+   "end": 7.1,
+   "conf": 0.752
+  },
+  {
+   "i": 15,
+   "text": "bolosha",
+   "start": 7.16,
+   "end": 7.62,
+   "conf": 1.0
+  },
+  {
+   "i": 16,
+   "text": "suqi,",
+   "start": 7.66,
+   "end": 8.0,
+   "conf": 0.99
+  },
+  {
+   "i": 17,
+   "text": "yasu",
+   "start": 8.039,
+   "end": 8.26,
+   "conf": 0.915
+  },
+  {
+   "i": 18,
+   "text": "shara",
+   "start": 8.32,
+   "end": 8.46,
+   "conf": 1.0
+  },
+  {
+   "i": 19,
+   "text": "chiqi,",
+   "start": 8.58,
+   "end": 9.1,
+   "conf": 0.995
+  },
+  {
+   "i": 20,
+   "text": "shara",
+   "start": 9.54,
+   "end": 9.68,
+   "conf": 0.999
+  },
+  {
+   "i": 21,
+   "text": "chiqi",
+   "start": 9.72,
+   "end": 10.08,
+   "conf": 1.0
+  },
+  {
+   "i": 22,
+   "text": "shameta",
+   "start": 10.16,
+   "end": 10.86,
+   "conf": 0.995
+  },
+  {
+   "i": 23,
+   "text": "rachichi",
+   "start": 11.08,
+   "end": 11.7,
+   "conf": 0.978
+  },
+  {
+   "i": 24,
+   "text": "ninevo",
+   "start": 12.14,
+   "end": 12.46,
+   "conf": 0.532,
+   "corrected_by": "user"
+  },
+  {
+   "i": 25,
+   "text": "rashata",
+   "start": 12.5,
+   "end": 12.82,
+   "conf": 0.997
+  },
+  {
+   "i": 26,
+   "text": "michi",
+   "start": 12.88,
+   "end": 13.06,
+   "conf": 0.999
+  },
+  {
+   "i": 27,
+   "text": "lorune",
+   "start": 13.12,
+   "end": 13.4,
+   "conf": 0.95
+  },
+  {
+   "i": 28,
+   "text": "shaya.",
+   "start": 13.46,
+   "end": 13.68,
+   "conf": 0.995
+  },
+  {
+   "i": 29,
+   "text": "Gʻamesha",
+   "start": 13.74,
+   "end": 14.24,
+   "conf": 0.829
+  },
+  {
+   "i": 30,
+   "text": "yalusa",
+   "start": 14.28,
+   "end": 14.64,
+   "conf": 1.0
+  },
+  {
+   "i": 31,
+   "text": "ninevo",
+   "start": 14.68,
+   "end": 14.96,
+   "conf": 0.999,
+   "corrected_by": "user"
+  },
+  {
+   "i": 32,
+   "text": "xochixo",
+   "start": 15.0,
+   "end": 15.22,
+   "conf": 0.95
+  },
+  {
+   "i": 33,
+   "text": "shaya.",
+   "start": 15.26,
+   "end": 15.52,
+   "conf": 1.0
+  },
+  {
+   "i": 34,
+   "text": "Voqi",
+   "start": 15.68,
+   "end": 16.1,
+   "conf": 0.998
+  },
+  {
+   "i": 35,
+   "text": "Botata,",
+   "start": 16.16,
+   "end": 16.72,
+   "conf": 0.997
+  },
+  {
+   "i": 36,
+   "text": "Lubomi,",
+   "start": 16.88,
+   "end": 17.46,
+   "conf": 1.0
+  },
+  {
+   "i": 37,
+   "text": "OʻLGʻA,",
+   "start": 17.88,
+   "end": 18.36,
+   "conf": 0.962
+  },
+  {
+   "i": 38,
+   "text": "safi",
+   "start": 19.56,
+   "end": 19.78,
+   "conf": 0.76,
+   "corrected_by": "user"
+  },
+  {
+   "i": 39,
+   "text": "xoqi",
+   "start": 19.82,
+   "end": 20.02,
+   "conf": 1.0
+  },
+  {
+   "i": 40,
+   "text": "rumira",
+   "start": 20.08,
+   "end": 20.32,
+   "conf": 0.978
+  },
+  {
+   "i": 41,
+   "text": "oʻlyata.",
+   "start": 20.38,
+   "end": 21.1,
+   "conf": 0.917
+  },
+  {
+   "i": 42,
+   "text": "Lusa",
+   "start": 21.22,
+   "end": 21.66,
+   "conf": 0.533
+  },
+  {
+   "i": 43,
+   "text": "sugʻa",
+   "start": 22.0,
+   "end": 22.24,
+   "conf": 0.899
+  },
+  {
+   "i": 44,
+   "text": "yalome",
+   "start": 22.3,
+   "end": 22.82,
+   "conf": 0.918
+  },
+  {
+   "i": 45,
+   "text": "milusha",
+   "start": 22.86,
+   "end": 23.38,
+   "conf": 0.987
+  },
+  {
+   "i": 46,
+   "text": "rumira",
+   "start": 23.42,
+   "end": 23.66,
+   "conf": 0.999
+  },
+  {
+   "i": 47,
+   "text": "chisasa.",
+   "start": 23.68,
+   "end": 24.22,
+   "conf": 0.746
+  },
+  {
+   "i": 48,
+   "text": "Tavoru,",
+   "start": 24.26,
+   "end": 24.54,
+   "conf": 0.996
+  },
+  {
+   "i": 49,
+   "text": "gʻachi",
+   "start": 24.62,
+   "end": 24.84,
+   "conf": 0.984
+  },
+  {
+   "i": 50,
+   "text": "xomimi,",
+   "start": 24.88,
+   "end": 25.54,
+   "conf": 0.875
+  },
+  {
+   "i": 51,
+   "text": "dagʻata,",
+   "start": 25.7,
+   "end": 26.6,
+   "conf": 0.826
+  },
+  {
+   "i": 52,
+   "text": "memilo,",
+   "start": 27.02,
+   "end": 27.68,
+   "conf": 0.779
+  },
+  {
+   "i": 53,
+   "text": "fitaqi,",
+   "start": 27.84,
+   "end": 28.36,
+   "conf": 0.885
+  },
+  {
+   "i": 54,
+   "text": "nichime,",
+   "start": 28.46,
+   "end": 29.12,
+   "conf": 0.999
+  },
+  {
+   "i": 55,
+   "text": "taze",
+   "start": 29.56,
+   "end": 29.84,
+   "conf": 1.0
+  },
+  {
+   "i": 56,
+   "text": "mevoka",
+   "start": 29.94,
+   "end": 30.5,
+   "conf": 0.981
+  },
+  {
+   "i": 57,
+   "text": "xovo.",
+   "start": 30.56,
+   "end": 30.76,
+   "conf": 1.0
+  },
+  {
+   "i": 58,
+   "text": "Tarura",
+   "start": 30.8,
+   "end": 31.2,
+   "conf": 0.974
+  },
+  {
+   "i": 59,
+   "text": "gʻalo",
+   "start": 31.28,
+   "end": 31.52,
+   "conf": 0.929
+  },
+  {
+   "i": 60,
+   "text": "nelu.",
+   "start": 31.6,
+   "end": 31.78,
+   "conf": 0.999
+  },
+  {
+   "i": 61,
+   "text": "Qisu",
+   "start": 31.78,
+   "end": 32.02,
+   "conf": 0.983
+  },
+  {
+   "i": 62,
+   "text": "fiboze",
+   "start": 32.119,
+   "end": 32.64,
+   "conf": 0.846
+  },
+  {
+   "i": 63,
+   "text": "zegʻa",
+   "start": 32.659,
+   "end": 32.8,
+   "conf": 1.0
+  },
+  {
+   "i": 64,
+   "text": "mitaxo.",
+   "start": 32.84,
+   "end": 33.28,
+   "conf": 1.0
+  },
+  {
+   "i": 65,
+   "text": "Mana",
+   "start": 33.48,
+   "end": 33.62,
+   "conf": 1.0
+  },
+  {
+   "i": 66,
+   "text": "zesha",
+   "start": 33.66,
+   "end": 33.8,
+   "conf": 0.987
+  },
+  {
+   "i": 67,
+   "text": "dasuya",
+   "start": 33.84,
+   "end": 34.72,
+   "conf": 0.517,
+   "corrected_by": "user"
+  },
+  {
+   "i": 68,
+   "text": "shadata",
+   "start": 34.84,
+   "end": 35.44,
+   "conf": 0.941
+  },
+  {
+   "i": 69,
+   "text": "yavo",
+   "start": 35.52,
+   "end": 35.72,
+   "conf": 0.993
+  },
+  {
+   "i": 70,
+   "text": "meze",
+   "start": 35.76,
+   "end": 36.1,
+   "conf": 0.997
+  },
+  {
+   "i": 71,
+   "text": "chilooʻl",
+   "start": 36.24,
+   "end": 36.52,
+   "conf": 0.994
+  },
+  {
+   "i": 72,
+   "text": "bosumi.",
+   "start": 36.56,
+   "end": 37.14,
+   "conf": 0.846
+  },
+  {
+   "i": 73,
+   "text": "Tasu",
+   "start": 37.62,
+   "end": 37.9,
+   "conf": 1.0
+  },
+  {
+   "i": 74,
+   "text": "bomebo",
+   "start": 37.94,
+   "end": 38.2,
+   "conf": 1.0
+  },
+  {
+   "i": 75,
+   "text": "kagʻachi,",
+   "start": 38.24,
+   "end": 38.82,
+   "conf": 0.985
+  },
+  {
+   "i": 76,
+   "text": "voqi",
+   "start": 38.88,
+   "end": 39.16,
+   "conf": 1.0
+  },
+  {
+   "i": 77,
+   "text": "tada",
+   "start": 39.22,
+   "end": 39.4,
+   "conf": 0.4
+  },
+  {
+   "i": 78,
+   "text": "qikasu",
+   "start": 39.46,
+   "end": 39.92,
+   "conf": 0.997
+  },
+  {
+   "i": 79,
+   "text": "yasha",
+   "start": 39.96,
+   "end": 40.12,
+   "conf": 0.999
+  },
+  {
+   "i": 80,
+   "text": "voruchi,",
+   "start": 40.14,
+   "end": 40.7,
+   "conf": 0.961
+  },
+  {
+   "i": 81,
+   "text": "sasuta",
+   "start": 40.78,
+   "end": 41.06,
+   "conf": 0.571,
+   "corrected_by": "user"
+  },
+  {
+   "i": 82,
+   "text": "oʻlruni",
+   "start": 41.1,
+   "end": 41.26,
+   "conf": 1.0
+  },
+  {
+   "i": 83,
+   "text": "mefilo",
+   "start": 41.28,
+   "end": 41.76,
+   "conf": 0.996
+  },
+  {
+   "i": 84,
+   "text": "meze,",
+   "start": 41.8,
+   "end": 42.1,
+   "conf": 1.0
+  },
+  {
+   "i": 85,
+   "text": "tavoru,",
+   "start": 42.78,
+   "end": 43.14,
+   "conf": 0.993
+  },
+  {
+   "i": 86,
+   "text": "xolume",
+   "start": 43.28,
+   "end": 43.84,
+   "conf": 0.93
+  },
+  {
+   "i": 87,
+   "text": "kagʻachi",
+   "start": 43.9,
+   "end": 44.32,
+   "conf": 0.979
+  },
+  {
+   "i": 88,
+   "text": "shazeze",
+   "start": 44.36,
+   "end": 45.06,
+   "conf": 0.999
+  },
+  {
+   "i": 89,
+   "text": "zezera",
+   "start": 45.1,
+   "end": 45.48,
+   "conf": 0.97
+  },
+  {
+   "i": 90,
+   "text": "kagʻachi",
+   "start": 45.52,
+   "end": 45.88,
+   "conf": 0.995
+  },
+  {
+   "i": 91,
+   "text": "gʻanize",
+   "start": 45.92,
+   "end": 46.56,
+   "conf": 0.997
+  },
+  {
+   "i": 92,
+   "text": "xovo,",
+   "start": 46.62,
+   "end": 46.78,
+   "conf": 0.992
+  },
+  {
+   "i": 93,
+   "text": "lonemi",
+   "start": 46.88,
+   "end": 47.28,
+   "conf": 0.997
+  },
+  {
+   "i": 94,
+   "text": "kagʻachi",
+   "start": 47.34,
+   "end": 47.8,
+   "conf": 1.0
+  },
+  {
+   "i": 95,
+   "text": "xovo,",
+   "start": 47.84,
+   "end": 47.98,
+   "conf": 0.999
+  },
+  {
+   "i": 96,
+   "text": "nexota",
+   "start": 48.38,
+   "end": 48.76,
+   "conf": 0.954
+  },
+  {
+   "i": 97,
+   "text": "rasaru",
+   "start": 48.8,
+   "end": 49.38,
+   "conf": 0.997
+  },
+  {
+   "i": 98,
+   "text": "xovo.",
+   "start": 49.44,
+   "end": 49.62,
+   "conf": 0.999
+  },
+  {
+   "i": 99,
+   "text": "Michi",
+   "start": 49.92,
+   "end": 50.16,
+   "conf": 1.0
+  },
+  {
+   "i": 100,
+   "text": "loraka",
+   "start": 50.2,
+   "end": 50.64,
+   "conf": 0.999
+  },
+  {
+   "i": 101,
+   "text": "yavo",
+   "start": 50.72,
+   "end": 50.9,
+   "conf": 1.0
+  },
+  {
+   "i": 102,
+   "text": "meze",
+   "start": 50.9,
+   "end": 51.0,
+   "conf": 0.976
+  },
+  {
+   "i": 103,
+   "text": "chisusha.",
+   "start": 51.06,
+   "end": 51.6,
+   "conf": 0.926
+  },
+  {
+   "i": 104,
+   "text": "Ravoru",
+   "start": 52.22,
+   "end": 52.46,
+   "conf": 0.86
+  },
+  {
+   "i": 105,
+   "text": "loraka",
+   "start": 52.5,
+   "end": 52.76,
+   "conf": 0.999
+  },
+  {
+   "i": 106,
+   "text": "bosumi.",
+   "start": 52.82,
+   "end": 53.28,
+   "conf": 1.0
+  }
+ ]
+}

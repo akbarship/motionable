@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daemon",
+      "runtimeExecutable": "node_modules/.bin/tsx",
+      "runtimeArgs": [
+        "apps/daemon/src/boot.ts"
+      ],
+      "port": 4377
+    },
+    {
+      "name": "studio",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@motionable/studio"
+      ],
+      "port": 5173
+    }
+  ]
+}

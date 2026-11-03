@@ -1,0 +1,141 @@
+{
+  "name": "hook-title-behind",
+  "version": 1,
+  "kind": "overlay",
+  "title": {
+    "uz": "Boshdan chiquvchi sarlavha",
+    "en": "Title behind the speaker"
+  },
+  "description": "A big condensed title rises from behind the speaker's head on the scene plane, with two small words under its outer edges that appear as they're spoken. Use with depth behind-subject and attach scene. DEPRECATED 2026-10-19: no text behind the speaker; use hook-title@1 in front.",
+  "tags": [
+    "hook",
+    "title",
+    "behind-subject",
+    "depth"
+  ],
+  "props": {
+    "title": {
+      "type": "text",
+      "default": "SARLAVHA",
+      "maxLength": 24,
+      "label": {
+        "uz": "Sarlavha",
+        "en": "Title"
+      }
+    },
+    "left": {
+      "type": "object",
+      "default": {
+        "text": "",
+        "at": "cut:0"
+      },
+      "label": {
+        "uz": "Chap so\u02bbz",
+        "en": "Left word"
+      },
+      "fields": {
+        "text": {
+          "type": "text",
+          "default": "",
+          "maxLength": 16,
+          "label": {
+            "uz": "Matn",
+            "en": "Text"
+          }
+        },
+        "at": {
+          "type": "anchor",
+          "default": "cut:0",
+          "label": {
+            "uz": "Vaqt",
+            "en": "Time"
+          }
+        }
+      }
+    },
+    "right": {
+      "type": "object",
+      "default": {
+        "text": "",
+        "at": "cut:0"
+      },
+      "label": {
+        "uz": "O\u02bbng so\u02bbz",
+        "en": "Right word"
+      },
+      "fields": {
+        "text": {
+          "type": "text",
+          "default": "",
+          "maxLength": 16,
+          "label": {
+            "uz": "Matn",
+            "en": "Text"
+          }
+        },
+        "at": {
+          "type": "anchor",
+          "default": "cut:0",
+          "label": {
+            "uz": "Vaqt",
+            "en": "Time"
+          }
+        }
+      }
+    },
+    "size": {
+      "type": "number",
+      "unit": "px",
+      "min": 80,
+      "max": 400,
+      "default": 236,
+      "label": {
+        "uz": "O\u02bblcham",
+        "en": "Size"
+      }
+    },
+    "flankSize": {
+      "type": "number",
+      "unit": "px",
+      "min": 24,
+      "max": 160,
+      "default": 64,
+      "label": {
+        "uz": "Kichik so\u02bbzlar",
+        "en": "Small words size"
+      }
+    },
+    "font": {
+      "type": "font",
+      "default": "$type.title.font",
+      "label": {
+        "uz": "Shrift",
+        "en": "Font"
+      }
+    },
+    "fill": {
+      "type": "gradient",
+      "default": "$gradient.title",
+      "label": {
+        "uz": "Rang",
+        "en": "Fill"
+      }
+    }
+  },
+  "needs": [
+    "face"
+  ],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "deprecated",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  }
+}

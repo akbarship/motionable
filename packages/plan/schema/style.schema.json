@@ -1,0 +1,281 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:style:1",
+  "title": "Style (docs/styles.md \u00a73)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "version",
+    "title",
+    "description",
+    "tags",
+    "fits",
+    "canvas",
+    "madeFrom",
+    "author",
+    "owner",
+    "status",
+    "tokens",
+    "rules",
+    "triggers",
+    "components",
+    "never"
+  ],
+  "properties": {
+    "schema": {
+      "const": "motionable.style/1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "object",
+      "required": [
+        "en"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fits": {
+      "type": "object",
+      "required": [
+        "footage",
+        "framing",
+        "lengthS",
+        "speakers"
+      ]
+    },
+    "canvas": {
+      "type": "object",
+      "required": [
+        "w",
+        "h",
+        "fps"
+      ]
+    },
+    "madeFrom": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "manual",
+            "reference",
+            "job"
+          ]
+        }
+      }
+    },
+    "author": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "us",
+            "coder"
+          ]
+        }
+      }
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "private",
+        "public",
+        "deprecated",
+        "blocked"
+      ]
+    },
+    "tokens": {
+      "$ref": "urn:motionable:edit-plan:1#/definitions/tokens"
+    },
+    "rules": {
+      "type": "object",
+      "required": [
+        "timeline",
+        "framing",
+        "shots",
+        "captions"
+      ],
+      "properties": {
+        "timeline": {
+          "type": "object",
+          "required": [
+            "trimPausesOver",
+            "trimTo",
+            "retakes",
+            "filler"
+          ],
+          "properties": {
+            "trimPausesOver": {
+              "type": "number"
+            },
+            "trimTo": {
+              "type": "number"
+            },
+            "tail": {
+              "type": "number"
+            },
+            "naturalPause": {
+              "type": "object",
+              "required": [
+                "afterSentence",
+                "afterComma"
+              ]
+            },
+            "crossfade": {
+              "type": "number"
+            },
+            "retakes": {
+              "enum": [
+                "auto-when-sure",
+                "suggest",
+                "off"
+              ]
+            },
+            "filler": {
+              "enum": [
+                "suggest",
+                "off"
+              ]
+            }
+          }
+        },
+        "framing": {
+          "type": "object",
+          "required": [
+            "levels"
+          ],
+          "properties": {
+            "levels": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "shots": {
+          "type": "object",
+          "required": [
+            "targetS",
+            "maxS"
+          ]
+        },
+        "captions": {
+          "type": "object",
+          "required": [
+            "wordsPerLine",
+            "maxLines",
+            "lowConfidence"
+          ]
+        }
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "when",
+          "do"
+        ]
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "component"
+            ],
+            "properties": {
+              "component": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*@\\d+$"
+              },
+              "props": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*@\\d+$"
+            }
+          }
+        ]
+      }
+    },
+    "never": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "where each value came from, by dotted path: ref:<id>@<s>, lesson:<id> or guess",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(ref:[A-Za-z0-9_.-]+(@[\\d.]+)?|lesson:[A-Za-z0-9_.-]+|guess)$"
+      }
+    },
+    "refs": {
+      "type": "array",
+      "description": "reference ids this version was learned from",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

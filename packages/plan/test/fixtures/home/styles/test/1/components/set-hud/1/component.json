@@ -1,0 +1,120 @@
+{
+  "name": "set-hud",
+  "version": 1,
+  "kind": "overlay",
+  "title": {
+    "uz": "Ro\u02bbyxat kartalari",
+    "en": "List HUD"
+  },
+  "description": "A spoken list of QUANTITIES as a HUD (e.g. sets of 3, 5 and 10): each item pops in as a warm glass card at chest height with a big gradient numeral and that many little boxes, then shrinks into a chip stacked top-left. The last item stays big; at the end the chips pop out one by one. Only for counts up to about 10, not for numbering a list (1, 2, 3\u2026): the boxes read as quantities.",
+  "tags": [
+    "list",
+    "hud",
+    "numbers",
+    "cards",
+    "glass"
+  ],
+  "props": {
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "default": [
+        {
+          "at": "cut:0",
+          "n": "3",
+          "label": "SET"
+        }
+      ],
+      "label": {
+        "uz": "Elementlar",
+        "en": "Items"
+      },
+      "items": {
+        "type": "object",
+        "fields": {
+          "at": {
+            "type": "anchor",
+            "default": "cut:0",
+            "label": {
+              "uz": "Vaqt",
+              "en": "Time"
+            }
+          },
+          "n": {
+            "type": "text",
+            "default": "3",
+            "maxLength": 3,
+            "label": {
+              "uz": "Raqam",
+              "en": "Number"
+            }
+          },
+          "label": {
+            "type": "text",
+            "default": "",
+            "maxLength": 18,
+            "label": {
+              "uz": "Yozuv",
+              "en": "Label"
+            }
+          }
+        }
+      }
+    },
+    "font": {
+      "type": "font",
+      "default": "$type.accent.font",
+      "label": {
+        "uz": "Shrift",
+        "en": "Font"
+      }
+    },
+    "numeralFill": {
+      "type": "gradient",
+      "default": {
+        "angle": 180,
+        "stops": [
+          [
+            "#FFC170",
+            0
+          ],
+          [
+            "#FF8A2B",
+            0.35
+          ],
+          [
+            "#FA5602",
+            0.65
+          ],
+          [
+            "#B33A00",
+            1
+          ]
+        ]
+      },
+      "label": {
+        "uz": "Raqam rangi",
+        "en": "Numeral fill"
+      }
+    }
+  },
+  "needs": [],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "public",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "passedAt": "2026-10-19T15:29:33.035Z",
+    "gemini": false
+  }
+}

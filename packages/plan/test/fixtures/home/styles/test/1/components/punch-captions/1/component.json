@@ -1,0 +1,67 @@
+{
+  "name": "punch-captions",
+  "version": 1,
+  "kind": "caption",
+  "title": {
+    "uz": "Zarba",
+    "en": "Punch"
+  },
+  "description": "One word at a time, big, bold and upper case; each word bounces in and pops the previous one away. Emphasis words use their gradient and a bigger size.",
+  "tags": [
+    "captions",
+    "punch",
+    "one-word",
+    "bold"
+  ],
+  "props": {
+    "boldFont": {
+      "type": "font",
+      "default": "$type.accent.font",
+      "label": {
+        "uz": "Shrift",
+        "en": "Font"
+      }
+    },
+    "size": {
+      "type": "number",
+      "unit": "px",
+      "min": 40,
+      "max": 200,
+      "default": 104,
+      "label": {
+        "uz": "Oʻlcham",
+        "en": "Size"
+      }
+    },
+    "emphasisSize": {
+      "type": "number",
+      "unit": "px",
+      "min": 60,
+      "max": 260,
+      "default": 130,
+      "label": {
+        "uz": "Urgʻu oʻlchami",
+        "en": "Emphasis size"
+      }
+    }
+  },
+  "needs": [],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "deprecated",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "failedAt": "2026-10-19T15:11:31.116Z",
+    "gemini": false
+  }
+}

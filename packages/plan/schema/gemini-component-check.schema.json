@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:gemini-component-check:1",
+  "title": "Gemini's visual check of a component's test renders (components.md §8.5)",
+  "type": "object",
+  "required": ["match", "legible", "polish", "problems", "matchNotes", "strengths"],
+  "properties": {
+    "match": {"type": "integer", "minimum": 1, "maximum": 5, "description": "how well the effect matches the reference clip (or, without one, the brief)"},
+    "legible": {"type": "integer", "minimum": 1, "maximum": 5, "description": "is every text readable on every background, Uzbek letters (oʻ gʻ ʼ) included"},
+    "polish": {"type": "integer", "minimum": 1, "maximum": 5, "description": "would a good motion designer ship this motion"},
+    "matchNotes": {"type": "string", "description": "how it differs from the reference: timing, easing, overshoot, layout, type, color"},
+    "problems": {"type": "array", "items": {"type": "string"}, "description": "concrete problems, each with the case name and the time, and what to change"},
+    "strengths": {"type": "array", "items": {"type": "string"}}
+  }
+}

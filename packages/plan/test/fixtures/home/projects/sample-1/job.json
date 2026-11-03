@@ -1,0 +1,89 @@
+{
+  "id": "sample-1",
+  "title": "Sample talking head (real timings, made-up words)",
+  "assets": {
+    "src_main": {
+      "path": "input/source.mp4",
+      "kind": "video",
+      "meta": {
+        "w": 1080,
+        "h": 1920,
+        "fps": 30
+      }
+    },
+    "tr_main": {
+      "path": "analysis/transcript.json",
+      "kind": "transcript",
+      "version": 1
+    },
+    "trk_main": {
+      "path": "analysis/track.json",
+      "kind": "track",
+      "version": 1
+    },
+    "mat_hook": {
+      "path": "input/cutout_0-8.webm",
+      "kind": "matte",
+      "version": 1,
+      "meta": {
+        "startS": 0
+      }
+    },
+    "br_clip-1": {
+      "path": "media/broll/clip-1.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-1.mp4"
+      }
+    },
+    "br_clip-2": {
+      "path": "media/broll/clip-2.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-2.mp4"
+      }
+    },
+    "br_clip-3": {
+      "path": "media/broll/clip-3.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-3.mp4"
+      }
+    },
+    "br_clip-4": {
+      "path": "media/broll/clip-4.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-4.mp4"
+      }
+    },
+    "br_clip-5": {
+      "path": "media/broll/clip-5.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-5.mp4"
+      }
+    },
+    "br_clip-6": {
+      "path": "media/broll/clip-6.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-6.mp4"
+      }
+    },
+    "br_clip-7": {
+      "path": "media/broll/clip-7.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-7.mp4"
+      }
+    },
+    "br_clip-8": {
+      "path": "media/broll/clip-8.mp4",
+      "kind": "broll",
+      "meta": {
+        "from": "clip-8.mp4"
+      }
+    }
+  }
+}

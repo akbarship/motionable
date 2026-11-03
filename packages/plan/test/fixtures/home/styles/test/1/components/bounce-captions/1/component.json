@@ -1,0 +1,55 @@
+{
+  "name": "bounce-captions",
+  "version": 1,
+  "kind": "caption",
+  "title": {
+    "uz": "Sakrash",
+    "en": "Bounce"
+  },
+  "description": "Words spring in with overshoot as they're spoken, in a bold display font; the next line replaces the old one. Emphasis lines hold at least the template's minimum hold.",
+  "tags": [
+    "captions",
+    "bounce",
+    "spring",
+    "punchy"
+  ],
+  "props": {
+    "boldFont": {
+      "type": "font",
+      "default": "$type.accent.font",
+      "label": {
+        "uz": "Qalin shrift",
+        "en": "Bold font"
+      },
+      "description": "regular words switch to this font, bold, so the bounce reads punchy"
+    },
+    "highlightFill": {
+      "type": "gradient",
+      "default": "$gradient.hero",
+      "label": {
+        "uz": "Ajratish rangi",
+        "en": "Highlight fill"
+      },
+      "editor": false
+    }
+  },
+  "needs": [],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "public",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "passedAt": "2026-10-19T15:10:26.177Z",
+    "gemini": false
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:gemini-reference:1",
+  "title": "Gemini reference study (docs/gemini-timeline.md §4). Style only, never content.",
+  "type": "object",
+  "required": ["format", "pacing", "framing", "captions", "emphasis", "titles", "graphics", "transitions", "broll", "grade", "sound", "hook", "cta", "avoid", "effects", "fitsTalkingHead"],
+  "properties": {
+    "format": {"type": "object", "required": ["aspect", "kind"], "properties": {"aspect": {"type": "string"}, "kind": {"type": "string"}}},
+    "pacing": {"type": "object", "required": ["avgShotS", "pattern", "pauses"], "properties": {
+      "avgShotS": {"type": "number"}, "pattern": {"type": "string"}, "pauses": {"type": "string"}}},
+    "framing": {"type": "object", "required": ["levels", "moves", "faceTarget"], "properties": {
+      "levels": {"type": "array", "items": {"type": "object", "required": ["name", "share", "looks"], "properties": {
+        "name": {"type": "string", "enum": ["wide", "medium", "close", "extreme-close"]}, "share": {"type": "number"},
+        "looks": {"type": "string", "description": "what the frame shows at this level, e.g. 'full body', 'waist up', 'head and shoulders'"}}}},
+      "moves": {"type": "string"}, "faceTarget": {"type": "string"}}},
+    "captions": {"type": "object", "required": ["position", "wordsPerLine", "type", "fill", "motion", "layout"], "properties": {
+      "position": {"type": "string"}, "wordsPerLine": {"type": "string"},
+      "type": {"type": "object", "required": ["class", "weight", "case", "sizeShare"], "properties": {
+        "class": {"type": "string", "description": "e.g. 'heavy grotesque sans', 'tall condensed sans', 'serif'"},
+        "weight": {"type": "string"}, "case": {"type": "string"}, "sizeShare": {"type": "number", "description": "cap height of ordinary caption text as a share of the frame height"}}},
+      "fill": {"type": "string"}, "motion": {"type": "string"},
+      "layout": {"type": "string", "description": "e.g. 'one line centred', 'small clusters placed beside the speaker', 'big word with a tiny line under it'"}}},
+    "emphasis": {"type": "string"},
+    "titles": {"type": "array", "items": {"type": "object", "required": ["approxT", "what"], "properties": {"approxT": {"type": "number"}, "what": {"type": "string"}}}},
+    "graphics": {"type": "array", "items": {"type": "object", "required": ["kind", "approxT", "what"], "properties": {"kind": {"type": "string"}, "approxT": {"type": "number"}, "what": {"type": "string"}}}},
+    "transitions": {"type": "array", "items": {"type": "object", "required": ["approxT", "what"], "properties": {"approxT": {"type": "number"}, "what": {"type": "string"}}}},
+    "broll": {"type": "object", "required": ["share", "style"], "properties": {"share": {"type": "number"}, "style": {"type": "string"}}},
+    "grade": {"type": "string"},
+    "sound": {"type": "object", "required": ["music", "sfx"], "properties": {"music": {"type": "boolean"}, "sfx": {"type": "string"}}},
+    "hook": {"type": "string"}, "cta": {"type": "string"},
+    "avoid": {"type": "array", "items": {"type": "string"}},
+    "effects": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "span", "what", "sound"], "properties": {
+      "id": {"type": "string"}, "kind": {"type": "string", "enum": ["caption", "overlay", "transition"]},
+      "span": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+      "what": {"type": "string"}, "sound": {"type": "string"}}}},
+    "fitsTalkingHead": {"type": "string", "description": "How much of this style works on a plain talking-head video without b-roll, and what it needs"}
+  }
+}

@@ -1,0 +1,35 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# media: never in git
+*.mp4
+*.mov
+*.MOV
+*.m4a
+*.mp3
+*.wav
+*.webm
+*.webp
+*.png
+*.jpg
+*.jpeg
+*.onnx
+!packages/engine/models/*.onnx
+
+# build caches
+.remotion/
+.cache/
+*.pack
+*.so*
+*.pdf
+*.zip
+*.ttf
+*.otf
+*.woff2
+*.gif
+

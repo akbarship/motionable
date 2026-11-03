@@ -1,0 +1,37 @@
+{
+  "name": "motionable",
+  "description": "Edit talking-head footage into reels in your own style: your Claude Code directs, the local Studio shows and renders.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "tsx apps/daemon/src/boot.ts",
+    "build": "npm run build -w @motionable/studio",
+    "dev": "npm run dev -w @motionable/studio",
+    "connect": "node scripts/connect-claude.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hyperframes/player": "0.8.223",
+    "@hyperframes/producer": "0.8.223",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ajv": "^8.20.0",
+    "fastify": "^5.12.7",
+    "hyperframes": "0.8.223",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

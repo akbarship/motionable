@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:gemini-qa:1",
+  "title": "Gemini QA review of a render (docs/gemini-timeline.md §6)",
+  "type": "object",
+  "required": ["scores", "verdict", "issues", "strengths"],
+  "properties": {
+    "scores": {"type": "object", "required": ["hook", "pacing", "readability", "framing", "matchesStyle", "overall"], "properties": {
+      "hook": {"type": "integer", "minimum": 1, "maximum": 5}, "pacing": {"type": "integer", "minimum": 1, "maximum": 5},
+      "readability": {"type": "integer", "minimum": 1, "maximum": 5}, "framing": {"type": "integer", "minimum": 1, "maximum": 5},
+      "matchesStyle": {"type": "integer", "minimum": 1, "maximum": 5}, "overall": {"type": "integer", "minimum": 1, "maximum": 5}}},
+    "verdict": {"type": "string", "enum": ["pass", "fix", "block"]},
+    "issues": {"type": "array", "items": {"type": "object", "required": ["id", "type", "severity", "target", "approxT", "what", "suggest"], "properties": {
+      "id": {"type": "string"},
+      "type": {"type": "string", "enum": ["caption-unreadable", "caption-timing", "caption-spelling", "awkward-cut", "jump-in-sentence", "dead-spot",
+        "framing", "headroom", "text-on-face", "text-cut-off", "effect-glitch", "style-mismatch", "never-do", "color", "other"]},
+      "severity": {"type": "string", "enum": ["block", "fix", "nit"]},
+      "target": {"type": "string", "description": "a plan id (shot s3, line w12, overlay o1, transition x2) or empty"},
+      "approxT": {"type": "number", "description": "output seconds"},
+      "what": {"type": "string"}, "suggest": {"type": "string"}}}},
+    "strengths": {"type": "array", "items": {"type": "string"}}
+  }
+}

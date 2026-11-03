@@ -1,0 +1,54 @@
+{
+  "name": "highlight-captions",
+  "version": 1,
+  "kind": "caption",
+  "title": {
+    "uz": "Ajratish",
+    "en": "Highlight"
+  },
+  "description": "The line builds word by word; the word being spoken is lit with the accent gradient and lifted slightly. The next line replaces the old one.",
+  "tags": [
+    "captions",
+    "highlight",
+    "karaoke",
+    "accent"
+  ],
+  "props": {
+    "boldFont": {
+      "type": "font",
+      "default": "$type.accent.font",
+      "label": {
+        "uz": "Qalin shrift",
+        "en": "Bold font"
+      },
+      "description": "regular words switch to this font, bold, so the bounce reads punchy"
+    },
+    "highlightFill": {
+      "type": "gradient",
+      "default": "$gradient.hero",
+      "label": {
+        "uz": "Ajratish rangi",
+        "en": "Highlight fill"
+      }
+    }
+  },
+  "needs": [],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "public",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "passedAt": "2026-10-19T15:12:38.485Z",
+    "gemini": false
+  }
+}

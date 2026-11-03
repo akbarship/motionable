@@ -1,0 +1,57 @@
+{
+  "name": "kinetic-captions",
+  "version": 1,
+  "kind": "caption",
+  "title": {
+    "uz": "Kinetik",
+    "en": "Kinetic"
+  },
+  "description": "Words reveal as they're spoken with a soft blur and lift; earlier words recede, each new line pushes the stack up, and old lines exit with blur.",
+  "tags": [
+    "captions",
+    "kinetic",
+    "keynote",
+    "clean"
+  ],
+  "props": {
+    "maxLines": {
+      "type": "integer",
+      "min": 1,
+      "max": 4,
+      "default": 2,
+      "label": {
+        "uz": "Qatorlar soni",
+        "en": "Lines on screen"
+      }
+    },
+    "cut": {
+      "type": "boolean",
+      "default": true,
+      "label": {
+        "uz": "Kesishda yo\u02bbqolsin",
+        "en": "Disappear on the cut"
+      },
+      "description": "true: the block disappears with a hard cut at `until`; false: it exits with a blur",
+      "editor": false
+    }
+  },
+  "needs": [],
+  "madeFrom": {
+    "kind": "manual",
+    "from": "an earlier Motionable version"
+  },
+  "author": {
+    "kind": "us"
+  },
+  "owner": null,
+  "status": "public",
+  "compatibleWith": null,
+  "ae": {
+    "mode": "layers"
+  },
+  "gate": {
+    "report": "gate-report.json",
+    "passedAt": "2026-10-19T15:09:15.713Z",
+    "gemini": false
+  }
+}

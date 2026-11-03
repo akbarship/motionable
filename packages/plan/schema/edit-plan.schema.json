@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:motionable:edit-plan:1",
+  "title": "Edit plan (docs/edit-plan.md)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "job", "version", "style", "reference", "canvas", "language", "inputs", "transcript", "timeline",
+               "tokens", "shots", "captions", "overlays", "transitions", "sfx", "audio", "notes"],
+  "definitions": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+    "cameraMode": {"enum": ["track", "fixed", "off"]},
+    "anchor": {"type": "string", "pattern": "^(word:\\d+(\\.end)?|t:\\d+(\\.\\d+)?|out:\\d+(\\.\\d+)?|cut:\\d+|shot:[A-Za-z0-9_]+(\\.end)?|end)([+-]\\d+(\\.\\d+)?f?)?$"},
+    "duration": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "string", "pattern": "^\\d+(\\.\\d+)?f$"}]},
+    "asset": {"type": "string", "pattern": "^asset:[A-Za-z0-9_.-]+(@\\d+)?$"},
+    "component": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*@\\d+$"},
+    "props": {"type": "object"},
+    "pair": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+    "instance": {
+      "type": "object", "additionalProperties": false, "required": ["component"],
+      "properties": {"component": {"$ref": "#/definitions/component"}, "props": {"$ref": "#/definitions/props"}}
+    },
+    "range": {
+      "type": "object", "additionalProperties": false, "required": ["from", "to", "kind"],
+      "properties": {
+        "from": {"$ref": "#/definitions/anchor"}, "to": {"$ref": "#/definitions/anchor"},
+        "kind": {"enum": ["retake", "filler", "other"]}, "by": {"type": "string"},
+        "evidence": {"type": "array", "items": {"type": "string"}}, "why": {"type": "string"},
+        "cut": {"type": "array", "items": {"$ref": "#/definitions/pair"}}
+      }
+    },
+    "textStyle": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "font": {"type": "string"}, "weight": {"type": "number"}, "size": {"type": "number", "exclusiveMinimum": 0},
+        "tracking": {"type": "number"}, "caps": {"type": "boolean"}, "italic": {"type": "boolean"}, "keep": {"type": "boolean"},
+        "fill": {"type": "string"}, "shadow": {"type": "string"}
+      }
+    },
+    "tokens": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "color": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"}},
+        "gradient": {"type": "object", "additionalProperties": {
+          "type": "object", "required": ["angle", "stops"], "additionalProperties": false,
+          "properties": {"angle": {"type": "number"}, "stops": {"type": "array", "minItems": 2, "items": {
+            "type": "array", "minItems": 2, "maxItems": 2, "items": [{"type": "string"}, {"type": "number", "minimum": 0, "maximum": 1}]}}}}},
+        "type": {"type": "object", "additionalProperties": {"$ref": "#/definitions/textStyle"}},
+        "framing": {"type": "object", "additionalProperties": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"zoom": {"$ref": "#/definitions/pair"}, "face": {"$ref": "#/definitions/pair"}}}},
+        "captionZone": {"type": "object", "additionalProperties": {"type": "number"}},
+        "safe": {"type": "object", "additionalProperties": false, "properties": {"face": {"type": "number", "minimum": 0}}},
+        "grade": {"type": "object", "additionalProperties": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"contrast": {"type": "number"}, "saturation": {"type": "number"}, "brightness": {"type": "number"}}}},
+        "shadow": {"type": "object", "additionalProperties": {
+          "type": "object", "additionalProperties": false, "required": ["y", "blur", "color", "opacity"],
+          "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "blur": {"type": "number"},
+                         "color": {"type": "string"}, "opacity": {"type": "number", "minimum": 0, "maximum": 1}}}},
+        "timing": {"type": "object", "additionalProperties": false, "properties": {
+          "anchorLead": {"type": "number"}, "captionLead": {"$ref": "#/definitions/duration"}, "minHold": {"type": "number"}}}
+      }
+    }
+  },
+  "properties": {
+    "schema": {"const": "motionable.edit-plan/1"},
+    "job": {"type": "string"},
+    "version": {"type": "integer", "minimum": 0},
+    "style": {"$ref": "#/definitions/component"},
+    "reference": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["asset", "study"],
+      "properties": {"asset": {"$ref": "#/definitions/asset"}, "study": {"$ref": "#/definitions/asset"}}}]},
+    "canvas": {"type": "object", "additionalProperties": false, "required": ["w", "h", "fps"],
+      "properties": {"w": {"type": "integer", "minimum": 1}, "h": {"type": "integer", "minimum": 1}, "fps": {"type": "number", "exclusiveMinimum": 0}}},
+    "language": {"type": "string"},
+    "inputs": {"type": "object", "additionalProperties": false, "required": ["source"], "properties": {
+      "source": {"$ref": "#/definitions/asset"}, "proxy": {"$ref": "#/definitions/asset"}, "track": {"$ref": "#/definitions/asset"},
+      "matte": {"$ref": "#/definitions/asset"}, "broll": {"type": "array", "items": {"$ref": "#/definitions/asset"}}}},
+    "transcript": {"type": "object", "additionalProperties": false, "required": ["asset", "edits"], "properties": {
+      "asset": {"$ref": "#/definitions/asset"},
+      "edits": {"type": "object", "propertyNames": {"pattern": "^\\d+$"}, "additionalProperties": {"type": "string", "minLength": 1}}}},
+    "timeline": {"type": "object", "additionalProperties": false, "required": ["segments", "removed", "suggested"], "properties": {
+      "segments": {"type": "array", "minItems": 1, "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "in", "out"],
+        "properties": {"id": {"type": "integer", "minimum": 0}, "in": {"type": "number", "minimum": 0}, "out": {"type": "number"},
+          "join": {"type": "object", "additionalProperties": false, "properties": {"crossfade": {"type": "number", "minimum": 0}}}}}},
+      "removed": {"type": "array", "items": {"$ref": "#/definitions/range"}},
+      "suggested": {"type": "array", "items": {"$ref": "#/definitions/range"}},
+      "why": {"type": "string"}}},
+    "tokens": {"$ref": "#/definitions/tokens"},
+    "shots": {"type": "array", "minItems": 1, "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "from", "kind"],
+      "properties": {
+        "id": {"$ref": "#/definitions/id"}, "from": {"$ref": "#/definitions/anchor"}, "kind": {"enum": ["speaker", "broll", "motion"]},
+        "level": {"type": "string"}, "zoom": {"$ref": "#/definitions/pair"}, "face": {"$ref": "#/definitions/pair"},
+        "camera": {"$ref": "#/definitions/cameraMode"},
+        "intro": {"type": "object", "additionalProperties": false, "required": ["zoom", "dur"],
+          "properties": {"zoom": {"type": "number"}, "dur": {"$ref": "#/definitions/duration"}}},
+        "hook": {"type": "boolean"},
+        "clip": {"$ref": "#/definitions/asset"}, "clipIn": {"type": "number", "minimum": 0},
+        "crop": {"type": "object", "additionalProperties": false, "required": ["zoom", "origin"],
+          "properties": {"zoom": {"type": "number", "minimum": 1}, "origin": {"$ref": "#/definitions/pair"}}},
+        "grade": {"type": "string"}, "captionZone": {"type": "number"},
+        "captions": {"$ref": "#/definitions/instance"}, "scene": {"$ref": "#/definitions/instance"}, "why": {"type": "string"}
+      }}},
+    "captions": {"type": "object", "additionalProperties": false, "required": ["component", "lines"], "properties": {
+      "component": {"$ref": "#/definitions/component"}, "props": {"$ref": "#/definitions/props"}, "why": {"type": "string"},
+      "lines": {"type": "array", "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "words", "role"],
+        "properties": {
+          "id": {"$ref": "#/definitions/id"}, "words": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 0}},
+          "role": {"type": "string"}, "style": {"$ref": "#/definitions/textStyle"},
+          "component": {"$ref": "#/definitions/component"}, "props": {"$ref": "#/definitions/props"}, "hidden": {"type": "boolean"}
+        }}}}},
+    "overlays": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "component", "from", "to"],
+      "properties": {
+        "id": {"$ref": "#/definitions/id"}, "component": {"$ref": "#/definitions/component"},
+        "from": {"$ref": "#/definitions/anchor"}, "to": {"$ref": "#/definitions/anchor"},
+        "attach": {"enum": ["screen", "scene"]}, "depth": {"enum": ["front", "behind-subject"]},
+        "props": {"$ref": "#/definitions/props"}, "why": {"type": "string"}
+      }}},
+    "transitions": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "shot", "component"],
+      "properties": {"id": {"$ref": "#/definitions/id"}, "shot": {"$ref": "#/definitions/id"}, "component": {"$ref": "#/definitions/component"},
+        "props": {"$ref": "#/definitions/props"}, "why": {"type": "string"}}}},
+    "sfx": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "sound", "at"],
+      "properties": {"id": {"$ref": "#/definitions/id"}, "sound": {"$ref": "#/definitions/asset"}, "at": {"$ref": "#/definitions/anchor"},
+        "gain": {"type": "number"}, "why": {"type": "string"}}}},
+    "audio": {"type": "object", "additionalProperties": false, "properties": {"loudness": {"type": "number"}, "why": {"type": "string"},
+      "fadeOut": {"type": "number", "minimum": 0, "maximum": 10},
+      "music": {"type": "object", "additionalProperties": false, "required": ["asset"], "properties": {"asset": {"$ref": "#/definitions/asset"},
+        "gain": {"type": "number", "minimum": -60, "maximum": 12}, "from": {"$ref": "#/definitions/anchor"},
+        "fadeIn": {"type": "number", "minimum": 0}, "fadeOut": {"type": "number", "minimum": 0}}}}},
+    "notes": {"type": "array", "items": {"oneOf": [{"type": "string"}, {"type": "object", "additionalProperties": false,
+      "required": ["id", "text", "status"], "properties": {"id": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"}, "text": {"type": "string", "minLength": 1},
+        "status": {"enum": ["open", "done"]}, "at": {"type": "string"}, "to": {"type": "string"}, "by": {"type": "string"}, "reply": {"type": "string"}}}]}},
+    "camera": {"type": "object", "additionalProperties": false, "required": ["mode"], "properties": {
+      "mode": {"$ref": "#/definitions/cameraMode"}, "center": {"$ref": "#/definitions/pair"}, "why": {"type": "string"}}}
+  }
+}

@@ -1,0 +1,870 @@
+{
+  "schema": "motionable.edit-plan/1",
+  "job": "sample-1",
+  "version": 1,
+  "reference": null,
+  "canvas": {
+    "w": 1080,
+    "h": 1920,
+    "fps": 30
+  },
+  "language": "uz-Latn",
+  "inputs": {
+    "source": "asset:src_main",
+    "track": "asset:trk_main@1",
+    "matte": "asset:mat_hook@1",
+    "broll": [
+      "asset:br_clip-1",
+      "asset:br_clip-2",
+      "asset:br_clip-3",
+      "asset:br_clip-4",
+      "asset:br_clip-5",
+      "asset:br_clip-6",
+      "asset:br_clip-7",
+      "asset:br_clip-8"
+    ]
+  },
+  "transcript": {
+    "asset": "asset:tr_main@1",
+    "edits": {}
+  },
+  "timeline": {
+    "segments": [
+      {
+        "id": 0,
+        "in": 0.6,
+        "out": 3.73
+      },
+      {
+        "id": 1,
+        "in": 3.89,
+        "out": 9.15
+      },
+      {
+        "id": 2,
+        "in": 9.489999999999998,
+        "out": 11.75
+      },
+      {
+        "id": 3,
+        "in": 12.09,
+        "out": 18.41
+      },
+      {
+        "id": 4,
+        "in": 19.509999999999998,
+        "out": 21.71
+      },
+      {
+        "id": 5,
+        "in": 21.95,
+        "out": 26.650000000000002
+      },
+      {
+        "id": 6,
+        "in": 26.97,
+        "out": 29.17
+      },
+      {
+        "id": 7,
+        "in": 29.509999999999998,
+        "out": 37.19
+      },
+      {
+        "id": 8,
+        "in": 37.57,
+        "out": 42.15
+      },
+      {
+        "id": 9,
+        "in": 42.730000000000004,
+        "out": 48.029999999999994
+      },
+      {
+        "id": 10,
+        "in": 48.330000000000005,
+        "out": 49.669999999999995
+      },
+      {
+        "id": 11,
+        "in": 49.870000000000005,
+        "out": 51.65
+      },
+      {
+        "id": 12,
+        "in": 52.17,
+        "out": 53.58
+      }
+    ],
+    "removed": [],
+    "suggested": [],
+    "why": "sample"
+  },
+  "tokens": {},
+  "shots": [
+    {
+      "id": "s1",
+      "from": "cut:0",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "W",
+      "hook": true,
+      "intro": {
+        "zoom": 1.45,
+        "dur": "26f"
+      },
+      "captionZone": 1150
+    },
+    {
+      "id": "s2",
+      "from": "word:8",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-1",
+      "clipIn": 1.5
+    },
+    {
+      "id": "s3",
+      "from": "word:10",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s4",
+      "from": "word:15",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-2",
+      "clipIn": 4
+    },
+    {
+      "id": "s5",
+      "from": "word:17",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-3",
+      "clipIn": 5
+    },
+    {
+      "id": "s6",
+      "from": "word:20",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "C"
+    },
+    {
+      "id": "s7",
+      "from": "word:24",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s8",
+      "from": "word:29",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "C"
+    },
+    {
+      "id": "s9",
+      "from": "word:34",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "W"
+    },
+    {
+      "id": "s10",
+      "from": "word:38",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s11",
+      "from": "word:43",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "C"
+    },
+    {
+      "id": "s12",
+      "from": "word:48",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-4",
+      "clipIn": 0.8,
+      "crop": {
+        "zoom": 1.75,
+        "origin": [
+          0.8,
+          0
+        ]
+      },
+      "grade": "mono-dark",
+      "captionZone": 1450
+    },
+    {
+      "id": "s13",
+      "from": "word:52",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s14",
+      "from": "word:55",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-5",
+      "clipIn": 1
+    },
+    {
+      "id": "s15",
+      "from": "word:58",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "C"
+    },
+    {
+      "id": "s16",
+      "from": "word:63",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-6",
+      "clipIn": 3,
+      "captionZone": 860
+    },
+    {
+      "id": "s17",
+      "from": "word:65",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "W"
+    },
+    {
+      "id": "s18",
+      "from": "word:73",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s19",
+      "from": "word:85",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-7",
+      "clipIn": 1
+    },
+    {
+      "id": "s20",
+      "from": "word:89",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "M"
+    },
+    {
+      "id": "s21",
+      "from": "word:96",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "C"
+    },
+    {
+      "id": "s22",
+      "from": "word:99",
+      "why": "sample",
+      "kind": "broll",
+      "clip": "asset:br_clip-8",
+      "clipIn": 4
+    },
+    {
+      "id": "s23",
+      "from": "word:104",
+      "why": "sample",
+      "kind": "speaker",
+      "level": "W"
+    }
+  ],
+  "captions": {
+    "component": "kinetic-captions@1",
+    "props": {},
+    "lines": [
+      {
+        "id": "lt",
+        "words": [
+          2,
+          3,
+          4
+        ],
+        "role": "display",
+        "hidden": true
+      },
+      {
+        "id": "lh1",
+        "words": [
+          5
+        ],
+        "role": "display",
+        "style": {
+          "size": 250,
+          "keep": true
+        }
+      },
+      {
+        "id": "lh2",
+        "words": [
+          6,
+          7
+        ],
+        "role": "display",
+        "style": {
+          "size": 120
+        }
+      },
+      {
+        "id": "l1",
+        "words": [
+          8,
+          9
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l2",
+        "words": [
+          10,
+          11
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l3",
+        "words": [
+          12,
+          13
+        ],
+        "role": "hero"
+      },
+      {
+        "id": "l4",
+        "words": [
+          14
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l5",
+        "words": [
+          15,
+          16
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l6",
+        "words": [
+          17,
+          18,
+          19
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l7",
+        "words": [
+          20,
+          21
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l8",
+        "words": [
+          22,
+          23
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l9",
+        "words": [
+          24,
+          25
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l10",
+        "words": [
+          26,
+          27,
+          28
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l11",
+        "words": [
+          29
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l12",
+        "words": [
+          30
+        ],
+        "role": "hero"
+      },
+      {
+        "id": "l13",
+        "words": [
+          31,
+          32,
+          33
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l14",
+        "words": [
+          34
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l15",
+        "words": [
+          35
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l16",
+        "words": [
+          36
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l17",
+        "words": [
+          37
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l18",
+        "words": [
+          38,
+          39
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l19",
+        "words": [
+          40,
+          41
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l20",
+        "words": [
+          42
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l21",
+        "words": [
+          43,
+          44
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l22",
+        "words": [
+          45
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l23",
+        "words": [
+          46,
+          47
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l24",
+        "words": [
+          48,
+          49
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l25",
+        "words": [
+          50
+        ],
+        "role": "accent"
+      },
+      {
+        "id": "l26",
+        "words": [
+          51
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l27",
+        "words": [
+          52
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l28",
+        "words": [
+          53
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l29",
+        "words": [
+          54
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l30",
+        "words": [
+          55,
+          56
+        ],
+        "role": "accent",
+        "component": "bounce-captions@1"
+      },
+      {
+        "id": "l31",
+        "words": [
+          57
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l32",
+        "words": [
+          58,
+          59
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l33",
+        "words": [
+          60
+        ],
+        "role": "hero"
+      },
+      {
+        "id": "l34",
+        "words": [
+          61
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l35",
+        "words": [
+          62
+        ],
+        "role": "accent"
+      },
+      {
+        "id": "l36",
+        "words": [
+          63,
+          64
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l37",
+        "words": [
+          65,
+          66
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l38",
+        "words": [
+          67
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l39",
+        "words": [
+          68
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l40",
+        "words": [
+          69,
+          70
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l41",
+        "words": [
+          71,
+          72
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l42",
+        "words": [
+          73,
+          74,
+          75
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l43",
+        "words": [
+          76,
+          77
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l44",
+        "words": [
+          78
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l45",
+        "words": [
+          79,
+          80
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l46",
+        "words": [
+          81,
+          82,
+          83
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l47",
+        "words": [
+          84
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l48",
+        "words": [
+          85
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l49",
+        "words": [
+          86,
+          87
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l50",
+        "words": [
+          88
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l51",
+        "words": [
+          89,
+          90
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l52",
+        "words": [
+          91,
+          92
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l53",
+        "words": [
+          93,
+          94,
+          95
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l54",
+        "words": [
+          96,
+          97
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l55",
+        "words": [
+          98
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l56",
+        "words": [
+          99,
+          100
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l57",
+        "words": [
+          101,
+          102
+        ],
+        "role": "accent"
+      },
+      {
+        "id": "l58",
+        "words": [
+          103
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l59",
+        "words": [
+          104,
+          105
+        ],
+        "role": "cap"
+      },
+      {
+        "id": "l60",
+        "words": [
+          106
+        ],
+        "role": "hero"
+      }
+    ],
+    "why": "sample"
+  },
+  "overlays": [
+    {
+      "id": "o1",
+      "component": "hook-title-behind@1",
+      "from": "cut:0",
+      "to": "shot:s1.end",
+      "attach": "scene",
+      "depth": "behind-subject",
+      "props": {
+        "title": "NAMUNA",
+        "left": {
+          "text": "BIRINCHI",
+          "at": "word:2"
+        },
+        "right": {
+          "text": "IKKINCHI",
+          "at": "word:4"
+        }
+      },
+      "why": "sample"
+    },
+    {
+      "id": "o2",
+      "component": "set-hud@1",
+      "from": "word:89",
+      "to": "word:99",
+      "props": {
+        "items": [
+          {
+            "at": "word:89+2f",
+            "n": "3",
+            "label": "SET"
+          },
+          {
+            "at": "word:93+2f",
+            "n": "5",
+            "label": "SET"
+          },
+          {
+            "at": "word:96+2f",
+            "n": "10",
+            "label": "SET"
+          }
+        ]
+      },
+      "why": "sample"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "x1",
+      "shot": "s9",
+      "component": "blur-zoom@1"
+    },
+    {
+      "id": "x2",
+      "shot": "s17",
+      "component": "blur-zoom@1"
+    },
+    {
+      "id": "x3",
+      "shot": "s23",
+      "component": "blur-zoom@1"
+    }
+  ],
+  "sfx": [],
+  "audio": {
+    "loudness": -14
+  },
+  "notes": [
+    "Synthetic sample: the timings, cuts and track of a real edit; the words are made up."
+  ],
+  "style": "test@1"
+}
