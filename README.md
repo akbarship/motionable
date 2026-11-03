@@ -47,7 +47,8 @@ npm run connect      # adds the motionable MCP server and skill to your Claude C
 `~/Motionable` holds your projects and styles; `~/.motionable` your settings, keys and lessons. Nothing is
 uploaded anywhere except the audio you send to ElevenLabs for transcription.
 
-The server listens on `127.0.0.1` only. Don't expose port 4377 to a network.
+The server listens on `127.0.0.1` only and answers only requests addressed to this computer, so other websites
+can't reach it. Don't expose port 4377 to a network.
 
 ## Development
 `npm run dev` (Studio with hot reload, next to `npm start`), `npm test`, `npm run typecheck`.

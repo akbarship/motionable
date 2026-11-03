@@ -20,11 +20,13 @@ import type {ComponentManifest, Style} from '@motionable/plan';
 import {look, type LookArgs} from './look';
 import {deleteFile, listFiles, saveUpload} from './files';
 import {claudeCommand, claudeStatus, notesPrompt, startClaude, stopClaude} from './claude';
+import {guard} from './guard';
 import {addReferences, listStyles, pendingRefs, saveStyle, styleDetail, stylesDir, writeComponent} from './styles';
 
 const PORT = Number(process.env.MOTIONABLE_PORT ?? 4377);
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const app = Fastify({logger: false, bodyLimit: 8 * 1024 * 1024});
+guard(app); // requests from other sites are refused (see guard.ts)
 
 // ---------- live events (SSE) ----------
 const clients = new Set<NodeJS.WritableStream>();

@@ -49,7 +49,8 @@ npm run connect      # Claude Code'ga motionable MCP server va skill'ini qo'shad
 `~/Motionable` — loyihalar va uslublar; `~/.motionable` — sozlamalar, kalitlar va saboqlar. Hech narsa hech
 qayerga yuklanmaydi, faqat transkript uchun ovoz ElevenLabs'ga yuboriladi.
 
-Server faqat `127.0.0.1` da tinglaydi. 4377-portni tarmoqqa ochmang.
+Server faqat `127.0.0.1` da tinglaydi va faqat shu kompyuterga yo'llangan so'rovlarga javob beradi: boshqa saytlar
+unga ulana olmaydi. 4377-portni tarmoqqa ochmang.
 
 ## Dasturchilar uchun
 `npm run dev` (Studio, `npm start` yonida), `npm test`, `npm run typecheck`.
