@@ -23,7 +23,7 @@ Bepul va ochiq kodli (MIT). [English](README.md)
 
 ## O'rnatish
 ```bash
-git clone <shu repo> motionable
+git clone https://github.com/akbarship/motionable.git
 cd motionable
 npm install          # render uchun Chrome ham yuklanadi
 npm run build        # Studio'ni yig'adi

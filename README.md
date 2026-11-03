@@ -22,7 +22,7 @@ Free and open source (MIT). [O'zbekcha](README.uz.md)
 
 ## Install
 ```bash
-git clone <this repo> motionable
+git clone https://github.com/akbarship/motionable.git
 cd motionable
 npm install          # also downloads the Chrome the renderer uses
 npm run build        # builds the Studio
