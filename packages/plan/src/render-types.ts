@@ -25,5 +25,5 @@ export type ResolvedTokens = {
   timing: {anchorLead: number; captionLead: number; minHold: number}; // anchorLead in seconds; the others in frames
 };
 
-export type CaptionWord = {id: number; text: string; start: number; end: number}; // frames from the block start
+export type CaptionWord = {id: number; text: string; start: number; end: number; tone?: 'accent' | 'alert'}; // frames from the block start
 export type CaptionLine = {id: string; role: string; style: TextStyle; words: CaptionWord[]};

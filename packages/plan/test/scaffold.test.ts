@@ -15,4 +15,15 @@ describe('scaffold', () => {
     fs.rmSync(path.join(dir, 'plan'), {recursive: true, force: true});
     expect(scaffold(dir, 'test@1', home).plan.camera?.mode).toBe('off');
   });
+
+  it("keeps the voice's pauses when the approved plan says so", () => {
+    const home = makeHome();
+    const dir = path.join(home, 'projects', 'sample-1');
+    const trimmed = scaffold(dir, 'test@1', home).plan.timeline.segments.length;
+    fs.rmSync(path.join(dir, 'plan'), {recursive: true, force: true});
+    const kept = scaffold(dir, 'test@1', home, {keepPauses: true}).plan;
+    expect(trimmed).toBeGreaterThan(1);
+    expect(kept.timeline.segments).toHaveLength(1); // one span: nothing between the words is cut
+    expect(kept.timeline.why).toMatch(/keeps the voice's pauses/);
+  });
 });

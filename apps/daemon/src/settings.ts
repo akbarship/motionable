@@ -2,9 +2,13 @@
 // the Studio sees them masked.
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {HOME, STATE, readJson, writeJson} from '@motionable/plan/store';
 
-const KEYS = ['elevenlabs', 'gemini'] as const;
+const VERSION = readJson<{version: string}>(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../package.json')).version;
+
+// ElevenLabs: transcripts (paid). Pexels and Pixabay: stock b-roll (free keys).
+const KEYS = ['elevenlabs', 'pexels', 'pixabay'] as const;
 
 export type Config = {keys?: Partial<Record<(typeof KEYS)[number], string>>; lang?: 'uz' | 'en'; home?: string};
 
@@ -27,6 +31,7 @@ export const publicSettings = (state = STATE) => {
     lang: c.lang ?? 'uz',
     home: c.home ?? HOME,
     restart: !!c.home && path.resolve(c.home) !== path.resolve(HOME), // the daemon reads the folder when it starts
+    version: VERSION,
   };
 };
 

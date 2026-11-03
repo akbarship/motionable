@@ -11,5 +11,12 @@ Motionable is MIT-licensed (see LICENSE). It builds on the following; their lice
 | ffmpeg-skill | one threshold (held vowels, `packages/plan/src/cutter.ts`) | MIT |
 | Google Fonts (Inter, Montserrat, League Gothic, …) | loaded at run time by the preview and the renders | SIL Open Font License |
 
-Not bundled: **ffmpeg** (install it on your system; its licence is yours to check for what you distribute), the
-Chrome that HyperFrames' renderer downloads, and the ElevenLabs service you call with your own key.
+Not bundled (downloaded onto the user's computer at install time, never part of this repository):
+- **ffmpeg / ffprobe** static builds (GPL or LGPL, see each build's notice): johnvansickle.com (Linux), gyan.dev
+  (Windows), ffmpeg.martin-riedl.de (macOS). `npm run setup -- --ffmpeg` downloads them into `~/.motionable/bin`.
+  An ffmpeg already on your PATH works as well.
+- **Node.js** (MIT) from nodejs.org, when the installer finds no Node 22+.
+- The **Chrome** that HyperFrames' renderer downloads (puppeteer).
+- Services you call with your own keys: **ElevenLabs** (transcripts), **Pexels** and **Pixabay** (stock b-roll; each
+  clip keeps its source and author, and an export lists them in `credits.txt`; their licences allow free use without
+  attribution, and credit is given anyway).

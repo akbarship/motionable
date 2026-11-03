@@ -5,11 +5,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
 import {resolveProps, resolveTokens, validateComponentManifest, type ComponentManifest, type Style} from '@motionable/plan';
 import {MC_RUNTIME, componentCss, tokenFonts} from '@motionable/compose';
+import {nodeBin, tool} from '@motionable/engine';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const GSAP = 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js';
 const DUR = 4; // s: every test page
 const TIMES = [0.5, 1.5, 2.5, 3.5];
@@ -37,7 +36,8 @@ export const staticChecks = (source: string, ref: string) => {
 // Uzbek samples: the apostrophe letters, a long word, and a line that must wrap
 const UZ = {short: 'Oʻzbekiston', words: 'Gʻildirak maʼlumot oʻz vaqtida', long: 'Toshkentdagi eng kattakon ulgurji bozorlardan birida oʻtkazilgan tadqiqot natijalari'};
 
-type Case = {name: string; props: Record<string, unknown>; ctx: Record<string, unknown>};
+// quick: one render (a variant of a case already checked twice for determinism), so many variants stay fast
+type Case = {name: string; props: Record<string, unknown>; ctx: Record<string, unknown>; quick?: boolean};
 
 /** Test cases per kind: defaults, Uzbek text in every text prop, the longest text, and numbers at min and max. */
 export const cases = (m: ComponentManifest): Case[] => {
@@ -55,15 +55,25 @@ export const cases = (m: ComponentManifest): Case[] => {
   };
   const out: Case[] = [];
   if (m.kind === 'caption') {
-    out.push({name: 'uzbek', props: {}, ctx: captionCtx([UZ.short, UZ.words])});
+    // one word in the accent and one in the alert tone (caption.tone), as an edit marks them
+    const toned = captionCtx([UZ.short, UZ.words]);
+    toned.lines[1].words[0] = {...toned.lines[1].words[0], tone: 'accent'} as never;
+    toned.lines[1].words[2] = {...toned.lines[1].words[2], tone: 'alert'} as never;
+    out.push({name: 'uzbek', props: {}, ctx: toned});
     out.push({name: 'long', props: {}, ctx: captionCtx([UZ.long])});
     // the block placed right under the face, as resolve places it when the zone would cover the face
     out.push({name: 'face', props: {}, ctx: {...captionCtx([UZ.short, UZ.words]), underFace: true}});
     // a real block holds every line of a shot: the sheet must show one screen at a time, not a stack
     out.push({name: 'many', props: {}, ctx: captionCtx(UZ.long.split(' ').concat(UZ.words.split(' ')))});
   } else {
-    out.push({name: 'uzbek', props: withText(UZ.words), ctx: {}});
-    if (texts.length) out.push({name: 'long', props: withText(UZ.long), ctx: {}});
+    // a scene hears the words spoken over it (ctx.words, seconds)
+    const ctx = m.kind === 'scene' ? {words: words(UZ.long, 0.3)} : {};
+    out.push({name: 'uzbek', props: withText(UZ.words), ctx});
+    if (texts.length) out.push({name: 'long', props: withText(UZ.long), ctx});
+    // every value of a choice prop (a scene's variants) gets its own page: each one must pass, not only the default
+    for (const [k, s] of Object.entries(m.props).filter(([, s]) => s.type === 'enum' && s.options?.length)) {
+      for (const o of s.options!.slice(0, 24)) if (o.value !== s.default) out.push({name: `${k}-${o.value}`, props: {...withText(UZ.words), [k]: o.value}, ctx, quick: true});
+    }
   }
   for (const [k, s] of nums) {
     out.push({name: `${k}-min`, props: {...out[0].props, [k]: s.min}, ctx: out[0].ctx});
@@ -73,14 +83,14 @@ export const cases = (m: ComponentManifest): Case[] => {
 };
 
 const sh = (cmd: string, args: string[], cwd: string) => new Promise<{code: number; out: string; err: string}>((resolve) => {
-  const p = spawn(cmd, args, {cwd, env: {...process.env, HYPERFRAMES_NO_TELEMETRY: '1'}});
+  const p = spawn(cmd, args, {cwd, windowsHide: true, env: {...process.env, HYPERFRAMES_NO_TELEMETRY: '1'}});
   let out = '';
   let err = '';
   p.stdout.on('data', (d) => (out += d));
   p.stderr.on('data', (d) => (err += d));
   p.on('close', (code) => resolve({code: code ?? 1, out, err}));
 });
-const hf = (args: string[], cwd: string) => sh(path.join(REPO, 'node_modules', '.bin', 'hyperframes'), args, cwd);
+const hf = (args: string[], cwd: string) => sh(...nodeBin('hyperframes', args), cwd);
 
 // the test face, as fractions of the canvas height (its box is drawn on every page)
 const FACE = {top: 0.23, bottom: 0.37};
@@ -170,7 +180,14 @@ export const runGate = async (dir: string, style: Style, work: string): Promise<
   }
   if (!errors.length) {
     fs.rmSync(work, {recursive: true, force: true});
-    for (const c of list) {
+    // the empty page once, before the cases run side by side: a case that draws nothing matches it
+    const bp = path.join(work, '_blank');
+    fs.mkdirSync(bp, {recursive: true});
+    fs.copyFileSync(path.join(dir, 'component.js'), path.join(bp, 'component.js'));
+    fs.writeFileSync(path.join(bp, 'index.html'), testPage(style, manifest, ref, list[0], css, false));
+    blank = (await snap(bp, path.join(bp, 'snap'))).map(hash);
+    const sheetOf = new Map<string, string>();
+    const runCase = async (c: Case) => {
       const page = path.join(work, c.name);
       fs.mkdirSync(page, {recursive: true});
       fs.copyFileSync(path.join(dir, 'component.js'), path.join(page, 'component.js'));
@@ -188,33 +205,33 @@ export const runGate = async (dir: string, style: Style, work: string): Promise<
         }
       } catch {
         errors.push(`${c.name}: check failed: ${(check.err || check.out).slice(-300)}`);
-        continue;
+        return;
       }
       try {
         const a = await snap(page, path.join(page, 'snap-a'));
-        const b = await snap(page, path.join(page, 'snap-b'));
+        const b = c.quick ? a : await snap(page, path.join(page, 'snap-b'));
         a.forEach((f, i) => { if (!b[i] || hash(f) !== hash(b[i])) errors.push(`${c.name}: frame at ${TIMES[i]} s differs between two renders (not deterministic)`); });
-        if (!blank) {
-          const bp = path.join(work, '_blank');
-          fs.mkdirSync(bp, {recursive: true});
-          fs.copyFileSync(path.join(dir, 'component.js'), path.join(bp, 'component.js'));
-          fs.writeFileSync(path.join(bp, 'index.html'), testPage(style, manifest, ref, c, css, false));
-          blank = (await snap(bp, path.join(bp, 'snap'))).map(hash);
-        }
         if (a.every((f, i) => hash(f) === blank![i])) errors.push(`${c.name}: draws nothing (every frame equals the empty page)`);
-        sheets.push(path.join(page, 'snap-a', 'contact-sheet.jpg'));
+        sheetOf.set(c.name, path.join(page, 'snap-a', 'contact-sheet.jpg'));
       } catch (e) {
         errors.push(`${c.name}: ${(e as Error).message}`);
       }
-    }
+    };
+    // four pages at a time: a scene with many variants stays within a tool call's patience
+    const queue = [...list];
+    await Promise.all(Array.from({length: Math.min(4, queue.length)}, async () => {
+      for (let c = queue.shift(); c; c = queue.shift()) await runCase(c);
+    }));
+    for (const c of list) if (sheetOf.has(c.name)) sheets.push(sheetOf.get(c.name)!); // in case order
   }
   // one sheet for Claude: every case, a row each
   let sheet: string | undefined;
   if (sheets.length) {
     sheet = path.join(dir, 'gate-sheet.jpg');
     const inputs = sheets.flatMap((s) => ['-i', s]);
-    const filter = sheets.map((_, i) => `[${i}]scale=1200:-2[s${i}]`).join(';') + ';' + sheets.map((_, i) => `[s${i}]`).join('') + `vstack=inputs=${sheets.length}`;
-    const r = await sh('ffmpeg', ['-v', 'error', '-y', ...inputs, '-filter_complex', sheets.length > 1 ? filter : '[0]scale=1200:-2', '-q:v', '6', sheet], dir);
+    const width = sheets.length > 6 ? 600 : 1200; // many variants: smaller rows, one readable sheet
+    const filter = sheets.map((_, i) => `[${i}]scale=${width}:-2[s${i}]`).join(';') + ';' + sheets.map((_, i) => `[s${i}]`).join('') + `vstack=inputs=${sheets.length}`;
+    const r = await sh(tool('ffmpeg'), ['-v', 'error', '-y', ...inputs, '-filter_complex', sheets.length > 1 ? filter : '[0]scale=1200:-2', '-q:v', '6', sheet], dir);
     if (r.code !== 0) warnings.push(`sheet: ${r.err.slice(-200)}`);
   }
   const report: GateReport = {ref, pass: !errors.length, errors, warnings, cases: list.map((c) => c.name), sheet, at: new Date().toISOString()};

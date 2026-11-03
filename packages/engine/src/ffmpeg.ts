@@ -1,9 +1,10 @@
 // ffmpeg and ffprobe calls. Node only.
 import {spawn} from 'node:child_process';
+import {tool} from './bin';
 
 /** Runs a command; resolves with stdout (or stderr with `stderr: true`, for ffmpeg's measurements). */
 export const run = (cmd: string, args: string[], {stderr = false} = {}) => new Promise<string>((resolve, reject) => {
-  const p = spawn(cmd, args, {stdio: ['ignore', 'pipe', 'pipe']});
+  const p = spawn(cmd === 'ffmpeg' || cmd === 'ffprobe' ? tool(cmd) : cmd, args, {stdio: ['ignore', 'pipe', 'pipe']});
   let out = '';
   let err = '';
   p.stdout.on('data', (d) => (out += d));

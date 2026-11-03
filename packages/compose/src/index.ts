@@ -46,7 +46,7 @@ export const compose = ({plan: r, base, manifests, scripts, css = {}, gsap = GSA
         id: `cap-${b.id}`, ref: b.component, kind: 'caption', start: sec(b.start), end: sec(b.start + Math.min(b.until, b.hardEnd)),
         props: timedProps(b.component, b.props, b.start),
         ctx: {y: Math.round(b.y), lines: lines.map((l) => ({id: l.id, role: l.role, style: l.style,
-          words: l.words.map((wd) => ({text: wd.text, start: sec(b.start + wd.start), end: sec(b.start + wd.end)}))}))},
+          words: l.words.map((wd) => ({text: wd.text, start: sec(b.start + wd.start), end: sec(b.start + wd.end), ...(wd.tone ? {tone: wd.tone} : {})}))}))},
       });
       continue;
     }

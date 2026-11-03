@@ -7,24 +7,26 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Fastify from 'fastify';
 import type {Batch, Brief} from '@motionable/plan';
-import {HOME, STATE, deleteLesson, loadComponents, loadLessons, saveLesson} from '@motionable/plan/store';
+import {HOME, STATE, deleteLesson, loadComponents, loadJob, loadLessons, saveLesson} from '@motionable/plan/store';
 import {lessonsFor, type Lesson} from '@motionable/plan';
 import {buildPage} from './build';
 import {analyzeFree, createProject, readReport, transcribe} from './analyze';
 import {applyOps, cutCandidates, listProjects, projectDir, projectState, srtOf, studioView, undoLast} from './projects';
 import {listVideos} from './videos';
 import {publicSettings, saveSettings} from './settings';
-import {normalizeLoudness} from '@motionable/engine';
+import {nodeBin, normalizeLoudness} from '@motionable/engine';
 import {scaffold} from '@motionable/plan/scaffold';
 import type {ComponentManifest, Style} from '@motionable/plan';
 import {look, type LookArgs} from './look';
 import {deleteFile, listFiles, saveUpload} from './files';
 import {createQueue, forClaude} from './requests';
-import {decide, proposals, saveProposal, type ProposalInput} from './proposal';
+import {currentProposal, decide, proposals, saveProposal, type ProposalInput} from './proposal';
 import {guard} from './guard';
+import {addBroll, credits, searchBroll, type Orientation} from './broll';
 import {addReferences, listStyles, pendingRefs, saveStyle, styleDetail, stylesDir, writeComponent} from './styles';
 
-const PORT = Number(process.env.MOTIONABLE_PORT ?? 4377);
+const FIRST_PORT = Number(process.env.MOTIONABLE_PORT ?? 4377);
+let PORT = FIRST_PORT;
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const app = Fastify({logger: false, bodyLimit: 8 * 1024 * 1024});
 guard(app); // requests from other sites are refused (see guard.ts)
@@ -163,7 +165,9 @@ app.post<{Params: {id: string}}>('/api/projects/:id/transcribe', async (req, rep
 });
 app.post<{Params: {id: string}; Body: {style: string}}>('/api/projects/:id/scaffold', async (req, reply) => {
   try {
-    const {plan} = scaffold(projectDir(req.params.id), req.body.style);
+    const dir = projectDir(req.params.id);
+    // the approved proposal may keep the voice's own pauses (a paced voiceover)
+    const {plan} = scaffold(dir, req.body.style, undefined, {keepPauses: currentProposal(dir)?.pauses === 'keep'});
     emit({type: 'plan', project: req.params.id, version: plan.version, by: 'system'});
     rebuild(req.params.id);
     return {version: plan.version, camera: plan.camera?.mode, lines: plan.captions.lines.length, segments: plan.timeline.segments.length};
@@ -244,6 +248,23 @@ app.put<{Params: {id: string; name: string}}>('/api/projects/:id/files/:name', a
     return fail400(reply, e);
   }
 });
+// stock b-roll (Pexels, Pixabay) on the user's keys: search, then download a pick as a project file
+app.post<{Body: {query: string; orientation?: Orientation; n?: number}}>('/api/broll/search', async (req, reply) => {
+  try {
+    return await searchBroll(req.body);
+  } catch (e) {
+    return fail400(reply, e);
+  }
+});
+app.post<{Params: {id: string}; Body: {pick: string}}>('/api/projects/:id/broll', async (req, reply) => {
+  try {
+    const f = await addBroll(req.params.id, req.body.pick);
+    emit({type: 'files', project: req.params.id});
+    return f;
+  } catch (e) {
+    return fail400(reply, e);
+  }
+});
 app.get<{Params: {id: string}}>('/api/projects/:id/files', (req, reply) => {
   try {
     return listFiles(req.params.id);
@@ -276,7 +297,7 @@ app.post<{Body: {keys?: Record<string, string | null>; lang?: string; home?: str
 app.get<{Querystring: {style?: string}}>('/api/lessons', (req) => {
   const all = loadLessons();
   const name = req.query.style?.split('@')[0];
-  return name ? all.filter((l) => l.scope === 'global' || l.scope === `style:${name}`) : all;
+  return name ? lessonsFor(all, name) : all;
 });
 app.post<{Body: Omit<Lesson, 'id' | 'at'>}>('/api/lessons', (req, reply) => {
   try {
@@ -374,8 +395,8 @@ app.post<{Body: LookArgs}>('/api/look', async (req, reply) => {
 type Quality = 'draft' | 'looks' | 'delivery' | 'export';
 const renders = new Map<string, {status: 'running' | 'done' | 'failed'; out: string; step?: string; error?: string; lufs?: number}>();
 const hfRender = (dir: string, quality: string, out: string) => new Promise<void>((resolve, reject) => {
-  const p = spawn(path.join(REPO, 'node_modules', '.bin', 'hyperframes'), ['render', '--quality', quality, '--workers', '4', '--output', out],
-    {cwd: path.join(dir, 'render', 'page'), env: {...process.env, HYPERFRAMES_NO_TELEMETRY: '1'}});
+  const [node, args] = nodeBin('hyperframes', ['render', '--quality', quality, '--workers', '4', '--output', out]);
+  const p = spawn(node, args, {cwd: path.join(dir, 'render', 'page'), windowsHide: true, env: {...process.env, HYPERFRAMES_NO_TELEMETRY: '1'}});
   let err = '';
   p.stderr.on('data', (d) => (err = (err + d).slice(-2000)));
   p.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve() : reject(new Error(err.slice(-400) || `render exited ${code}`))));
@@ -394,7 +415,7 @@ app.post<{Params: {id: string}; Body: {quality?: Quality}}>('/api/projects/:id/r
   const set = (v: Partial<NonNullable<ReturnType<typeof renders.get>>>) => {
     renders.set(key, {...(renders.get(key) ?? {status: 'running', out}), ...v});
     const r = renders.get(key)!;
-    emit({type: 'render', project: id, version, quality, status: r.status, step: r.step, error: r.error});
+    emit({type: 'render', project: id, version, quality, status: r.status, step: r.step, error: r.error, file: r.status === 'done' ? path.basename(out) : undefined});
   };
   set({status: 'running', step: 'render'});
   (async () => {
@@ -404,6 +425,11 @@ app.post<{Params: {id: string}; Body: {quality?: Quality}}>('/api/projects/:id/r
     set({step: 'loudness'});
     const l = await normalizeLoudness(delivery, out, -14, -1);
     fs.writeFileSync(out.replace(/\.mp4$/, '.srt'), srtOf(id));
+    // stock clips the edit uses, credited beside the video
+    const job = loadJob(dir);
+    const used = new Set(job.plan.shots.map((s) => String(s.clip ?? '').replace(/^asset:/, '')));
+    const lines = credits(job.manifest.assets as Record<string, {meta?: Record<string, unknown>}>, used);
+    if (lines.length) fs.writeFileSync(out.replace(/\.mp4$/, '.credits.txt'), `B-roll\n${lines.join('\n')}\n`);
     renders.set(key, {...renders.get(key)!, lufs: l.integratedLufs});
   })().then(() => set({status: 'done', step: undefined}), (e) => set({status: 'failed', error: String((e as Error).message).slice(-400)}));
   return {job: key, status: 'running', out};
@@ -458,13 +484,36 @@ app.get('/player.js', (req, reply) =>
   sendFile(path.join(REPO, 'node_modules/@hyperframes/player/dist/hyperframes-player.global.js'), undefined, reply));
 // the Studio's build (apps/studio: npm run build -w @motionable/studio); the probe page stays for engine checks
 const STUDIO = path.join(REPO, 'apps/studio/dist');
+// no build yet: a page that says so (and how to fix it), not the engine probe
 app.get('/', (req, reply) => sendFile(fs.existsSync(path.join(STUDIO, 'index.html')) ? path.join(STUDIO, 'index.html')
-  : path.join(REPO, 'apps/daemon/static/probe.html'), undefined, reply));
+  : path.join(REPO, 'apps/daemon/static/not-built.html'), undefined, reply));
 app.get<{Params: {'*': string}}>('/assets/*', (req, reply) => sendFile(inside(path.join(STUDIO, 'assets'), req.params['*']), undefined, reply));
 app.get('/probe', (req, reply) => sendFile(path.join(REPO, 'apps/daemon/static/probe.html'), undefined, reply));
 
-// ---------- start ----------
-await app.listen({port: PORT, host: '127.0.0.1'});
+// ---------- restart (Settings): close, start a fresh copy of this process, exit ----------
+const LOG = path.join(STATE, 'daemon.log');
+app.post('/api/restart', async () => {
+  setTimeout(async () => {
+    for (const c of clients) c.end(); // the Studio's live streams would hold the close open
+    app.server.closeAllConnections();
+    await app.close();
+    const log = fs.openSync(LOG, 'a');
+    spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {detached: true, windowsHide: true, stdio: ['ignore', log, log], env: process.env}).unref();
+    bye();
+  }, 200);
+  return {ok: true};
+});
+
+// ---------- start: the first free port from 4377 (another program may hold it) ----------
+for (;;) {
+  try {
+    await app.listen({port: PORT, host: '127.0.0.1'});
+    break;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EADDRINUSE' || PORT >= FIRST_PORT + 13) throw e;
+    PORT++;
+  }
+}
 fs.mkdirSync(STATE, {recursive: true});
 fs.writeFileSync(path.join(STATE, 'daemon.json'), JSON.stringify({port: PORT, pid: process.pid, home: HOME}));
 const bye = () => {

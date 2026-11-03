@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as ort from 'onnxruntime-web';
+import {tool} from './bin';
 import {probe} from './ffmpeg';
 
 const MODEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../models/face_detection_yunet_2023mar.onnx');
@@ -66,7 +67,7 @@ export const trackFace = async (src: string, out: string, fps = 10) => {
   ort.env.wasm.numThreads = 1;
   const session = await ort.InferenceSession.create(fs.readFileSync(MODEL));
   // frames letterboxed into the model's square from the top-left, as BGR bytes
-  const dec = spawn('ffmpeg', ['-v', 'error', '-i', src, '-vf', `fps=${fps},scale=${dw}:${dh},pad=${SIZE}:${SIZE}:0:0`,
+  const dec = spawn(tool('ffmpeg'), ['-v', 'error', '-i', src, '-vf', `fps=${fps},scale=${dw}:${dh},pad=${SIZE}:${SIZE}:0:0`,
     '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], {stdio: ['ignore', 'pipe', 'pipe']});
   const frame = SIZE * SIZE * 3;
   const input = new Float32Array(frame);

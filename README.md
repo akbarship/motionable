@@ -18,24 +18,27 @@ Free and open source (MIT). [O'zbekcha](README.uz.md)
 - **Export** for reels: MP4 at −14 LUFS plus an SRT.
 
 ## Requirements
-- **Node.js 22+** and **ffmpeg** (with `ffprobe`) on your PATH
 - **[Claude Code](https://claude.com/claude-code)** with a Claude plan (terminal, desktop app or IDE)
-- An **ElevenLabs** API key for transcription (paid, on your own account; asked before every call)
-- Tested on Ubuntu 24.04 with Chrome. macOS and Windows are not tested yet: reports and fixes are welcome.
+- Windows 10/11, macOS (Intel or Apple silicon) or Linux. The installer brings Node.js and ffmpeg itself.
+- Optional keys, in the Studio's ⚙ Settings: **ElevenLabs** for the transcript (paid, your own account; asked before
+  every call), **Pexels** and **Pixabay** (free) for stock b-roll.
 
 ## Install
-In Claude Code:
-```
-/plugin marketplace add akbarship/motionable
-/plugin install motionable
-```
-(Claude Code 2.1.275 or later does it in one step: `/plugin install motionable --marketplace akbarship/motionable`.)
-Then type **`/motionable`**. The first time, Claude sets it up with you, one question at a time: your language,
-the folder your videos live in, ffmpeg and the packages. It asks before installing anything; keys never go in the
-chat. Then the Studio opens.
+One line in a terminal. No admin rights; run it again to update.
 
-**By hand:** `git clone https://github.com/akbarship/motionable.git`, open `claude` inside the folder (it picks up
-the tool and the skill from there; `npm run connect` adds them for every folder) and type `/motionable`.
+**macOS / Linux**
+```bash
+curl -fsSL https://raw.githubusercontent.com/akbarship/motionable/main/scripts/install.sh | bash
+```
+**Windows** (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/akbarship/motionable/main/scripts/install.ps1 | iex
+```
+It installs into `~/.motionable/app`, asks your language and where your videos live, and connects Claude Code.
+Then open Claude Code and type **`/motionable`**: the Studio opens.
+
+**As a Claude Code plugin:** `/plugin marketplace add akbarship/motionable`, `/plugin install motionable`, then
+`/motionable`: Claude sets the rest up with you, one question at a time, and asks before installing anything.
 
 ## Your first video
 1. **`/motionable`** in Claude Code. The Studio opens; the pill says *Claude connected*: Claude is waiting for it.

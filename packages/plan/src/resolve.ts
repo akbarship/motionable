@@ -30,7 +30,7 @@ const fail = (msg: string): never => {
 
 /** The plan's words with the transcript edits applied. */
 export const wordsOf = (plan: EditPlan, transcript: Transcript): Word[] =>
-  transcript.words.map((w) => (plan.transcript.edits[String(w.i)] ? {...w, text: plan.transcript.edits[String(w.i)]} : w));
+  transcript.words.map((w) => (plan.transcript.edits[String(w.i)] !== undefined ? {...w, text: plan.transcript.edits[String(w.i)]} : w));
 
 /** The tokens in force for this plan: style → taste → plan. */
 export const planTokens = (plan: EditPlan, style: Style, taste?: Tokens): Tokens =>
@@ -270,12 +270,11 @@ export const resolvePlan = (input: ResolveInput): ResolvedPlan => {
         id: l.id,
         role: l.role,
         style: lineStyle(l.role, l.style),
-        words: l.words.map((i) => ({
-          id: i,
-          text: words[i].text,
-          start: wf(i) - lead - blockStart,
-          end: map.srcToFrame(words[i].end) - blockStart,
-        })),
+        // a word set to "" (word.setText) is spoken but not shown
+        words: l.words.filter((i) => words[i].text !== '').map((i) => {
+          const tone = l.tones?.find((x) => x.word === i)?.tone;
+          return {id: i, text: words[i].text, start: wf(i) - lead - blockStart, end: map.srcToFrame(words[i].end) - blockStart, ...(tone ? {tone} : {})};
+        }),
       }));
       // a block shows up to two lines at once: its height is about the two biggest line sizes
       const sizes = kitLines.map((l) => l.style.size).sort((a, b) => b - a);

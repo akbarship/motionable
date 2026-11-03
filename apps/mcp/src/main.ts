@@ -8,9 +8,11 @@ import {fileURLToPath} from 'node:url';
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {z} from 'zod';
+import {nodeBin} from '../../../packages/engine/src/bin'; // the file alone: nothing heavy loads in the shim
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const STATE = path.join(process.env.MOTIONABLE_STATE ?? path.join(os.homedir(), '.motionable'), 'daemon.json');
+const STATE_DIR = process.env.MOTIONABLE_STATE ?? path.join(os.homedir(), '.motionable');
+const STATE = path.join(STATE_DIR, 'daemon.json');
 const PORT = Number(process.env.MOTIONABLE_PORT ?? 4377);
 
 const base = () => {
@@ -24,14 +26,15 @@ const alive = async () => fetch(`${base()}/api/health`).then((r) => r.ok, () => 
 
 const ensureDaemon = async () => {
   if (await alive()) return;
-  const tsx = path.join(REPO, 'node_modules', '.bin', 'tsx');
-  const log = fs.openSync(path.join(os.tmpdir(), 'motionable-daemon.log'), 'a');
-  spawn(tsx, [path.join(REPO, 'apps/daemon/src/boot.ts')], {detached: true, stdio: ['ignore', log, log], env: process.env}).unref();
+  fs.mkdirSync(STATE_DIR, {recursive: true});
+  const log = fs.openSync(path.join(STATE_DIR, 'daemon.log'), 'a');
+  const [node, args] = nodeBin('tsx', [path.join(REPO, 'apps/daemon/src/boot.ts')]);
+  spawn(node, args, {detached: true, windowsHide: true, stdio: ['ignore', log, log], env: process.env}).unref();
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 250));
     if (await alive()) return;
   }
-  throw new Error('the Motionable daemon did not start (see motionable-daemon.log in the temp folder)');
+  throw new Error(`the Motionable server did not start: see ${path.join(STATE_DIR, 'daemon.log')}`);
 };
 
 const call = async (method: 'GET' | 'POST', url: string, body?: unknown) => {
@@ -136,11 +139,12 @@ server.registerTool('add_lesson', {
   inputSchema: {
     text: z.string().describe('the user\'s own words, one sentence'),
     scope: z.string().optional().describe('"global" (default) or "style:<name>"'),
+    about: z.enum(['style', 'craft']).optional().describe('style: about the look (scope it to the style; references decide the look) | craft: holds for every style'),
     rule: z.object({kind: z.enum(['forbid', 'max_per_minute', 'min_hold', 'no_behind_subject'])}).passthrough().optional()
       .describe('forbid {component} | max_per_minute {what: shot|overlay|transition|<component>, n} | min_hold {role, s} | no_behind_subject'),
   },
-}, tool(async ({text, scope, rule}: {text: string; scope?: string; rule?: Record<string, unknown>}) =>
-  call('POST', '/api/lessons', {text, scope: scope ?? 'global', rule, source: 'claude'})));
+}, tool(async ({text, scope, about, rule}: {text: string; scope?: string; about?: 'style' | 'craft'; rule?: Record<string, unknown>}) =>
+  call('POST', '/api/lessons', {text, scope: scope ?? 'global', about, rule, source: 'claude'})));
 
 server.registerTool('apply_ops', {
   description: 'Apply one all-or-nothing batch of plan operations; returns the new version and warnings.',
@@ -168,8 +172,24 @@ server.registerTool('propose_plan', {
     scenes: z.array(z.object({from: z.number(), to: z.number(), title: z.string(), what: z.string(), why: z.string()})).min(1),
     cuts: z.array(z.object({from: z.number(), to: z.number(), why: z.string()})).optional(),
     audio: z.string().optional().describe('music and SFX, one line'), delivery: z.string().optional().describe('format and length, one line'),
+    pauses: z.enum(['trim', 'keep']).optional().describe('keep: scaffold keeps the voice\'s pauses (a paced voiceover)'),
+    needs: z.array(z.object({what: z.string(), when: z.string().optional()})).optional()
+      .describe('clips the user should upload (no stock key or nothing fitting): what, and where'),
   },
 }, tool(async ({project, ...p}: {project: string} & Record<string, unknown>) => call('POST', `/api/projects/${project}/proposal`, p)));
+
+server.registerTool('find_broll', {
+  description: 'Stock b-roll on the user\'s Pexels/Pixabay keys: a short list (pick, source, seconds, size, author); add the fitting one with add_broll.',
+  inputSchema: {query: z.string().describe('what is on screen, in English'), orientation: z.enum(['portrait', 'landscape', 'square']).optional(),
+    n: z.number().int().min(1).max(12).optional()},
+}, tool(async (a: {query: string; orientation?: string; n?: number}) =>
+  (await call('POST', '/api/broll/search', a) as {pick: string; source: string; durationS: number; w: number; h: number; author: string}[])
+    .map(({pick, source, durationS, w, h, author}) => ({pick, source, s: durationS, size: `${w}x${h}`, author}))));
+
+server.registerTool('add_broll', {
+  description: 'Download a find_broll pick into the project as a b-roll file (br_*), credited on export.',
+  inputSchema: {project: z.string(), pick: z.string().describe('like pexels:123 or pixabay:456')},
+}, tool(async ({project, pick}: {project: string; pick: string}) => call('POST', `/api/projects/${project}/broll`, {pick})));
 
 // The bridge: the Studio queues requests (plan, revise, approve, notes, style); Claude waits here in chunks, does one,
 // and closes it with `done` + a one-line `reply` on the next call. Progress pings keep the client from timing out.

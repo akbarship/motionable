@@ -7,6 +7,8 @@ import {api, type Lesson, type StyleDetail, type StyleListItem} from './api';
 import {pick, useT, type Lang} from './i18n';
 import {RequestCard, useRequests} from './Requests';
 import {Lessons} from './Lessons';
+import {Check, Close, Plus} from './Icons';
+import {slug} from './slug';
 
 const fontsLink = (families: string[]) => families.length
   ? `https://fonts.googleapis.com/css2?${families.map((f) => `family=${encodeURIComponent(f)}:wght@400;600;700;800;900`).join('&')}&display=swap` : '';
@@ -31,7 +33,7 @@ export const Styles = ({lang, projects, refresh, onError}: {lang: Lang; projects
   }, [ref, refresh, onError]);
 
   const create = () => {
-    const name = newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const name = slug(newName);
     if (!name) return;
     setList((l) => (l.some((s) => s.name === name) ? l : [...l, {name, versions: [], refs: 0, components: []}]));
     setRef(name);
@@ -58,7 +60,7 @@ export const Styles = ({lang, projects, refresh, onError}: {lang: Lang; projects
         <div className="newstyle">
           <input className="inp" placeholder={t('newStyleName')} value={newName} onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && create()} aria-label={t('newStyleName')} />
-          <button className="btn" onClick={create} disabled={!newName.trim()}>+</button>
+          <button className="btn" onClick={create} disabled={!newName.trim()} aria-label={t('newStyleName')}><Plus size={14} /></button>
         </div>
       </aside>
       <section className="scard">
@@ -78,7 +80,10 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
   const src = d.style.sources ?? {};
   const types = Object.entries(tok.type ?? {});
   const families = [...new Set(types.map(([, s]) => s.font))];
+  // where each value came from (a reference moment, a lesson, a guess): only under "Details"
+  const [details, setDetails] = useState(false);
   const tag = (key: string) => {
+    if (!details) return null;
     const s = src[key] ?? Object.entries(src).find(([k]) => key.startsWith(`${k}.`) || k.startsWith(`${key}.`))?.[1];
     return s ? <span className={`tag src ${s === 'guess' ? 'guess' : ''}`} title={s}>{s.replace(/^ref:/, '')}</span> : null;
   };
@@ -87,8 +92,9 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
     <div className="scontent">
       {families.length > 0 && <link rel="stylesheet" href={fontsLink(families)} />}
       <header className="shead">
-        <h2>{pick(d.style.title, lang, name)} <small>{d.ref}</small></h2>
+        <h2>{pick(d.style.title, lang, name)}{details && <small>{d.ref}</small>}</h2>
         <p className="muted">{d.style.description}</p>
+        <label className="toggle"><input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} /> {t('details')}</label>
       </header>
 
       <div className="sgrid">
@@ -100,7 +106,7 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
           <h3>{t('colours')}</h3>
           <ul className="swatches">
             {Object.entries(tok.color ?? {}).map(([k, v]) => (
-              <li key={k}><i style={{background: v}} /><b>{k}</b><code>{v}</code>{tag(`tokens.color.${k}`)}</li>
+              <li key={k}><i style={{background: v}} /><b>{k}</b>{details ? <code>{v}</code> : <span />}{tag(`tokens.color.${k}`)}</li>
             ))}
           </ul>
           <h3>{t('type')}</h3>
@@ -111,7 +117,7 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
                   color: typeof s.fill === 'string' && s.fill.startsWith('#') ? s.fill : s.fill?.startsWith('$color.') ? tok.color?.[s.fill.slice(7)] : undefined}}>
                   Oʻzbekiston
                 </span>
-                <small>{k} · {s.font} {s.weight} · {s.size}px</small>{tag(`tokens.type.${k}`)}
+                <small>{s.font}{details && ` · ${k} · ${s.weight} · ${s.size}px`}</small>{tag(`tokens.type.${k}`)}
               </li>
             ))}
           </ul>
@@ -125,7 +131,7 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
             <dt>{t('faceMargin')}</dt><dd>{tok.safe?.face ?? 40} px {tag('tokens.safe.face')}</dd>
             <dt>{t('framing')}</dt><dd>{rules?.framing?.levels?.join(' / ')} {tag('tokens.framing')}</dd>
           </dl>
-          {d.style.never?.length > 0 && (<><h3>{t('never')}</h3><ul className="never">{d.style.never.map((n) => <li key={n.id}>✕ {n.text}</li>)}</ul></>)}
+          {d.style.never?.length > 0 && (<><h3>{t('never')}</h3><ul className="never">{d.style.never.map((n) => <li key={n.id}><Close size={14} /> {n.text}</li>)}</ul></>)}
         </div>
       </div>
 
@@ -149,11 +155,12 @@ const Card = ({d, lang, projects, onError}: {d: StyleDetail & {lessons: Lesson[]
             <li key={c.ref}>
               {c.sheet && <div className="cthumb"><img src={file(c.sheet)} alt="" loading="lazy" /></div>}
               <div>
-                <b>{pick(c.title, lang, c.ref)}</b> <code>{c.ref}</code>
+                <b>{pick(c.title, lang, c.ref)}</b>{details && <> <code>{c.ref}</code></>}
                 <p className="muted">{c.description}</p>
-                <span className="tag">{c.kind}</span> <span className={`tag ${c.status === 'private' || c.status === 'public' ? 'done' : ''}`}>{c.status}</span>{' '}
-                {c.gate && <span className={`tag ${c.gate.pass ? 'done' : 'fail'}`}>{c.gate.pass ? `gate ✓ ${c.gate.cases}` : 'gate ✕'}</span>}
-                {c.gate && !c.gate.pass && <p className="error">{c.gate.errors.join(' · ')}</p>}
+                {c.gate && !c.gate.pass && <span className="tag fail">{lang === 'uz' ? 'Tekshiruvdan oʻtmagan' : 'Didn’t pass its check'}</span>}
+                {details && <> <span className="tag">{c.kind}</span> <span className="tag">{c.status}</span>{' '}
+                  {c.gate?.pass && <span className="tag done"><Check size={12} /> {c.gate.cases}</span>}</>}
+                {details && c.gate && !c.gate.pass && <p className="error">{c.gate.errors.join(' · ')}</p>}
               </div>
             </li>
           ))}
@@ -227,7 +234,7 @@ const NewStyle = ({name, refresh, onError}: {name: string; refresh: number; onEr
           <b>{busy ? `${t('studying')} ${busy}…` : t('addReferences')}</b><span>{t('addReferencesHint')}</span>
         </button>
         <input ref={input} type="file" accept="video/*" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
-        <ul className="never">{pending.map((p) => <li key={p}>✓ {p}</li>)}</ul>
+        <ul className="never">{pending.map((p) => <li key={p}><Check size={14} /> {p}</li>)}</ul>
       </div>
       {pending.length > 0 && (
         <div className="sec">

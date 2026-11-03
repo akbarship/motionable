@@ -266,6 +266,18 @@ const applyOp = (plan: EditPlan, op: Op, ctx: ApplyContext, byKind: string) => {
     case 'caption.setRole':
       update(plan.captions.lines, str(op, 'line'), 'caption line', {role: str(op, 'role')});
       return;
+    case 'caption.tone': {
+      // one word of a line in the accent or alert colour; tone null takes it back
+      const i = findIndex(plan.captions.lines, str(op, 'line'), 'caption line');
+      const l = plan.captions.lines[i];
+      const w = num(op, 'word');
+      if (!l.words.includes(w)) throw new Error(`word ${w} isn't in line ${l.id}`);
+      if (op.tone !== null && op.tone !== 'accent' && op.tone !== 'alert') throw new Error('tone is "accent", "alert" or null');
+      const tones = (l.tones ?? []).filter((x) => x.word !== w);
+      plan.captions.lines[i] = {...l, tones: op.tone ? [...tones, {word: w, tone: op.tone}] : tones};
+      if (!plan.captions.lines[i].tones!.length) delete plan.captions.lines[i].tones;
+      return;
+    }
     case 'caption.hide':
       update(plan.captions.lines, str(op, 'line'), 'caption line', {hidden: op.hidden !== false});
       return;

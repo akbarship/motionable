@@ -2,9 +2,11 @@
 // talking-head footage, or a voiceover made all of motion) and a style (one of the user's, or a new one from
 // references, built by Claude while the wizard goes on); 3) the materials. "Send to Claude" creates the project;
 // the daemon then runs the analysis, the paid transcript (agreed here) and queues the plan request for Claude.
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useRef, useState, type DragEvent} from 'react';
 import {api, type StyleListItem} from './api';
 import {useT} from './i18n';
+import {Check, Close, Down, Up} from './Icons';
+import {slug} from './slug';
 
 type Mode = 'edit' | 'voiceover';
 type StyleCard = {name: string; ref: string | null; colors: string[]; components: number};
@@ -21,13 +23,45 @@ const loadCards = async (list: StyleListItem[]): Promise<StyleCard[]> => Promise
   return {name: s.name, ref, colors: Object.values(d?.style.tokens?.color ?? {}).slice(0, 5), components: s.components.length};
 }));
 
-export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onError(m: string): void}) => {
+// what the user typed survives leaving the wizard (Settings for a key, another tab) until the video is sent
+type Language = 'uz' | 'ru' | 'en' | 'auto';
+type Draft = {title: string; about: string; script: string; mode: Mode; language: Language};
+const DRAFT = 'mc.draft';
+const readDraft = (): Partial<Draft> => {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT) ?? '{}');
+  } catch {
+    return {};
+  }
+};
+
+/** A drop zone: files dragged onto it arrive like picked ones. */
+const useDrop = (onFiles: (f: File[]) => void) => {
+  const [over, setOver] = useState(false);
+  return {
+    over,
+    props: {
+      onDragOver: (e: DragEvent) => { e.preventDefault(); setOver(true); },
+      onDragLeave: () => setOver(false),
+      onDrop: (e: DragEvent) => { e.preventDefault(); setOver(false); onFiles(Array.from(e.dataTransfer.files)); },
+    },
+  };
+};
+
+export const NewVideo = ({onCreated, onError, onSettings}: {onCreated(id: string): void; onError(m: string): void; onSettings(): void}) => {
   const t = useT();
+  const d0 = useRef(readDraft()).current;
   const [step, setStep] = useState(1);
-  const [title, setTitle] = useState('');
-  const [about, setAbout] = useState('');
-  const [script, setScript] = useState('');
-  const [mode, setMode] = useState<Mode>('edit');
+  const [title, setTitle] = useState(d0.title ?? '');
+  const [about, setAbout] = useState(d0.about ?? '');
+  const [script, setScript] = useState(d0.script ?? '');
+  const [mode, setMode] = useState<Mode>(d0.mode ?? 'edit');
+  const [language, setLanguage] = useState<Language>(d0.language ?? 'uz');
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT, JSON.stringify({title, about, script, mode, language}));
+    } catch {}
+  }, [title, about, script, mode, language]);
   const [cards, setCards] = useState<StyleCard[] | null>(null);
   const [style, setStyle] = useState<string>(''); // name@version, or the name of a style still being built
   const [pickNew, setPickNew] = useState(false);
@@ -64,8 +98,8 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
   });
 
   // a new style: references go up now, and Claude is asked to build it while the user carries on
-  const name = newName.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  const uploadRefs = async (files: FileList | null) => {
+  const name = slug(newName);
+  const uploadRefs = async (files: FileList | File[] | null) => {
     if (!name) return onError(t('newStyleName'));
     for (const f of Array.from(files ?? [])) {
       setBusy(f.name);
@@ -101,12 +135,15 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
         done += f.size;
       }
       const {id} = await api.createProject(paths, {title: title.trim() || undefined,
-        brief: {about: about.trim(), script: script.trim() || undefined, mode, style: style || undefined},
+        brief: {about: about.trim(), script: script.trim() || undefined, mode, style: style || undefined, language},
         then: {transcribe: paid, plan: true}});
       for (const f of extras) {
         await api.upload(id, f, track(f)).catch((e) => onError(`${f.name}: ${e.message}`));
         done += f.size;
       }
+      try {
+        localStorage.removeItem(DRAFT);
+      } catch {}
       onCreated(id);
     } catch (e) {
       onError((e as Error).message);
@@ -115,13 +152,17 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
   };
 
   const steps = [t('wzAbout'), t('wzFormat'), t('wzFiles')];
+  const addMain = (f: File[]) => setMain(mode === 'edit' ? [...main, ...f] : f.slice(0, 1));
+  const dropRefs = useDrop((f) => newName.trim() && !busy && uploadRefs(f));
+  const dropMain = useDrop((f) => progress === null && addMain(f));
+  const dropExtras = useDrop((f) => progress === null && setExtras([...extras, ...f]));
   return (
     <main className="setup">
       <div className="sheet wide wizard">
         <h2>{t('newVideo')}</h2>
         <ol className="wzsteps">
           {steps.map((s, i) => (
-            <li key={s} className={i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}>
+            <li key={s} className={i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''} aria-current={i + 1 === step ? 'step' : undefined}>
               <button className="link" disabled={i + 1 > step || progress !== null} onClick={() => setStep(i + 1)}>{i + 1}. {s}</button>
             </li>
           ))}
@@ -173,12 +214,12 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
             {pickNew && (
               <div className="newstyle">
                 <div className="field"><label htmlFor="wz-sname">{t('newStyleName')}</label>
-                  <input id="wz-sname" className="inp" value={newName} placeholder="kofe-pop" onChange={(e) => setNewName(e.target.value)} /></div>
-                <button className="drop" onClick={() => refInput.current?.click()} disabled={!newName.trim() || !!busy}>
-                  <b>{busy ? `${t('studying')} ${busy}…` : t('addReferences')}</b><span>{t('addReferencesHint')}</span>
+                  <input id="wz-sname" className="inp" value={newName} placeholder={t('styleNameHint')} onChange={(e) => setNewName(e.target.value)} /></div>
+                <button className={`drop${dropRefs.over ? ' over' : ''}`} {...dropRefs.props} onClick={() => refInput.current?.click()} disabled={!newName.trim() || !!busy}>
+                  <b>{busy ? `${t('studying')} ${busy}…` : t('addReferences')}</b><span>{t('addReferencesHint')} · {t('dropHere')}</span>
                 </button>
                 <input ref={refInput} type="file" accept={VIDEO} multiple hidden onChange={(e) => { uploadRefs(e.target.files); e.target.value = ''; }} />
-                <ul className="never">{refs.map((r) => <li key={r}>✓ {r}</li>)}</ul>
+                <ul className="never">{refs.map((r) => <li key={r}><Check size={14} /> {r}</li>)}</ul>
               </div>
             )}
             <div className="btnrow">
@@ -194,12 +235,12 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
         {step === 3 && (
           <div className="sec">
             <h3>{mode === 'edit' ? t('wzMainVideo') : t('wzMainAudio')}</h3>
-            <button className="drop" onClick={() => mainInput.current?.click()} disabled={progress !== null}>
+            <button className={`drop${dropMain.over ? ' over' : ''}`} {...dropMain.props} onClick={() => mainInput.current?.click()} disabled={progress !== null}>
               <b>{mode === 'edit' ? t('chooseVideos') : t('wzChooseAudio')}</b>
-              <span>{mode === 'edit' ? t('newProjectHint') : t('wzAudioHint')}</span>
+              <span>{mode === 'edit' ? t('newProjectHint') : t('wzAudioHint')} · {t('dropHere')}</span>
             </button>
             <input ref={mainInput} type="file" accept={mode === 'edit' ? VIDEO : AUDIO} multiple={mode === 'edit'} hidden
-              onChange={(e) => { const f = Array.from(e.target.files ?? []); setMain(mode === 'edit' ? [...main, ...f] : f.slice(0, 1)); e.target.value = ''; }} />
+              onChange={(e) => { addMain(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
             {main.length > 0 && (
               <ol className="picklist">
                 {main.map((f, i) => (
@@ -207,16 +248,16 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
                     <span className="fname">{i + 1}. {f.name}</span>
                     <small>{(f.size / 1e6).toFixed(1)} MB</small>
                     <span className="acts">
-                      {mode === 'edit' && <button className="iconbtn" aria-label="up" onClick={() => move(i, -1)} disabled={i === 0 || progress !== null}>↑</button>}
-                      {mode === 'edit' && <button className="iconbtn" aria-label="down" onClick={() => move(i, 1)} disabled={i === main.length - 1 || progress !== null}>↓</button>}
-                      <button className="iconbtn" aria-label={t('remove')} onClick={() => setMain(main.filter((_, j) => j !== i))} disabled={progress !== null}>✕</button>
+                      {mode === 'edit' && <button className="iconbtn" aria-label={`${t('moveUp')}: ${f.name}`} onClick={() => move(i, -1)} disabled={i === 0 || progress !== null}><Up /></button>}
+                      {mode === 'edit' && <button className="iconbtn" aria-label={`${t('moveDown')}: ${f.name}`} onClick={() => move(i, 1)} disabled={i === main.length - 1 || progress !== null}><Down /></button>}
+                      <button className="iconbtn" aria-label={`${t('remove')}: ${f.name}`} onClick={() => setMain(main.filter((_, j) => j !== i))} disabled={progress !== null}><Close /></button>
                     </span>
                   </li>
                 ))}
               </ol>
             )}
             <h3>{t('wzExtras')} <span>{t('optional')}</span></h3>
-            <button className="drop" onClick={() => extraInput.current?.click()} disabled={progress !== null}>
+            <button className={`drop${dropExtras.over ? ' over' : ''}`} {...dropExtras.props} onClick={() => extraInput.current?.click()} disabled={progress !== null}>
               <b>{t('choose')}</b><span>{t('dropHint')}</span>
             </button>
             <input ref={extraInput} type="file" multiple hidden onChange={(e) => { setExtras([...extras, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }} />
@@ -225,17 +266,23 @@ export const NewVideo = ({onCreated, onError}: {onCreated(id: string): void; onE
                 {extras.map((f, i) => (
                   <li key={`${f.name}-${i}`}>
                     <span className="fname">{f.name}</span><small>{(f.size / 1e6).toFixed(1)} MB</small>
-                    <span className="acts"><button className="iconbtn" aria-label={t('remove')} onClick={() => setExtras(extras.filter((_, j) => j !== i))} disabled={progress !== null}>✕</button></span>
+                    <span className="acts"><button className="iconbtn" aria-label={`${t('remove')}: ${f.name}`} onClick={() => setExtras(extras.filter((_, j) => j !== i))} disabled={progress !== null}><Close /></button></span>
                   </li>
                 ))}
               </ul>
             )}
             <h3>{t('step_transcribe')}</h3>
+            <div className="field"><label htmlFor="wz-lang">{t('videoLang')}</label>
+              <select id="wz-lang" className="inp" value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
+                <option value="uz">Oʻzbekcha</option><option value="ru">Русский</option><option value="en">English</option>
+                <option value="auto">{t('langAuto')}</option>
+              </select></div>
             <label className="check">
               <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} disabled={!hasKey} />
               <span>{t('wzPaidOk')}</span>
             </label>
             <p className="hint">{hasKey ? t('transcribeHint') : t('wzNoKey')}</p>
+            {!hasKey && <div className="btnrow"><button className="btn slim" onClick={onSettings}>{t('openSettings')}</button></div>}
             {progress !== null && <div className="bar"><i style={{width: `${Math.round(progress * 100)}%`}} /></div>}
             <div className="btnrow">
               <button className="btn" onClick={() => setStep(2)} disabled={progress !== null}>{t('back')}</button>

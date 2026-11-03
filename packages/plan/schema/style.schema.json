@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:motionable:style:1",
-  "title": "Style (docs/styles.md \u00a73)",
+  "title": "Style (docs/styles.md §3)",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -198,6 +198,55 @@
             "maxLines",
             "lowConfidence"
           ]
+        },
+        "broll": {
+          "type": "object",
+          "description": "how much of the references is stock or own b-roll, measured by eye (style.md): stock means Claude finds clips (find_broll) or asks the user",
+          "properties": {
+            "shareOfRuntime": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "clipS": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "source": {
+              "enum": [
+                "stock",
+                "own",
+                "none",
+                "mixed"
+              ]
+            },
+            "subjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20
+            },
+            "gradeToFootage": {
+              "type": "boolean"
+            },
+            "captionShade": {
+              "type": "boolean"
+            },
+            "cropLogos": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },

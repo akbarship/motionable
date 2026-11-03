@@ -2,6 +2,7 @@
 // this spot) and a lesson (the mistake isn't made again). "Never use this component" makes the lesson a rule.
 import {useState} from 'react';
 import {api, type Op} from './api';
+import {ThumbDown} from './Icons';
 import {useT} from './i18n';
 
 type Props = {
@@ -18,7 +19,7 @@ export const Dislike = ({style, what, component, at, apply, onError}: Props) => 
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [never, setNever] = useState(false);
-  if (!open) return <button className="btn dislike" onClick={() => setOpen(true)}>👎 {t('dislike')}</button>;
+  if (!open) return <button className="btn dislike" onClick={() => setOpen(true)}><ThumbDown size={14} /> {t('dislike')}</button>;
   const send = async () => {
     const text = reason.trim();
     try {
@@ -39,7 +40,7 @@ export const Dislike = ({style, what, component, at, apply, onError}: Props) => 
       {component && (
         <label className="toggle">
           <input type="checkbox" checked={never} onChange={(e) => setNever(e.target.checked)} />
-          {t('neverUse')} <code>{component}</code>
+          {t('neverUse')} <b>{component.replace(/@\d+$/, '')}</b>
         </label>
       )}
       <div className="btnrow">

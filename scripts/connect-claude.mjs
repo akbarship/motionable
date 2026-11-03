@@ -14,13 +14,13 @@ if (claude(['--version']).status !== 0) {
   console.error('Claude Code (the `claude` command) was not found. Install it first: https://claude.com/claude-code');
   process.exit(1);
 }
-const tsx = path.join(repo, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
-if (!fs.existsSync(tsx)) {
+if (!fs.existsSync(path.join(repo, 'node_modules', 'tsx'))) {
   console.error('Run `npm install` in this folder first.');
   process.exit(1);
 }
 claude(['mcp', 'remove', '-s', 'user', 'motionable']); // re-run safe: replace an older entry
-const add = claude(['mcp', 'add', '-s', 'user', 'motionable', '--', tsx, path.join(repo, 'apps', 'mcp', 'src', 'main.ts')]);
+// this Node by its full path (the installer's portable Node isn't on PATH), the same launcher as .mcp.json
+const add = claude(['mcp', 'add', '-s', 'user', 'motionable', '--', process.execPath, path.join(repo, 'scripts', 'mcp.mjs')]);
 if (add.status !== 0) {
   console.error(add.stderr || add.stdout);
   process.exit(1);
@@ -34,4 +34,4 @@ try {
 } catch {
   fs.cpSync(path.join(repo, 'skills', 'motionable'), link, {recursive: true}); // no symlinks allowed: a copy
 }
-console.log('Motionable is connected to Claude Code (MCP server + skill). Start the app with `npm start`.');
+console.log('Motionable is connected to Claude Code (MCP server + skill). In Claude Code, type /motionable.');

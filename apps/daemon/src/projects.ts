@@ -20,8 +20,13 @@ export const listProjects = (home = HOME) => {
   return fs.readdirSync(root).filter((id) => fs.existsSync(path.join(root, id, 'job.json'))).map((id) => {
     const dir = path.join(root, id);
     const plan = fs.existsSync(planFile(dir)) ? readJson<EditPlan>(planFile(dir)) : null;
-    return {id, style: plan?.style ?? null, version: plan?.version ?? 0};
-  });
+    const m = readJson<JobManifest & {title?: string; createdAt?: string}>(path.join(dir, 'job.json'));
+    const version = plan?.version ?? 0;
+    const exported = version > 0 && fs.existsSync(path.join(dir, 'out')) && fs.readdirSync(path.join(dir, 'out')).some((f) => f.startsWith(`${id}-v`) && f.endsWith('.mp4'));
+    // where the video is, in the user's words: being prepared, its plan waiting for an OK, being edited, exported
+    const stage = version > 0 ? (exported ? 'exported' : 'editing') : currentProposal(dir)?.status === 'proposed' ? 'proposal' : 'setup';
+    return {id, title: m.title || id, at: m.createdAt ?? null, style: plan?.style ?? null, version, stage};
+  }).sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? '')));
 };
 
 type HistoryEntry = {version: number; by: Batch['by']; why?: string; ops: Batch['ops']; warnings?: string[]};
@@ -100,7 +105,15 @@ export const projectState = (id: string, since = 0, busy = false, home = HOME, w
   const dir = projectDir(id, home);
   const analysis = analysisSummary(dir);
   const brief = withBrief ? briefOf(dir) : undefined;
-  if (!fs.existsSync(planFile(dir))) return {id, version: 0, style: null, ...(brief ? {brief} : {}), analysis, next: nextStep(dir, analysis, busy), files: projectFiles(dir)};
+  if (!fs.existsSync(planFile(dir))) {
+    // the source's length (once prepared): the Studio prices the paid transcript in minutes of audio from it
+    const m = readJson<JobManifest>(path.join(dir, 'job.json'));
+    const src = (m.assets.src_main?.meta as {duration?: number} | undefined)?.duration;
+    // the lessons Claude keeps in mind while it proposes (the brief names the style)
+    const lessons = m.brief?.style ? lessonsFor(loadLessons(), m.brief.style).filter((x) => !x.rule).slice(-10).map((x) => x.text) : [];
+    return {id, version: 0, style: null, ...(src ? {durationS: +src.toFixed(2)} : {}), ...(brief ? {brief} : {}), analysis,
+      next: nextStep(dir, analysis, busy), files: projectFiles(dir), ...(lessons.length ? {lessons} : {})};
+  }
   const plan = readJson<EditPlan>(planFile(dir));
   const fps = plan.canvas.fps;
   const frames = plan.timeline.segments.reduce((n, g) => n + Math.round((g.out - g.in) * fps), 0);

@@ -2,8 +2,9 @@
    red only for cuts and the brand mark). It has nothing to do with the videos' design. */
 :root {
   --bg: #FFFFFF; --panel: #FFFFFF; --panel2: #F2F2F3; --line: #E6E6E8; --line2: #D9D9DC;
-  --text: #0F0F10; --dim: #6E6E73; --faint: #A1A1A6;
-  --ink: #0F0F10; --blue: #2F7CF6; --blue-soft: #E8F0FE; --red: #FE0201; --red-soft: #FFE9E8; --teal: #46E2CD; --teal-ink: #0E8F7E;
+  --text: #0F0F10; --dim: #57575C; --faint: #6E6E73; /* both ≥4.5:1 on white and on --panel2 */
+  --ink: #0F0F10; --blue: #2F7CF6; --blue-ink: #1A5BC4; --blue-soft: #E8F0FE; --red: #FE0201; --red-ink: #C40000; --red-soft: #FFE9E8; --teal: #46E2CD; --teal-ink: #0A6E61;
+  --warn: #E8A200; --warn-soft: #FFF4D6; --warn-ink: #7A5500;
   --warn: #E8A200;
   --c-word: #ECECEE; --c-capt: #2F7CF6; --c-cam: #0F0F10; --c-over: #8B6CF0; --c-tr: #F28C28;
   --r: 14px; --lh: 30px;
@@ -11,12 +12,15 @@
   color-scheme: light;
 }
 * { box-sizing: border-box }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-size: 13px }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-size: 14px }
+::selection { background: var(--blue-soft); color: var(--text) }
+* { scrollbar-color: var(--line2) transparent; scrollbar-width: thin; caret-color: var(--blue) }
+a { color: var(--blue-ink); text-underline-offset: 3px }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer }
 button:disabled { opacity: .4; cursor: default }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0) }
-.app { display: grid; grid-template-rows: auto minmax(0,1fr); height: 100vh; min-height: 640px }
+.app { display: grid; grid-template-rows: auto minmax(0,1fr); height: 100vh; min-height: 560px }
 .empty { color: var(--dim); padding: 40px; text-align: center }
 .hint { color: var(--dim); line-height: 1.45; margin: 0 }
 .hint.pad { padding: 10px 16px 0 }
@@ -38,7 +42,8 @@ button:disabled { opacity: .4; cursor: default }
 .seg button { padding: 4px 10px; color: var(--dim); border-radius: 999px }
 .seg button.on { background: var(--ink); color: #fff }
 .inp { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; min-height: 32px; color: var(--text); width: 100%; font: inherit }
-.inp:focus { border-color: var(--blue); outline: none }
+.inp:focus { border-color: var(--blue) }
+.inp:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px }
 .inp.slim { min-height: 30px; padding: 4px 10px; width: auto; max-width: 220px; border-radius: 999px; background: var(--panel2); border-color: transparent; font-weight: 600 }
 textarea.inp { resize: vertical }
 
@@ -48,7 +53,7 @@ textarea.inp { resize: vertical }
 .side { border-right: 1px solid var(--line) }
 .insp { border-left: 1px solid var(--line); display: flex; flex-direction: column }
 .sec { padding: 14px 16px; border-bottom: 1px solid var(--line) }
-.sec h3 { margin: 0 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 600; display: flex; justify-content: space-between; gap: 8px }
+.sec h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 600; display: flex; justify-content: space-between; gap: 8px }
 .sec h3 span { text-transform: none; letter-spacing: 0; color: var(--faint); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 
 /* files */
@@ -81,7 +86,7 @@ textarea.inp { resize: vertical }
 .tabs button { padding: 6px 12px; color: var(--dim); border-radius: 999px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px }
 .tabs button:hover { background: var(--panel2) }
 .tabs button.on { background: var(--ink); color: #fff }
-.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--red-soft); color: var(--red); font-size: 10px; font-weight: 700; text-align: center }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--red-soft); color: var(--red-ink); font-size: 11px; font-weight: 700; text-align: center }
 .badge.blue { background: var(--blue); color: #fff }
 .tabs button.on .badge { background: #fff; color: var(--ink) }
 .card { background: var(--panel2); border-radius: 12px; padding: 12px; margin-bottom: 8px }
@@ -104,8 +109,8 @@ textarea.inp { resize: vertical }
 .btn:hover:not(:disabled) { background: var(--line) }
 .btn.primary { background: var(--ink); color: #fff }
 .btn.primary:hover:not(:disabled) { background: #2a2a2d }
-.btn.danger { background: var(--red-soft); color: var(--red) }
-.link { color: var(--blue); padding: 0; margin-top: 4px; font-size: 12px }
+.btn.danger { background: var(--red-soft); color: var(--red-ink) }
+.link { color: var(--blue-ink); padding: 0; margin-top: 4px; font-size: 13px }
 
 /* transcript: timestamped rows */
 .transcript { display: flex; flex-direction: column; min-height: 0; flex: 1 }
@@ -197,9 +202,9 @@ button.tc:hover:not(:disabled) { color: var(--blue) }
 .types .sample { font-size: 28px; line-height: 1.1 }
 .types small { color: #a1a1a6 }
 .types .tag { position: absolute; right: 8px; top: 8px }
-.tag.src { background: var(--blue-soft); color: var(--blue) }
-.tag.src.guess { background: #FFF4D6; color: #8A6100 }
-.tag.fail { background: var(--red-soft); color: var(--red) }
+.tag.src { background: var(--blue-soft); color: var(--blue-ink) }
+.tag.src.guess { background: var(--warn-soft); color: var(--warn-ink) }
+.tag.fail { background: var(--red-soft); color: var(--red-ink) }
 .rules { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0 0 12px }
 .rules dt { color: var(--dim) }
 .rules dd { margin: 0; display: flex; gap: 6px; align-items: center }
@@ -228,7 +233,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 .link.strong { color: var(--text); font-weight: 600; font-size: 14px; margin: 0 }
 
 /* dislike and lessons */
-.btn.dislike { background: var(--red-soft); color: var(--red) }
+.btn.dislike { background: var(--red-soft); color: var(--red-ink) }
 .dislikebox { display: grid; gap: 8px; width: 100%; margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--red-soft) }
 .dislikebox > label:first-child { font-weight: 600 }
 .dislikebox .btnrow { margin-top: 0 }
@@ -240,7 +245,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 .tag.rule { background: var(--ink); color: #fff }
 .lmeta .link { margin: 0 0 0 auto }
 
-.toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 500; max-width: 80vw; z-index: 20; box-shadow: 0 8px 30px rgba(15,15,16,.25) }
+.toast-unused { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 500; max-width: 80vw; z-index: 20; box-shadow: 0 8px 30px rgba(15,15,16,.25) }
 
 @media (max-width: 1180px) {
   .main { grid-template-columns: 220px minmax(0,1fr) 300px }
@@ -304,7 +309,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 /* the Elements tab: shots, overlays and transitions as rows */
 .elements { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
 .elements li { border-radius: 10px; background: var(--panel2) }
-.elements li.here { box-shadow: inset 3px 0 0 var(--blue) }
+.elements li.here .tc { color: var(--blue-ink); font-weight: 600 }
 .elements li.on { background: var(--blue-soft) }
 .elements .row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; padding: 7px 10px; text-align: left }
 .elements .row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500 }
@@ -312,3 +317,100 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center }
 .elements small { color: var(--faint) }
 .elements .acts { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; align-items: center }
 .btn.slim { padding: 3px 9px; font-size: 12px }
+
+/* ---------- the sale-ready Studio: chrome, Home, banners, notices, dialogs, the editor bar ---------- */
+.btn { display: inline-flex; align-items: center; gap: 6px }
+.btn svg, .iconbtn svg { flex: none }
+.iconbtn { display: inline-flex; align-items: center; gap: 6px }
+.chrome { display: grid; min-width: 0 }
+.top .btn.primary { padding: 8px 14px; font-weight: 600 }
+.seg button[aria-current="page"] { background: var(--ink); color: #fff }
+
+/* Claude not connected / the server down: across every screen, with the fix in it */
+.banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; background: var(--warn-soft); color: var(--warn-ink); border-bottom: 1px solid #F1DFA6 }
+.banner p { margin: 0; flex: 1; min-width: 220px; line-height: 1.4; font-weight: 500 }
+.banner .dot { background: var(--warn) }
+.banner.bad { background: var(--red-soft); color: var(--red-ink); border-color: #F8C9C6 }
+.banner.bad .dot { background: var(--red) }
+.pill.claude.offline { background: var(--warn-soft); color: var(--warn-ink) }
+.pill.claude.offline .dot { background: var(--warn) }
+.cmdcopy { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap }
+.cmdcopy code { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: var(--ink); color: #fff; font: 600 13px ui-monospace, Menlo, Consolas, monospace; user-select: all }
+.banner .btn { background: #fff }
+
+/* Home */
+.home { overflow: auto; min-height: 0; background: var(--panel2); padding: 32px 16px 48px }
+.homecol { max-width: 760px; margin: 0 auto; display: grid; gap: 32px }
+.home h1 { margin: 0 0 14px; font-size: 22px; letter-spacing: -.01em }
+.start { background: #fff; border-radius: 20px; padding: 22px 24px; box-shadow: 0 1px 2px rgba(15,15,16,.04), 0 8px 24px rgba(15,15,16,.05) }
+.startlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px }
+.startlist li { display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--line) }
+.startlist li:first-child { border-top: 0 }
+.startlist h2 { margin: 4px 0 2px; font-size: 16px }
+.startlist p { margin: 0; color: var(--dim); line-height: 1.5; max-width: 60ch }
+.startlist .num { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--panel2); color: var(--dim); font-weight: 700 }
+.startlist li.now .num { background: var(--ink); color: #fff }
+.startlist li.done .num { background: #E3FAF6; color: var(--teal-ink) }
+.startlist li.done h2 { color: var(--dim); font-weight: 500 }
+.startlist .act { margin-top: 10px }
+.homehead { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.homehead h1 { margin: 0 0 14px }
+.projects { list-style: none; margin: 0; padding: 0; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,15,16,.04) }
+.projects li + li { border-top: 1px solid var(--line) }
+.projects button { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 14px 18px; text-align: left }
+.projects button:hover { background: var(--panel2) }
+.projects b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.projects small { color: var(--dim); font-variant-numeric: tabular-nums }
+.vstage { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--panel2); color: var(--dim); white-space: nowrap }
+.vstage.proposal { background: var(--warn-soft); color: var(--warn-ink) }
+.vstage.editing { background: var(--blue-soft); color: var(--blue-ink) }
+.vstage.exported { background: #E3FAF6; color: var(--teal-ink) }
+
+/* the editor: its own bar (the video, its state, what to do next), then the work area */
+.editor { display: grid; grid-template-rows: auto minmax(0,1fr); min-height: 0 }
+.edbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); min-width: 0 }
+.edbar .inp.slim { max-width: 320px }
+.toggle-adv { padding: 6px 12px; border-radius: 999px; color: var(--dim); background: var(--panel2); font-weight: 500 }
+.toggle-adv.on { background: var(--ink); color: #fff }
+.menu { position: relative }
+.menu summary { list-style: none; cursor: pointer }
+.menu summary::-webkit-details-marker { display: none }
+.menulist { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 220px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 4px 8px rgba(15,15,16,.06), 0 12px 32px rgba(15,15,16,.12); display: grid }
+.menulist button { text-align: left; padding: 8px 10px; border-radius: 8px }
+.menulist button:hover { background: var(--panel2) }
+.main.simple { grid-template-columns: minmax(0,1fr) 380px }
+.insp > .panel { flex: 1; display: flex; flex-direction: column; min-height: 0 }
+.steps .fail { grid-column: 2 / -1; display: flex; gap: 8px; align-items: center; justify-content: space-between }
+.steps .fail small { color: var(--red-ink) }
+
+/* notices: errors stay until closed; info goes by itself */
+.notice { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 10px; max-width: min(640px, calc(100vw - 32px));
+  padding: 10px 10px 10px 16px; border-radius: 14px; background: var(--ink); color: #fff; box-shadow: 0 4px 10px rgba(15,15,16,.12), 0 16px 40px rgba(15,15,16,.22);
+  animation: rise .28s cubic-bezier(.16,1,.3,1) }
+.notice p { margin: 0; line-height: 1.4 }
+.notice.error { background: #fff; color: var(--text); border: 1px solid #F8C9C6 }
+.notice.error svg { color: var(--red-ink); flex: none }
+.notice .iconbtn { color: inherit }
+@keyframes rise { from { transform: translate(-50%, 12px); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .notice { animation: none } }
+
+/* dialogs (native <dialog>) */
+.dialog { border: 0; border-radius: 20px; padding: 22px 24px; width: min(460px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(15,15,16,.25); color: var(--text) }
+.dialog::backdrop { background: rgba(15,15,16,.4) }
+.dialog h2 { margin: 0 0 8px; font-size: 20px }
+.dialog p { margin: 0 0 8px; line-height: 1.5 }
+.donevideo { display: block; width: 100%; max-height: 50vh; aspect-ratio: 9 / 16; object-fit: contain; background: #000; border-radius: 12px; margin: 8px 0 }
+
+/* phones: the Studio is a desktop tool; say so instead of breaking */
+.mobilenote { display: none }
+@media (max-width: 720px) {
+  .mobilenote { display: block; position: fixed; inset: auto 0 0 0; margin: 0; padding: 12px 16px; background: var(--ink); color: #fff; text-align: center; z-index: 35; line-height: 1.4 }
+  .main, .main.simple { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 60vh) auto; overflow: auto }
+  .main .side { display: none }
+  .top .seg { order: 3; width: 100% }
+  .edbar { flex-wrap: wrap }
+  .styles { grid-template-columns: 1fr }
+}
+.tabs { flex-wrap: wrap; row-gap: 4px; overflow: visible }
+.field.key { grid-template-columns: 170px minmax(0,1fr) }
+@media (max-width: 720px) { .field.key { grid-template-columns: 1fr } }

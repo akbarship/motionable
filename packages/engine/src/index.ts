@@ -1,3 +1,4 @@
+export * from './bin';
 export * from './ffmpeg';
 export * from './conform';
 export * from './media';

@@ -13,14 +13,15 @@ const ref = (manifest: JobManifest, id: string) => {
   return a.version ? `asset:${id}@${a.version}` : `asset:${id}`;
 };
 
-export const scaffold = (dir: string, styleRef: string, home = HOME) => {
+/** keepPauses: the approved proposal keeps the voice's own pauses (a paced voiceover): no pause is trimmed. */
+export const scaffold = (dir: string, styleRef: string, home = HOME, {keepPauses = false}: {keepPauses?: boolean} = {}) => {
   const manifest = readJson<JobManifest>(path.join(dir, 'job.json'));
   const style: Style = loadStyle(styleRef, home);
   const transcript = readJson<Transcript>(path.join(dir, 'analysis/transcript.json'));
   const words = transcript.words;
   if (!words.length) throw new Error('the transcript has no words');
   const from = Math.max(0, words[0].start - 0.15); // a little air before the first word
-  const segments = trimPauses(words, {from, rules: style.rules.timeline, natural: true});
+  const segments = trimPauses(words, {from, rules: style.rules.timeline, natural: true, ...(keepPauses ? {keepAfter: words.map((w) => w.i)} : {})});
   const kept = words.filter((w) => segments.some((g) => w.start >= g.in && w.start < g.out));
   const components = style.components as Record<string, {component: string; props?: Record<string, unknown>}>;
   const doc: EditPlan = {
@@ -34,7 +35,8 @@ export const scaffold = (dir: string, styleRef: string, home = HOME) => {
     inputs: {source: 'asset:src_main', ...(manifest.assets.proxy ? {proxy: 'asset:proxy'} : {}),
       ...(manifest.assets.trk_main ? {track: ref(manifest, 'trk_main')} : {})},
     transcript: {asset: ref(manifest, 'tr_main'), edits: {}},
-    timeline: {segments, removed: [], suggested: [], why: `style ${styleRef}: pauses over ${style.rules.timeline.trimPausesOver} s trimmed, natural pauses kept`},
+    timeline: {segments, removed: [], suggested: [], why: keepPauses ? 'the approved plan keeps the voice\'s pauses'
+      : `style ${styleRef}: pauses over ${style.rules.timeline.trimPausesOver} s trimmed, natural pauses kept`},
     tokens: {},
     shots: [{id: 's1', from: 'cut:0', kind: 'speaker', level: style.rules.framing.levels[0], why: 'scaffold: one shot until the director cuts'}],
     captions: {component: components.captions.component, props: components.captions.props ?? {}, lines: kept.map((w) => ({id: `w${w.i}`, words: [w.i], role: 'cap'}))},

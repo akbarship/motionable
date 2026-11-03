@@ -150,6 +150,7 @@ export const loadLessons = (state = STATE): Lesson[] => {
 export const saveLesson = (l: Omit<Lesson, 'id' | 'at'> & {id?: string; at?: string}, state = STATE): Lesson => {
   if (!l.text?.trim()) throw new Error('a lesson needs the user\'s words (text)');
   if (l.scope !== 'global' && !/^style:[a-z0-9-]+$/.test(l.scope)) throw new Error(`scope must be "global" or "style:<name>", not "${l.scope}"`);
+  if (l.about !== undefined && l.about !== 'style' && l.about !== 'craft') throw new Error(`about must be "style" or "craft", not "${l.about}"`);
   const base = l.id ?? (l.text.normalize('NFKD').replace(/[^\x00-\x7f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'lesson');
   if (!LESSON_ID.test(base)) throw new Error(`bad lesson id "${base}"`);
   let id = base;

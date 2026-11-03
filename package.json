@@ -1,5 +1,6 @@
 {
   "name": "motionable",
+  "version": "1.0.0",
   "description": "Edit talking-head footage into reels in your own style: your Claude Code directs, the local Studio shows and renders.",
   "license": "MIT",
   "private": true,
@@ -18,7 +19,8 @@
     "connect": "node scripts/connect-claude.mjs",
     "setup": "node scripts/setup.mjs",
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "update": "node scripts/update.mjs"
   },
   "dependencies": {
     "@hyperframes/player": "0.8.223",

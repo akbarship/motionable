@@ -29,3 +29,28 @@ describe('caption blocks', () => {
     expect(pairs).toBeGreaterThan(0);
   });
 });
+
+describe('caption words', () => {
+  it('carry a tone to the component, and a word set to "" is spoken but not shown', () => {
+    const home = makeHome();
+    const job = loadJob(path.join(home, 'projects/sample-1'), home);
+    // a line that is on screen (not in a cut), with two words
+    const shown = resolvePlan({plan: job.plan, ...job.ctx}).captionBlocks.flatMap((x) => x.lines).find((l) => l.words.length >= 2)!;
+    const line = job.plan.captions.lines.find((l) => l.id === shown.id)!;
+    const [a, b] = line.words;
+    const {plan} = applyBatch(job.plan, {base: job.plan.version, by: {kind: 'editor'}, ops: [
+      {op: 'caption.tone', line: line.id, word: a, tone: 'alert'},
+      {op: 'word.setText', word: b, text: ''},
+    ]}, job.ctx);
+    expect(plan.captions.lines.find((l) => l.id === line.id)!.tones).toEqual([{word: a, tone: 'alert'}]);
+    const r = resolvePlan({plan, ...job.ctx});
+    const words = r.captionBlocks.flatMap((x) => x.lines).find((l) => l.id === line.id)!.words;
+    expect(words.find((w) => w.id === a)?.tone).toBe('alert');
+    expect(words.some((w) => w.id === b)).toBe(false);
+    // a word outside the line, or an unknown tone, is refused; null takes the tone back
+    expect(() => applyBatch(plan, {base: plan.version, by: {kind: 'editor'}, ops: [{op: 'caption.tone', line: line.id, word: 99999, tone: 'accent'}]}, job.ctx)).toThrow(/isn't in line/);
+    expect(() => applyBatch(plan, {base: plan.version, by: {kind: 'editor'}, ops: [{op: 'caption.tone', line: line.id, word: a, tone: 'gold'}]}, job.ctx)).toThrow(/tone is/);
+    const back = applyBatch(plan, {base: plan.version, by: {kind: 'editor'}, ops: [{op: 'caption.tone', line: line.id, word: a, tone: null}]}, job.ctx).plan;
+    expect(back.captions.lines.find((l) => l.id === line.id)!.tones).toBeUndefined();
+  });
+});

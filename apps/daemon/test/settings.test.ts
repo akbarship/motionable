@@ -10,8 +10,8 @@ describe('settings', () => {
     const state = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-settings-'));
     expect(mask('sk_abcdef1234')).toBe('••••1234');
     expect(mask(undefined)).toBeNull();
-    const s = saveSettings({keys: {elevenlabs: '  sk_secret9876 ', gemini: ''}, lang: 'en'}, state);
-    expect(s.keys).toEqual({elevenlabs: '••••9876', gemini: null});
+    const s = saveSettings({keys: {elevenlabs: '  sk_secret9876 ', pexels: ''}, lang: 'en'}, state);
+    expect(s.keys).toEqual({elevenlabs: '••••9876', pexels: null, pixabay: null});
     expect(s.lang).toBe('en');
     expect(readConfig(state).keys?.elevenlabs).toBe('sk_secret9876');
     expect(JSON.stringify(publicSettings(state))).not.toContain('secret');

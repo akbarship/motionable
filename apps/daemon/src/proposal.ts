@@ -11,6 +11,10 @@ export type ProposalInput = {
   scenes: Scene[];
   cuts?: {from: number; to: number; why: string}[]; // source seconds
   audio?: string; delivery?: string;
+  /** keep: the voice's own pauses stay (a paced voiceover); trim (default): the style's pause trimming */
+  pauses?: 'trim' | 'keep';
+  /** clips the user should upload (no stock key, or nothing fitting): what, and where in the video */
+  needs?: {what: string; when?: string}[];
 };
 export type Proposal = ProposalInput & {
   v: number; at: string; durationS: number; cutS: number;
@@ -56,6 +60,8 @@ export const saveProposal = (dir: string, p: ProposalInput) => {
     scenes: p.scenes.map(({from, to, title, what, why}) => ({from: r2(from), to: r2(to), title: title.trim(), what: what.trim(), why: why.trim()})),
     cuts: cuts.map(({from, to, why}) => ({from: r2(from), to: r2(to), why: why.trim()})),
     ...(p.audio?.trim() ? {audio: p.audio.trim()} : {}), ...(p.delivery?.trim() ? {delivery: p.delivery.trim()} : {}),
+    ...(p.pauses === 'keep' ? {pauses: 'keep' as const} : {}),
+    ...(p.needs?.length ? {needs: p.needs.filter((x) => x?.what?.trim()).map((x) => ({what: x.what.trim(), ...(x.when?.trim() ? {when: x.when.trim()} : {})}))} : {}),
   };
   writeJson(file(dir), {versions: [...doc.versions, next]});
   return next;

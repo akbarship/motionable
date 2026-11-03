@@ -4,15 +4,18 @@ import {useEffect, useState} from 'react';
 import {api, type ProjectState} from './api';
 import {useT, type Key} from './i18n';
 import {RequestCard, useRequests} from './Requests';
+import {PaidDialog} from './Dialogs';
+import {Check} from './Icons';
 
 const STEPS = ['source', 'voice', 'loudness', 'sheet', 'track', 'transcribe'];
 
-export const Setup = ({project, tick, onSettings, onError}: {
-  project: string; tick: number; onSettings(): void; onError(m: string): void;
+export const Setup = ({project, title, tick, onSettings, onError}: {
+  project: string; title: string; tick: number; onSettings(): void; onError(m: string): void;
 }) => {
   const t = useT();
   const [state, setState] = useState<ProjectState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   const {last, ask, cancel} = useRequests({project}, onError);
 
   useEffect(() => { api.state(project).then(setState, (e) => onError(e.message)); }, [project, tick, onError]);
@@ -24,14 +27,13 @@ export const Setup = ({project, tick, onSettings, onError}: {
   const running = Object.values(steps).some((v) => v === 'running') || state?.next?.startsWith('analysis is running');
 
   const transcribe = async () => {
-    if (!window.confirm(t('transcribeConfirm'))) return;
+    setConfirm(false);
     setBusy(true);
     try {
       await api.transcribe(project);
     } catch (e) {
       const m = (e as Error).message;
-      if (/no ElevenLabs key/i.test(m)) onSettings();
-      onError(m);
+      onError(m); // a missing key comes back as a notice with its "Open Settings" button
     } finally {
       setBusy(false);
     }
@@ -40,7 +42,7 @@ export const Setup = ({project, tick, onSettings, onError}: {
   return (
     <main className="setup">
       <div className="sheet">
-        <h2>{project}</h2>
+        <h2>{title}</h2>
         {state?.brief && <p className="muted">{state.brief.about}</p>}
         <ol className="steps">
           {STEPS.filter((k) => !(voiceover && (k === 'sheet' || k === 'track'))).map((k) => {
@@ -50,17 +52,19 @@ export const Setup = ({project, tick, onSettings, onError}: {
               <li key={k} className={st}>
                 <span className="dot" />
                 <b>{t(`step_${k}` as Key)}</b>
-                <small>{st === 'done' ? '✓' : st === 'running' ? t('running') : st === 'failed' ? v.slice(8) : ''}</small>
+                <small>{st === 'done' ? <Check size={14} /> : st === 'running' ? t('running') : ''}</small>
+                {st === 'failed' && <span className="fail"><small>{v.slice(8)}</small>
+                  <button className="btn slim" onClick={() => api.analyze(project).catch((e) => onError(e.message))}>{t('retry')}</button></span>}
               </li>
             );
           })}
         </ol>
-        {state?.analysis?.warnings?.map((w) => <p key={w} className="hint">⚠ {w}</p>)}
+        {state?.analysis?.warnings?.map((w) => <p key={w} className="hint">{w}</p>)}
         {analysed && !transcribed && !running && (
           <div className="sec">
             <h3>{t('step_transcribe')}</h3>
             <p className="hint">{t('transcribeHint')}</p>
-            <div className="btnrow"><button className="btn primary" onClick={transcribe} disabled={busy}>{busy ? t('running') : t('transcribeGo')}</button></div>
+            <div className="btnrow"><button className="btn primary" onClick={() => setConfirm(true)} disabled={busy}>{busy ? t('running') : t('transcribeGo')}</button></div>
           </div>
         )}
         <div className="sec">
@@ -71,6 +75,7 @@ export const Setup = ({project, tick, onSettings, onError}: {
           )}
         </div>
       </div>
+      <PaidDialog open={confirm} minutes={state?.durationS ? state.durationS / 60 : null} onYes={transcribe} onNo={() => setConfirm(false)} />
     </main>
   );
 };

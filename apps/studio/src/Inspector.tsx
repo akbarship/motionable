@@ -28,31 +28,59 @@ type Props = {
   onRestore(k: number): void;
   seek(s: number): void;
   apply(why: string, ops: Op[]): void;
+  /** the simple editor: notes for Claude only (the rest is behind "Advanced") */
+  simple?: boolean;
 };
+const TABS: Tab[] = ['transcript', 'cuts', 'captions', 'elements', 'notes'];
 
 export const Inspector = (props: Props) => {
-  const {view, lang, components, line, sel, now, tab, setTab, apply} = props;
+  const {view, lang, components, line, sel, now, tab, setTab, apply, simple} = props;
   const t = useT();
   const open = view.notes.filter((n) => n.status === 'open').length;
+  if (simple) {
+    return (
+      <aside className="insp" aria-label={t('notes')}>
+        <p className="hint pad">{t('simpleHint')}</p>
+        <Notes {...props} />
+      </aside>
+    );
+  }
+  // tabs as the ARIA pattern: arrow keys move between them, each controls its panel
+  const onKey = (e: React.KeyboardEvent) => {
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = TABS[(TABS.indexOf(tab) + d + TABS.length) % TABS.length];
+    setTab(next);
+    (e.currentTarget.querySelector(`#tab-${next}`) as HTMLElement | null)?.focus();
+  };
   return (
     <aside className="insp">
-      <div className="tabs" role="tablist">
-        {(['transcript', 'cuts', 'captions', 'elements', 'notes'] as Tab[]).map((k) => (
-          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+      <div className="tabs" role="tablist" aria-label={t('advanced')} onKeyDown={onKey}>
+        {TABS.map((k) => (
+          <button key={k} id={`tab-${k}`} role="tab" aria-selected={tab === k} aria-controls={`panel-${k}`} tabIndex={tab === k ? 0 : -1}
+            className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             {t(k)}
             {k === 'cuts' && view.suggested.length ? <span className="badge">{view.suggested.length}</span> : null}
             {k === 'notes' && open ? <span className="badge blue">{open}</span> : null}
           </button>
         ))}
       </div>
-      {tab === 'transcript' && <Transcript view={view} sel={sel} now={now} onPick={props.onPick} onCut={props.onCut} onRestore={props.onRestore} />}
-      {tab === 'cuts' && <Cuts view={view} apply={apply} />}
-      {tab === 'captions' && <Captions view={view} lang={lang} components={components} line={line} apply={apply} onError={props.onError} />}
-      {tab === 'elements' && <Elements view={view} item={props.item} now={now} onItem={props.onItem} seek={props.seek} apply={apply} onError={props.onError} />}
-      {tab === 'notes' && <Notes {...props} />}
+      <div className="panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === 'transcript' && <Transcript view={view} sel={sel} now={now} onPick={props.onPick} onCut={props.onCut} onRestore={props.onRestore} />}
+        {tab === 'cuts' && <Cuts view={view} apply={apply} />}
+        {tab === 'captions' && <Captions view={view} lang={lang} components={components} line={line} apply={apply} onError={props.onError} />}
+        {tab === 'elements' && <Elements view={view} item={props.item} now={now} onItem={props.onItem} seek={props.seek} apply={apply} onError={props.onError} components={components} lang={lang} />}
+        {tab === 'notes' && <Notes {...props} />}
+      </div>
     </aside>
   );
 };
+
+// caption kinds in the user's words (a style's own roles keep their names)
+const ROLES: Record<string, [string, string]> = {cap: ['Subtitr', 'Caption'], title: ['Sarlavha', 'Title'], label: ['Yorliq', 'Label'],
+  kicker: ['Kichik yozuv', 'Small line'], hook: ['Boshlanish', 'Opening line']};
+const roleName = (r: string, lang: Lang) => ROLES[r]?.[lang === 'uz' ? 0 : 1] ?? r;
 
 const text = (view: View, from?: number, to?: number) =>
   from === undefined || to === undefined ? '' : view.words.slice(from, to + 1).map((w) => w.text).join(' ');
@@ -114,13 +142,13 @@ const Captions = ({view, lang, components, line, apply, onError}: Pick<Props, 'v
   return (
     <>
       <div className="sec">
-        <h3>{t('line')} <span>{l.id}</span></h3>
+        <h3>{t('line')}</h3>
         <p className="linetext">{words}</p>
         <div className="field">
           <label htmlFor="role">{t('role')}</label>
           <select id="role" className="inp" value={l.role}
             onChange={(e) => apply('studio: caption role', [{op: 'caption.setRole', line: l.id, role: e.target.value}])}>
-            {view.roles.map((r) => <option key={r} value={r}>{r}</option>)}
+            {view.roles.map((r) => <option key={r} value={r}>{roleName(r, lang)}</option>)}
           </select>
         </div>
         <label className="toggle">
@@ -138,13 +166,13 @@ const Captions = ({view, lang, components, line, apply, onError}: Pick<Props, 'v
         <select className="inp" aria-label={t('component')} value={l.component ?? ''}
           onChange={(e) => apply('studio: caption component', [{op: 'caption.setComponent', scope: 'line', target: l.id,
             component: e.target.value || view.captions.component, props: {}}])}>
-          <option value="">{t('videoDefault')} · {view.captions.component}</option>
-          {captionRefs.map((r) => <option key={r} value={r}>{pick(components[r].title, lang, r)} · {r}</option>)}
+          <option value="">{t('videoDefault')} · {pick(components[view.captions.component]?.title, lang, view.captions.component)}</option>
+          {captionRefs.map((r) => <option key={r} value={r}>{pick(components[r].title, lang, r)}</option>)}
         </select>
       </div>
       {Object.keys(spec).length > 0 && (
         <div className="sec">
-          <h3>{t('props')} <span>{ref}</span></h3>
+          <h3>{t('props')}</h3>
           {Object.entries(spec).map(([k, s]) => (
             <PropField key={k} name={k} spec={s} lang={lang} value={draft[k]} onChange={(v) => setDraft({...draft, [k]: v})} />
           ))}
@@ -235,7 +263,7 @@ const Notes = (props: Props) => {
           </li>
         ))}
       </ul>
-      <Lessons lessons={props.lessons} onError={props.onError} />
+      {!props.simple && <Lessons lessons={props.lessons} onError={props.onError} />}
     </div>
   );
 };

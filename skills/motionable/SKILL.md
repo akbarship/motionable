@@ -11,13 +11,16 @@ You direct; the app shows and renders. The plan (`edit-plan.json`) is the only t
 - No edit without a style. A style comes only from studied references.
 - Respect lessons: a batch that breaks one is rejected with the user's own words. Don't retry the same thing.
   `lessons` in the state are the ones no rule checks: follow them. When the user rejects something, `add_lesson`
-  in their words (with a rule when one fits).
+  in their words (with a rule when one fits). About the look (captions, type, colour, motion): `about: 'style'`,
+  `scope: 'style:<name>'`. About the craft (legibility, clean joins, no generic kit): `about: 'craft'`, global.
+- The references decide the look. A measured value beats any global taste lesson; only the style's own lessons
+  change it.
 - Spend few tokens: read `get_project_state` (a diff), not files. Ask for frames only when you must see.
 - The user edits in the Studio too. Call `get_project_state` before every batch and build on their changes.
 - Every op gets a short `why`.
 
 ## /motionable (start here)
-1. `npm run -s setup` in the Motionable folder (the plugin folder, or the clone). `next` not `done` (an `optional:` step
+1. `npm run -s setup` in the Motionable folder (`~/.motionable/app` from the installer, the plugin folder, or a clone). `next` not `done` (an `optional:` step
    counts as done): follow `references/onboarding.md`, then come back.
 2. `wait_for_studio` → first call starts the app and returns `{idle, url}`. Open the URL for the user
    (`xdg-open` / `open` / `start`; in Claude Desktop the built-in browser beside the chat). Say in one line:
@@ -42,7 +45,10 @@ write_component → specimen → the user's OK).
      speaker centred and still → `fixed` (set `center`); moves, off-centre or landscape → `track`; no face → `off`.
   3. `propose_plan`: a 2–3 sentence `summary`, `scenes` in output seconds (`title`, `what` happens on screen,
      `why`: the reference, the script or a lesson), `cuts` in source seconds with `why`, `audio`, `delivery`.
-     No edits yet. Reply: "Reja tayyor: N sahna, ~X s."
+     A paced voiceover keeps its pauses: `pauses: 'keep'`. No edits yet. Reply: "Reja tayyor: N sahna, ~X s."
+  4. Stock b-roll (the style's `rules.broll.source` is `stock` or `mixed`): `find_broll {query, orientation}` per scene
+     that needs one, `add_broll` the fitting pick. No key or nothing fits: list them in `propose_plan.needs`
+     (`what`, `when`); the Studio asks the user to upload them.
 - `revise`: `text` is the user's change in their words. A new `propose_plan`; `add_lesson` if it's a taste rule.
 - `approve`: `scaffold_plan {style}` (the proposal's), `camera.set` with your pick, then build it scene by scene:
   `range.cut` the proposed cuts (`kind`, `evidence`, `why`), `range.suggest` the unsure ones (never cut a discourse
@@ -59,7 +65,8 @@ write_component → specimen → the user's OK).
 4. The user reviews in the Studio (localhost:4377); `render` (draft) only when they ask or approve.
 
 ## Ops (most used)
-- Captions: `caption.merge {lines}`, `caption.split {line, atWord}`, `caption.setRole`, `caption.hide`, `word.setText {i, text}`.
+- Captions: `caption.merge {lines}`, `caption.split {line, atWord}`, `caption.setRole`, `caption.hide`,
+  `word.setText {word, text}` (`""` hides a spoken word), `caption.tone {line, word, tone: accent|alert|null}` (one word in colour).
 - Timeline: `range.cut {from, to, kind, why}`, `range.restore`, `range.suggest`, `pause.keep`, `pause.trim`.
 - Shots: `shot.insert {after, shot: {id, from, kind, level, why}}`, `shot.update`, `shot.remove`.
 - Camera: `camera.set {mode: track|fixed|off, center?}` for the video, or `{shot, mode}` (null clears). Ask the user before tracking if they said no zoom.

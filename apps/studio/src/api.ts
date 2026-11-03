@@ -4,10 +4,10 @@ export type ViewRange = {k: number; from?: number; to?: number; kind: string; wh
 export type ViewLine = {id: string; words: number[]; role: string; hidden: boolean; component: string | null; props: Record<string, unknown> | null};
 export type Note = {id: string; text: string; status: 'open' | 'done'; at?: string; to?: string; by?: string; reply?: string; t?: number; tEnd?: number};
 export type FileEntry = {id: string; kind: string; name: string; bytes: number; durationS?: number; w?: number; h?: number; thumb?: string};
-export type Brief = {about: string; script?: string; mode: 'edit' | 'voiceover'; style?: string};
+export type Brief = {about: string; script?: string; mode: 'edit' | 'voiceover'; style?: string; language?: 'uz' | 'ru' | 'en' | 'auto'};
 export type Proposal = {v: number; at: string; status: 'proposed' | 'approved' | 'revise'; feedback?: string; summary: string; style?: string;
   durationS: number; cutS: number; scenes: {from: number; to: number; title: string; what: string; why: string}[];
-  cuts?: {from: number; to: number; why: string}[]; audio?: string; delivery?: string};
+  cuts?: {from: number; to: number; why: string}[]; audio?: string; delivery?: string; pauses?: 'trim' | 'keep'; needs?: {what: string; when?: string}[]};
 export type RequestKind = 'plan' | 'revise' | 'approve' | 'notes' | 'style';
 export type StudioRequest = {id: string; kind: RequestKind; project?: string; style?: string; text?: string; at: string;
   status: 'queued' | 'taken' | 'done' | 'cancelled'; takenAt?: string; doneAt?: string; reply?: string};
@@ -17,7 +17,9 @@ export type Video = {project: string; file: string; kind: 'export' | 'draft' | '
 export type ProjectState = {id: string; version: number; style: string | null; next?: string; durationS?: number; brief?: Brief;
   analysis?: {steps?: Record<string, string>; warnings?: string[]}};
 export type StyleListItem = {name: string; versions: number[]; refs: number; components: string[]};
-export type SettingsInfo = {keys: Record<string, string | null>; lang: 'uz' | 'en'; home: string; restart: boolean};
+export type SettingsInfo = {keys: Record<string, string | null>; lang: 'uz' | 'en'; home: string; restart: boolean; version?: string};
+export type Stage = 'setup' | 'proposal' | 'editing' | 'exported';
+export type ProjectItem = {id: string; title: string; at: string | null; style: string | null; version: number; stage: Stage};
 type TypeTok = {font: string; weight: number; size: number; caps?: boolean; fill?: string};
 export type StyleDetail = {
   ref: string; brief: string;
@@ -50,7 +52,7 @@ const post = <T>(url: string, body?: unknown) =>
   fetch(url, {method: 'POST', headers: body ? {'content-type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined}).then((r) => json<T>(r));
 
 export const api = {
-  projects: () => fetch('/api/projects').then((r) => json<{id: string; style: string | null; version: number}[]>(r)),
+  projects: () => fetch('/api/projects').then((r) => json<ProjectItem[]>(r)),
   view: (id: string) => fetch(`/api/projects/${id}/view`).then((r) => json<View>(r)),
   components: (style: string) => fetch(`/api/styles/${style}/components`).then((r) => json<Record<string, ComponentInfo>>(r)),
   ops: (id: string, base: number, why: string, ops: Op[]) =>
@@ -83,6 +85,7 @@ export const api = {
   }),
   createProject: (files: string[], o: {title?: string; brief?: Brief; then?: {transcribe?: boolean; plan?: boolean}} = {}) =>
     post<{id: string}>('/api/projects', {files, ...o}),
+  analyze: (id: string) => post<{ok: boolean}>(`/api/projects/${id}/analyze`),
   transcribe: (id: string) => post<{words: number; lowConfidence: number; warnings: string[]}>(`/api/projects/${id}/transcribe`, {}),
   scaffold: (id: string, style: string) => post<{version: number}>(`/api/projects/${id}/scaffold`, {style}),
   files: (id: string) => fetch(`/api/projects/${id}/files`).then((r) => json<FileEntry[]>(r)),
@@ -110,6 +113,7 @@ export const api = {
     fetch(`/api/requests?${new URLSearchParams(q as Record<string, string>)}`).then((r) => json<StudioRequest[]>(r)),
   ask: (req: {kind: RequestKind; project?: string; style?: string; text?: string}) => post<StudioRequest>('/api/requests', req),
   cancelRequest: (id: string) => fetch(`/api/requests/${id}`, {method: 'DELETE'}).then((r) => json<StudioRequest>(r)),
+  restart: () => post<{ok: boolean}>('/api/restart'),
 };
 
 export const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;

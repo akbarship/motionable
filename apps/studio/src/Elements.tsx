@@ -1,16 +1,24 @@
 // "Elementlar": every shot, overlay and transition of the edit as a list, in place of a timeline. A row seeks there
 // and opens it; an overlay or a shot boundary nudges by a frame or half a second; anything can go, or be marked
 // "not this" (a lesson). Every change is one ops batch, anchored on words so it follows later cuts.
-import {clock, type Op, type Span, type View} from './api';
+import {clock, type ComponentInfo, type Op, type Span, type View} from './api';
 import {Dislike} from './Dislike';
-import {useT, type Key} from './i18n';
+import {pick, useT, type Key, type Lang} from './i18n';
 import {snap, timeToAnchor} from './timeAnchor';
 
 export type Item = {kind: 'overlay' | 'transition' | 'shot'; id: string};
-type Props = {view: View; item: Item | null; now: number; onItem(i: Item): void; seek(s: number): void; apply(why: string, ops: Op[]): void; onError(m: string): void};
+type Props = {view: View; item: Item | null; now: number; onItem(i: Item): void; seek(s: number): void; apply(why: string, ops: Op[]): void; onError(m: string): void;
+  components: Record<string, ComponentInfo>; lang: Lang};
 
-export const Elements = ({view, item, now, onItem, seek, apply, onError}: Props) => {
+// a shot in the user's words: what fills the screen, and how close
+const SHOT: Record<string, [string, string]> = {speaker: ['Kamera', 'Camera'], broll: ['B-roll', 'B-roll'], motion: ['Animatsiya', 'Animation']};
+const LEVEL: Record<string, [string, string]> = {W: ['keng', 'wide'], M: ['yaqin', 'close'], C: ['juda yaqin', 'very close']};
+
+export const Elements = ({view, item, now, onItem, seek, apply, onError, components, lang}: Props) => {
   const t = useT();
+  const u = lang === 'uz' ? 0 : 1;
+  const name = (s: Span) => s.component ? pick(components[s.component]?.title, lang, s.component.replace(/@\d+$/, ''))
+    : [SHOT[s.kind ?? '']?.[u] ?? s.kind, s.level ? LEVEL[s.level]?.[u] ?? s.level : null].filter(Boolean).join(' · ');
   const fps = view.fps;
   const anchor = (s: number) => timeToAnchor(view.words, s, fps);
   const at = (s: number) => {
@@ -33,7 +41,8 @@ export const Elements = ({view, item, now, onItem, seek, apply, onError}: Props)
     }
   };
 
-  const steps: [string, number][] = [['−0.5s', -0.5], ['−1f', -1 / fps], ['+1f', 1 / fps], ['+0.5s', 0.5]];
+  const f = lang === 'uz' ? 'kadr' : 'frame';
+  const steps: [string, number][] = [['−0.5 s', -0.5], [`−1 ${f}`, -1 / fps], [`+1 ${f}`, 1 / fps], ['+0.5 s', 0.5]];
   const group = (kind: Item['kind'], title: Key, spans: Span[]) => (
     <div className="sec">
       <h3>{t(title)} <span>{spans.length}</span></h3>
@@ -47,8 +56,7 @@ export const Elements = ({view, item, now, onItem, seek, apply, onError}: Props)
             <li key={s.id} className={`${on ? 'on' : ''}${here ? ' here' : ''}`}>
               <button className="row" onClick={() => { seek(s.start); onItem({kind, id: s.id}); }} aria-pressed={on}>
                 <span className="tc">{clock(s.start)}–{clock(s.end)}</span>
-                <b>{s.component ?? [s.kind, s.level].filter(Boolean).join(' · ')}</b>
-                <small>{s.id}</small>
+                <b>{name(s)}</b>
               </button>
               {on && (
                 <div className="acts">

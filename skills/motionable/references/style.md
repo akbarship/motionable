@@ -1,7 +1,8 @@
 # Making a style (the user's own design system)
 
 A style is learned from the user's reference reels: their technique, never their footage or words. No defaults:
-every value is measured from a reference, comes from a lesson, or is marked a guess.
+every value is measured from a reference, comes from this style's own lesson, or is marked a guess. Global lessons
+about the look don't apply here: the references win over them.
 
 ## 1. Study
 - `study_reference {style, files}` → cuts, cuts/min, average shot, pacing per reference.
@@ -9,6 +10,9 @@ every value is measured from a reference, comes from a lesson, or is marked a gu
   (the hook, a title, a caption run, a transition). Measure: type (family feel, weight, size vs frame, case),
   colour (3–5 hex), caption system (words per line, position, how words appear), motion (entry, easing, duration
   in frames, exit), framing (zoom levels, punch-ins per minute), transitions, density, SFX moments.
+- B-roll: how much of each reference is cutaway footage (stock, the creator's own, none) and what it shows →
+  `rules.broll {shareOfRuntime, source: stock|own|none|mixed, subjects: [english words]}`. Scenes drawn in code
+  (illustration, diagrams) are components, not b-roll.
 - Note what to avoid as `never` items.
 
 ## 2. save_style

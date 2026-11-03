@@ -19,24 +19,27 @@ Bepul va ochiq kodli (MIT). [English](README.md)
 - **Eksport** reels uchun: MP4 (−14 LUFS) va SRT.
 
 ## Talablar
-- **Node.js 22+** va **ffmpeg** (`ffprobe` bilan), PATH'da
 - **[Claude Code](https://claude.com/claude-code)** va Claude obunasi (terminal, desktop app yoki IDE)
-- Transkript uchun **ElevenLabs** API kaliti (pullik, o'z hisobingizdan; har chaqiruvdan oldin so'raladi)
-- Ubuntu 24.04 va Chrome'da sinalgan. macOS va Windows hali sinalmagan: xabar va tuzatishlar xush kelibsiz.
+- Windows 10/11, macOS (Intel yoki Apple silicon) yoki Linux. Node.js va ffmpeg'ni o'rnatuvchining o'zi olib keladi.
+- Ixtiyoriy kalitlar, Studio'dagi ⚙ Sozlamalar'da: transkript uchun **ElevenLabs** (pullik, o'z hisobingizdan; har
+  chaqiruvdan oldin so'raladi), stock b-roll uchun **Pexels** va **Pixabay** (bepul).
 
 ## O'rnatish
-Claude Code'da:
-```
-/plugin marketplace add akbarship/motionable
-/plugin install motionable
-```
-(Claude Code 2.1.275 va yangisida bitta qadam: `/plugin install motionable --marketplace akbarship/motionable`.)
-So'ng **`/motionable`** deb yozing. Birinchi marta Claude siz bilan birga sozlaydi, bitta-bitta savol bilan: til,
-videolar saqlanadigan papka, ffmpeg va paketlar. Biror narsa o'rnatishdan oldin so'raydi; kalitlar chatga
-yozilmaydi. Keyin Studio ochiladi.
+Terminalda bitta qator. Admin huquqi kerak emas; yangilash uchun yana ishga tushiring.
 
-**Qo'lda:** `git clone https://github.com/akbarship/motionable.git`, papka ichida `claude` ni oching (tool va skill
-shu yerdan olinadi; `npm run connect` ularni hamma papkalar uchun qo'shadi) va `/motionable` deb yozing.
+**macOS / Linux**
+```bash
+curl -fsSL https://raw.githubusercontent.com/akbarship/motionable/main/scripts/install.sh | bash
+```
+**Windows** (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/akbarship/motionable/main/scripts/install.ps1 | iex
+```
+U `~/.motionable/app` ga o'rnatadi, tilni va videolar papkasini so'raydi, Claude Code'ga ulaydi. So'ng Claude Code'ni
+oching va **`/motionable`** deb yozing: Studio ochiladi.
+
+**Claude Code plagini sifatida:** `/plugin marketplace add akbarship/motionable`, `/plugin install motionable`, so'ng
+`/motionable`: qolganini Claude siz bilan bitta-bitta savol bilan sozlaydi va biror narsa o'rnatishdan oldin so'raydi.
 
 ## Birinchi video
 1. Claude Code'da **`/motionable`**. Studio ochiladi; pill *Claude ulangan* deydi: Claude Studio'ni kutyapti.

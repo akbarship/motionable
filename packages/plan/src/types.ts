@@ -82,7 +82,9 @@ export type CaptionLine = {
   component?: ComponentRef; // this line's caption component, most specific first (line > shot > video)
   props?: Props; // props for this line's own component
   hidden?: boolean;
+  tones?: {word: number; tone: Tone}[]; // single words drawn in the style's accent or alert colour
 };
+export type Tone = 'accent' | 'alert';
 
 export type Overlay = {
   id: string;
@@ -164,7 +166,8 @@ export type StyleRules = {
   broll?: {
     shareOfRuntime?: [number, number];
     clipS?: [number, number];
-    source?: string;
+    source?: 'stock' | 'own' | 'none' | 'mixed' | string;
+    subjects?: string[]; // what the references' b-roll shows, in English (find_broll queries)
     gradeToFootage?: boolean;
     captionShade?: boolean;
     cropLogos?: boolean;
@@ -265,6 +268,7 @@ export type Brief = {
   script?: string;
   mode: 'edit' | 'voiceover'; // edit = talking-head footage; voiceover = a voice track, the picture is all motion/b-roll
   style?: string; // name@version, or a style name still being built from references
+  language?: 'uz' | 'ru' | 'en' | 'auto'; // what is spoken in the video (the transcript's language); missing = uz
 };
 
 // ---------- operations ----------

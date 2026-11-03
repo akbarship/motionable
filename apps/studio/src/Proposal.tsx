@@ -1,10 +1,11 @@
 // Claude's proposal, before any edit: how long the reel will be, how much is cut, and every scene with what happens
 // and why. "Approve" asks Claude to edit it; a few words + "Change" ask for a new version. Older versions stay
 // readable, each with the user's answer.
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {api, clock, type Proposal as P} from './api';
 import {useT} from './i18n';
 import {RequestCard, useRequests} from './Requests';
+import {Plus} from './Icons';
 
 export const Proposal = ({project, list, onError}: {project: string; list: P[]; onError(m: string): void}) => {
   const t = useT();
@@ -16,6 +17,20 @@ export const Proposal = ({project, list, onError}: {project: string; list: P[]; 
   if (!p) return null;
   const current = p.v === list.at(-1)?.v;
   const waiting = last && (last.status === 'queued' || last.status === 'taken');
+
+  // clips Claude asked for: uploaded straight into the project's files, where it picks them up
+  const pickClips = useRef<HTMLInputElement>(null);
+  const [sent, setSent] = useState(0);
+  const upload = async (files: File[]) => {
+    for (const f of files) {
+      try {
+        await api.upload(project, f, () => {});
+        setSent((n) => n + 1);
+      } catch (e) {
+        onError(`${f.name}: ${(e as Error).message}`);
+      }
+    }
+  };
 
   const revise = async () => {
     if (await ask('revise', text)) setText('');
@@ -59,10 +74,25 @@ export const Proposal = ({project, list, onError}: {project: string; list: P[]; 
             </ul>
           </div>
         )}
-        {(p.audio || p.delivery) && (
+        {!!p.needs?.length && (
+          <div className="sec needs">
+            <h3>{t('needsTitle')} <span>{p.needs.length}</span></h3>
+            <p className="hint">{t('needsHint')}</p>
+            <ul className="scenes">
+              {p.needs.map((n, i) => <li key={i}><span className="tc">{n.when ?? ''}</span><div><p>{n.what}</p></div></li>)}
+            </ul>
+            <div className="btnrow">
+              <button className="btn" onClick={() => pickClips.current?.click()}><Plus size={14} /> {t('uploadClips')}</button>
+              {sent > 0 && <span className="tag done" role="status">{sent} {t('uploaded')}</span>}
+              <input ref={pickClips} type="file" accept="video/*,image/*" multiple hidden onChange={(e) => { upload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+            </div>
+          </div>
+        )}
+        {(p.audio || p.delivery || p.pauses === 'keep') && (
           <div className="sec">
             {p.audio && <p><b>{t('sound')}:</b> {p.audio}</p>}
             {p.delivery && <p><b>{t('export')}:</b> {p.delivery}</p>}
+            {p.pauses === 'keep' && <p className="muted">{t('pausesKept')}</p>}
           </div>
         )}
         {p.feedback && <p className="reply">{t('yourWords')}: {p.feedback}</p>}

@@ -36,7 +36,8 @@ export const checkBrief = (b: unknown): Brief | undefined => {
   if (x.script !== undefined && typeof x.script !== 'string') throw new Error('brief.script is text');
   if ((x.script ?? '').length > 20000 || x.about.length > 2000) throw new Error('the brief is too long');
   return {about: x.about.trim(), mode: x.mode, ...(x.script?.trim() ? {script: x.script.trim()} : {}),
-    ...(typeof x.style === 'string' && x.style.trim() ? {style: x.style.trim()} : {})};
+    ...(typeof x.style === 'string' && x.style.trim() ? {style: x.style.trim()} : {}),
+    ...(x.language && ['uz', 'ru', 'en', 'auto'].includes(x.language) ? {language: x.language} : {})};
 };
 
 /** A project folder from the user's files (copied, never moved). Returns its id. */
@@ -161,7 +162,7 @@ export const analyzeFree = async (dir: string, on?: OnStep) => {
   return report;
 };
 
-const warnings = (report: Report, src: {w: number; h: number; duration: number}, voiceover = false) => {
+const warnings = (report: Report, src: {w: number; h: number; duration: number}, voiceover = false, language = 'uz') => {
   const out: string[] = [];
   const o = (report.steps.source?.originals ?? []) as {file: string; hdr: boolean; vfr: boolean}[];
   if (o.some((x) => x.hdr)) out.push('HDR original tone-mapped to SDR: check the colours');
@@ -174,7 +175,8 @@ const warnings = (report: Report, src: {w: number; h: number; duration: number},
   if (l?.integratedLufs !== undefined && l.integratedLufs < -30) out.push(`very quiet recording (${l.integratedLufs} LUFS)`);
   if (l?.truePeakDbtp !== undefined && l.truePeakDbtp > -0.1) out.push(`peaks at ${l.truePeakDbtp} dBTP: may be clipped`);
   const t = report.steps.transcribe as {words?: number; lowConfidence?: number; languageDetected?: string} | undefined;
-  if (t?.words && t.languageDetected && !['uzb', 'uz'].includes(t.languageDetected)) out.push(`Scribe heard ${t.languageDetected}, not Uzbek`);
+  const want = ({uz: 'uzb', ru: 'rus', en: 'eng'} as Record<string, string>)[language];
+  if (t?.words && t.languageDetected && want && t.languageDetected !== want) out.push(`Scribe heard ${t.languageDetected}, not ${want}`);
   if (t?.words && (t.lowConfidence ?? 0) / t.words > 0.2) out.push(`${t.lowConfidence} of ${t.words} words have low confidence`);
   return out;
 };
@@ -185,7 +187,8 @@ export const transcribe = async (dir: string, on?: OnStep, raw?: string) => {
   if (done(dir, report, 'transcribe', 'analysis/transcript.json')) return report;
   if (!fs.existsSync(path.join(dir, 'input/voice.mp3'))) throw new Error('run the analysis first (no voice audio yet)');
   await runStep(dir, report, 'transcribe', async (s) => {
-    const res = raw ? readJson<Awaited<ReturnType<typeof scribe>>>(raw) : await scribe(path.join(dir, 'input/voice.mp3'), elevenLabsKey());
+    const language = readJson<JobManifest>(path.join(dir, 'job.json')).brief?.language ?? 'uz';
+    const res = raw ? readJson<Awaited<ReturnType<typeof scribe>>>(raw) : await scribe(path.join(dir, 'input/voice.mp3'), elevenLabsKey(), language);
     writeJson(path.join(dir, 'analysis/transcript.raw.json'), res);
     const {transcript, fixed} = toTranscript(res);
     writeJson(path.join(dir, 'analysis/transcript.json'), transcript);
@@ -196,7 +199,7 @@ export const transcribe = async (dir: string, on?: OnStep, raw?: string) => {
       apostrophesFixed: fixed, languageDetected: transcript.languageDetected});
   }, on);
   const src = readJson<JobManifest>(path.join(dir, 'job.json')).assets.src_main.meta as {w: number; h: number; duration: number};
-  report.warnings = warnings(report, src, isVoiceover(dir));
+  report.warnings = warnings(report, src, isVoiceover(dir), readJson<JobManifest>(path.join(dir, 'job.json')).brief?.language);
   writeJson(reportFile(dir), report);
   return report;
 };

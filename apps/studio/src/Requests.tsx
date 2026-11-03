@@ -3,6 +3,7 @@
 import {createContext, useCallback, useContext, useEffect, useState} from 'react';
 import {api, type Presence, type RequestKind, type StudioRequest} from './api';
 import {useT} from './i18n';
+import {Check, Copy, Terminal} from './Icons';
 
 type Scope = {project?: string; style?: string};
 
@@ -73,8 +74,34 @@ export const RequestCard = ({r, onCancel}: {r: StudioRequest; onCancel(id: strin
       <b>{r.status === 'queued' ? t('reqQueued') : r.status === 'taken' ? t('claudeWorking') : t('claudeDone')}</b>
       {r.text && <p className="muted">{r.text}</p>}
       {r.reply && <p>Claude: {r.reply}</p>}
-      {r.status === 'queued' && presence.status === 'offline' && <p className="hint">{t('claudeOfflineHint')}</p>}
+      {r.status === 'queued' && presence.status === 'offline' && <p className="hint">{t('whenConnected')}: <CopyCommand /></p>}
       {r.status === 'queued' && <button className="link" onClick={() => onCancel(r.id)}>{t('cancel')}</button>}
+    </div>
+  );
+};
+
+/** The command that connects Claude, with a copy button: what a first-time user has to type, made one click. */
+export const CopyCommand = ({cmd = '/motionable', label}: {cmd?: string; label?: string}) => {
+  const t = useT();
+  const [done, setDone] = useState(false);
+  const copy = () => navigator.clipboard?.writeText(cmd).then(() => { setDone(true); window.setTimeout(() => setDone(false), 1600); }, () => {});
+  return (
+    <span className="cmdcopy">
+      <code><Terminal size={14} /> {cmd}</code>
+      <button className="btn slim" onClick={copy} aria-live="polite">{done ? <><Check size={14} /> {t('copied')}</> : <><Copy size={14} /> {label ?? t('copy')}</>}</button>
+    </span>
+  );
+};
+
+/** Across every screen while no Claude is waiting: without it nothing the Studio asks for gets done. */
+export const ClaudeBanner = ({p}: {p: Presence}) => {
+  const t = useT();
+  if (p.status !== 'offline') return null;
+  return (
+    <div className="banner" role="status">
+      <span className="dot" />
+      <p>{t('bannerOffline')}</p>
+      <CopyCommand label={t('copy')} />
     </div>
   );
 };

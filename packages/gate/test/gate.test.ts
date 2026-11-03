@@ -30,6 +30,17 @@ describe('gate', () => {
     expect((caps[0].ctx.lines as {words: {text: string}[]}[])[0].words[0].text).toBe('Oʻzbekiston');
   });
 
+  it('checks every variant of a scene, with the words spoken over it, and tones in captions', () => {
+    const c = cases(manifest('scene', {variant: {type: 'enum', default: 'a', options: [{value: 'a'}, {value: 'b'}, {value: 'c'}]}}));
+    expect(c.map((x) => x.name)).toEqual(['uzbek', 'variant-b', 'variant-c']);
+    expect(c[1].props.variant).toBe('b');
+    expect(c[1].quick).toBe(true); // one render: the default case already checked determinism
+    expect((c[0].ctx.words as {text: string}[]).length).toBeGreaterThan(5);
+    const caps = cases(manifest('caption', {}));
+    const tones = (caps[0].ctx.lines as {words: {tone?: string}[]}[])[1].words.map((w) => w.tone).filter(Boolean);
+    expect(tones).toEqual(['accent', 'alert']);
+  });
+
   it('reads a component\'s CSS without a browser', () => {
     expect(componentCss(ok, 't@1')).toBe('.t{font-family:Inter}');
   });

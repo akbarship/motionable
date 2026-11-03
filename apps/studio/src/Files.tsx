@@ -2,6 +2,7 @@
 // page on arrival, and Claude sees them in get_project_state as asset ids.
 import {useRef, useState} from 'react';
 import {api, clock, type FileEntry} from './api';
+import {Close} from './Icons';
 import {useT, type Key} from './i18n';
 
 type Upload = {name: string; p: number};
@@ -57,10 +58,9 @@ export const Files = ({project, files, onError}: {project: string; files: FileEn
                 <span className="tag">{t(`kind_${f.kind}` as Key)}</span>
                 {f.durationS !== undefined && <> {clock(f.durationS)}</>} · {mb(f.bytes)}
               </small>
-              <code className="fid">asset:{f.id}</code>
             </div>
             <button className="iconbtn" aria-label={`${t('remove')} ${f.name}`}
-              onClick={() => api.removeFile(project, f.id).catch((e) => onError(e.message))}>✕</button>
+              onClick={() => api.removeFile(project, f.id).catch((e) => onError(e.message))}><Close size={16} /></button>
           </li>
         ))}
       </ul>

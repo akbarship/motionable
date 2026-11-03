@@ -39,7 +39,7 @@ export const listFiles = (id: string, home = HOME): FileEntry[] => {
 };
 
 /** Save one uploaded file under a fresh asset id (br_, img_, aud_ or file_ + the file's name). */
-export const saveUpload = async (id: string, name: string, body: Readable, home = HOME): Promise<FileEntry> => {
+export const saveUpload = async (id: string, name: string, body: Readable, home = HOME, extra: Record<string, unknown> = {}): Promise<FileEntry> => {
   const dir = projectDir(id, home);
   const base = path.basename(name);
   const ext = path.extname(base).toLowerCase();
@@ -49,14 +49,14 @@ export const saveUpload = async (id: string, name: string, body: Readable, home 
   for (let n = 2; m.assets[key] || reserved.has(`${id}/${key}`); n++) key = `${k.prefix}_${slug(base).replace(/-/g, '_')}_${n}`;
   reserved.add(`${id}/${key}`);
   try {
-    return await store(dir, id, key, k.kind, base, ext, body, home);
+    return await store(dir, id, key, k.kind, base, ext, body, home, extra);
   } finally {
     reserved.delete(`${id}/${key}`);
   }
 };
 
 /** Stream the upload to disk, conform a video for the page, make a thumbnail, list it in job.json. */
-const store = async (dir: string, id: string, key: string, kind: string, base: string, ext: string, body: Readable, home: string) => {
+const store = async (dir: string, id: string, key: string, kind: string, base: string, ext: string, body: Readable, home: string, extra: Record<string, unknown>) => {
   const folder = path.join(dir, 'media', kind);
   fs.mkdirSync(folder, {recursive: true});
   const raw = path.join(folder, `${key}.upload${ext}`);
@@ -71,7 +71,7 @@ const store = async (dir: string, id: string, key: string, kind: string, base: s
     fs.rmSync(raw, {force: true});
     throw e;
   }
-  const meta: Record<string, unknown> = {name: base};
+  const meta: Record<string, unknown> = {name: base, ...extra}; // extra: a stock clip's source, author, page, licence
   let rel = path.relative(dir, raw);
   try {
     if (kind === 'broll') {

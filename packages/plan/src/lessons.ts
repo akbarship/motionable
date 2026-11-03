@@ -1,6 +1,8 @@
 // Lessons: the user's rejections, kept so the same mistake doesn't come back (CLAUDE.md rule 2). A lesson with a
 // `rule` is checked on every batch: a batch that adds a new breach is rejected with the user's own words. Lessons
-// without one are reminders in get_project_state.
+// without one are reminders in get_project_state. A style is learned from its references, so a lesson about the look
+// (`about: 'style'`) belongs to the style it was said about: a global one never overrides a style's measured values.
+// Lessons about the craft (legible captions, clean joins, no generic kit) hold everywhere.
 import type {EditPlan} from './types';
 import type {ResolvedPlan} from './resolved';
 
@@ -13,6 +15,7 @@ export type LessonRule =
 export type Lesson = {
   id: string;
   scope: string; // 'global' | 'style:<name>'
+  about?: 'style' | 'craft'; // the look (a style's own business) or the craft (every style); missing = craft
   text: string; // the user's words, one sentence
   rule?: LessonRule;
   source?: string;
@@ -24,10 +27,11 @@ export type Lesson = {
 /** One breach: `key` names it, so a breach the plan already had isn't held against the next batch. */
 export type Breach = {lesson: Lesson; key: string; detail: string};
 
-/** The lessons that apply to a plan in this style. */
+/** The lessons that apply to a plan in this style: its own, and the global ones about the craft (the references
+ *  decide the look, so a global lesson about the look doesn't apply). */
 export const lessonsFor = (all: Lesson[], style: string) => {
   const name = style.split('@')[0];
-  return all.filter((l) => l.scope === 'global' || l.scope === `style:${name}`);
+  return all.filter((l) => l.scope === `style:${name}` || (l.scope === 'global' && l.about !== 'style'));
 };
 
 const usesOf = (plan: EditPlan, ref: string) => [

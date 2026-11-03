@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {applyBatch, LessonError, type Lesson} from '../src';
+import {applyBatch, LessonError, lessonsFor, type Lesson} from '../src';
 import {deleteLesson, loadJob, loadLessons, saveLesson} from '../src/store';
 import {makeHome} from './home';
 
@@ -14,6 +14,24 @@ const run = (lessons: Lesson[], ops: {op: string; [k: string]: unknown}[]) =>
   applyBatch(job.plan, {base: job.plan.version, by: {kind: 'mcp'}, ops}, {...job.ctx, lessons});
 
 describe('lessons', () => {
+  it('lets the references decide the look: a global lesson about the look applies to no style, a style\'s own does', () => {
+    const all: Lesson[] = [
+      {id: 'look', scope: 'global', about: 'style', text: 'soʻzlar sakrasin', at: '2026-11-01'},
+      {id: 'craft', scope: 'global', about: 'craft', text: 'subtitr oʻqilsin', at: '2026-11-01'},
+      {id: 'old', scope: 'global', text: 'kesishlar silliq', at: '2026-11-01'},
+      {id: 'mine', scope: 'style:kofe', about: 'style', text: 'shu uslubda sariq yoʻq', at: '2026-11-01'},
+      {id: 'other', scope: 'style:sohbat', text: 'boshqa uslub', at: '2026-11-01'},
+    ];
+    expect(lessonsFor(all, 'kofe@2').map((l) => l.id)).toEqual(['craft', 'old', 'mine']);
+    expect(lessonsFor(all, 'sohbat').map((l) => l.id)).toEqual(['craft', 'old', 'other']);
+  });
+
+  it('saves only a known `about`', () => {
+    const state = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-about-'));
+    expect(saveLesson({scope: 'global', about: 'craft', text: 'toza'}, state).about).toBe('craft');
+    expect(() => saveLesson({scope: 'global', about: 'taste' as 'style', text: 'x'}, state)).toThrow(/about must be/);
+  });
+
   it('rejects a batch that uses a forbidden component, in the user\'s words', () => {
     const l = lesson('no-hud', 'bu HUD menga yoqmadi', {kind: 'forbid', component: 'set-hud@1'});
     const o = job.plan.overlays.find((x) => x.component === 'set-hud@1')!;
