@@ -34,9 +34,11 @@ shapes). Use footage, b-roll, a registry block or an approved gen asset; else ty
 ## Reference check (exact, not similar)
 
 The reference video is in `<home>/styles/<id>/source.json` (`videos[0]`, or `video`).
-For each touched scene pick the reference moment with the same grammar (from the sheet labels)
-and run `hf snapshot --at <scene mid> --against <reference video> --no-end`; Read the pair
-sheet. Name every visible mismatch (background colours/blobs, card material, type size,
+For each touched scene pick the reference moment with the same grammar (the sheet labels give
+its time `<rt>`). Our scene times differ from the reference's, so do not use `--against`
+(it samples the same second). Instead: `hf snapshot --at <scene mid> --no-end` and
+`node <cliPath> hf <projectDir> measure frames <reference video> --at <rt> --width 540 --out <projectDir>/comp/.ref`;
+Read both side by side. Name every visible mismatch (background colours/blobs, card material, type size,
 spacing, logo/UI fidelity) in a `task_progress` line, fix it once, re-snapshot. Also check:
 - palette: the hex colours on screen are from `colour.palette`, or from `styleAnswers.palette`
   when the user gave their own; the accent is `styleAnswers.accent`;
@@ -55,11 +57,15 @@ spacing, logo/UI fidelity) in a `task_progress` line, fix it once, re-snapshot. 
   file for all scenes, so it never jumps at a cut unless the reference cuts it.
 - Materials: use `style.materials[].css` exactly (glass = `backdrop-filter: blur(<blur>px)`,
   border, opacity, radius).
-- Type: `style.type.families[0]` (or `styleAnswers.font`) at the measured `sizes`.
+- Type: `style.type.families[0]` (or `styleAnswers.font`) at the measured `sizes`. If that
+  family has no font file here (e.g. Google Sans), use the closest Google Fonts family and
+  say which in one `task_progress` line.
+- Phone readability: hero UI cards span at least 80% of the 1080 px width; no text under
+  34 px (mono included). A reference that is 720 px wide scales by 1.5 to our 1080 px.
 - Animations: each `motion` names a recipe; implement it verbatim with GSAP: `from` -> `to`,
   `duration`, `ease`, `stagger`, the recipe `css`. Motion blur / ghost trails as the recipe's
   `blur` says (see the `hyperframes` skill recipes). Never swap in a different move.
-- `logo` assets: `hf media-use resolve --type logo --entity "<brand>" --json` (free, CC0 marks);
+- `logo` assets: `hf media-use resolve --type logo --entity "<brand>" --intent "<brand> logo" --json` (free, CC0 marks);
   use the returned `path`. Never redraw a logo by hand.
 - `ui` assets: rebuild the real product screen in HTML/CSS (real fonts, real colours, real
   copy from `what`); not a generic mock window.

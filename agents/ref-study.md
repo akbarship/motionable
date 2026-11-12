@@ -64,7 +64,7 @@ Write down every distinct visual idea you see on the sheets, then measure each o
 
 ```
 { "id": "<styleId>",
-  "pace": {"avgShotSeconds": <mean avgShot>, "cutsPerMin": <cuts / duration * 60>},
+  "pace": {"avgShotSeconds": <seconds between scene changes>, "cutsPerMin": <scene changes per minute>},
   "framing": "<subject size, centred or not, headroom; text and face on one centre line?>",
   "captions": {"fontFamily": "...", "weight": 700, "case": "upper|lower|sentence",
                "position": "...", "highlight": "...", "wordsPerLine": 3},
@@ -93,6 +93,9 @@ Write down every distinct visual idea you see on the sheets, then measure each o
   "assetsNeeded": [{"what": "GitHub logo", "how": "logo"}, {"what": "laptop with flowing digits", "how": "gen"}] }
 ```
 
+- `pace` counts scene changes, not only hard cuts: whips, full-frame wipes and big content
+  swaps from `measure events` count too. If cuts.json found no cuts but the reel changes scene
+  every 2-3 s, `avgShotSeconds` is that 2-3 s.
 - `x`/`y` of blobs are 0..1 of the frame; `r` and `blur` in px at 1080x1920.
 - Every recipe value comes from a measurement or a strip you read. If a number is a judgement
   from the strip, still give a number.
