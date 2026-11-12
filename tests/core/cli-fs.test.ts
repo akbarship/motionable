@@ -53,6 +53,15 @@ describe('copy-sheets', () => {
     expect(r.frames).toEqual(['frames/f-012.4.jpg']);
     expect(readdirSync(join(root, 'styles', 'k2', 'frames'))).toEqual(['f-012.4.jpg']);
   });
+  test('prefix keeps several refs apart', async () => {
+    const d = join(root, 'projects', 'p', 'ref3.sheet');
+    mkdirSync(join(d, 'frames'), { recursive: true });
+    writeFileSync(join(d, 'sheet-1.jpg'), 'a');
+    writeFileSync(join(d, 'frames', 'f-001.0.jpg'), 'b');
+    const r = await runCopySheets(d, 'k3', 'r2');
+    expect(r).toEqual({ copied: ['sheets/r2-sheet-1.jpg'], frames: ['frames/r2-f-001.0.jpg'] });
+    await expect(runCopySheets(d, 'k3', '../x')).rejects.toThrow();
+  });
   test('rejects outside paths and bad ids', async () => {
     await expect(runCopySheets(outside, 'k1')).rejects.toThrow();
     mkdirSync(join(root, 'a'));
@@ -105,6 +114,18 @@ describe('hf', () => {
     process.env.MOTIONABLE_HF_BIN = bin;
     expect(await runHf(proj, ['init'], 'linux', 'ignore')).toBe(0);
     expect(readFileSync(join(proj, 'out.txt'), 'utf8').trim()).toBe('init comp');
+  });
+  test('measure runs in the project dir and never creates comp/', async () => {
+    const proj = join(root, 'projects', 'm');
+    mkdirSync(proj, { recursive: true });
+    const bin = join(root, 'fake3.sh');
+    writeFileSync(bin, '#!/bin/sh\necho "$@" > out.txt\n');
+    chmodSync(bin, 0o755);
+    process.env.MOTIONABLE_HF_BIN = bin;
+    expect(await runHf(proj, ['measure', 'events', 'refs/a.mp4'], 'linux', 'ignore')).toBe(0);
+    expect(readFileSync(join(proj, 'out.txt'), 'utf8').trim()).toBe('measure events refs/a.mp4');
+    expect(readdirSync(proj)).not.toContain('comp');
+    await expect(runHf(proj, ['measure', 'events', 'a.mp4', '--out', outside], 'linux', 'ignore')).rejects.toThrow();
   });
   test('rejects project outside home and --output outside', async () => {
     await expect(runHf(outside, ['lint'], 'linux', 'ignore')).rejects.toThrow();

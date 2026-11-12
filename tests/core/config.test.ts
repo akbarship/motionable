@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadConfig, maskedConfig, saveConfig } from '../../src/core/config.js';
+import { loadConfig, maskedConfig, saveConfig, withEnvKeys } from '../../src/core/config.js';
 
 let prev: string | undefined;
 let tmp: string;
@@ -17,6 +17,28 @@ afterEach(async () => {
   if (prev === undefined) delete process.env.MOTIONABLE_HOME;
   else process.env.MOTIONABLE_HOME = prev;
   await rm(tmp, { recursive: true, force: true });
+});
+
+describe('withEnvKeys', () => {
+  const off = { use: 'off' as const };
+  const base = { providers: { image: off, video: off, tts: off, stt: off }, port: 4377 };
+  it('turns off kinds on from env keys', () => {
+    const c = withEnvKeys(base, { KIE_API_KEY: 'k1', ELEVENLABS_API_KEY: 'e1' });
+    expect(c.providers.image).toEqual({ use: 'kie', key: 'k1' });
+    expect(c.providers.video).toEqual({ use: 'kie', key: 'k1' });
+    expect(c.providers.stt).toEqual({ use: 'elevenlabs', key: 'e1' });
+  });
+  it('keeps stored keys and other providers', () => {
+    const c = withEnvKeys(
+      { ...base, providers: { ...base.providers, image: { use: 'kie', key: 'mine' }, tts: { use: 'bot' } } },
+      { KIE_API_KEY: 'k1', ELEVENLABS_API_KEY: 'e1' },
+    );
+    expect(c.providers.image).toEqual({ use: 'kie', key: 'mine' });
+    expect(c.providers.tts).toEqual({ use: 'bot' });
+  });
+  it('no env: unchanged', () => {
+    expect(withEnvKeys(base, {})).toEqual(base);
+  });
 });
 
 describe('config', () => {

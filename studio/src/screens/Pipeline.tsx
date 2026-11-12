@@ -53,12 +53,14 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
   const stages = [
     { id: 'study', title: "Namunani o'rganish" },
     { id: 'direct', title: 'Rejalashtirish' },
+    { id: 'storyboard', title: 'Storyboard' },
     { id: 'execute', title: 'Yaratish' },
   ] as const;
 
   const view = plan == null ? null : readPlan(plan);
   const pending = awaitingGenerate(tasks);
   const executeDone = tasks.some((t) => t.type === 'execute' && t.status === 'done');
+  const hasBoard = tasks.some((t) => t.type === 'storyboard');
   const unknown = tasks.filter(hasUnknownState);
 
   return (
@@ -91,6 +93,11 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
         </button>
       )}
       {view && showPlanReview(tasks) && <PlanReview key={JSON.stringify(plan)} projectId={id} plan={view} onStarted={() => void load()} />}
+      {hasBoard && !executeDone && (
+        <a className="btn btn--dark" href={`#/p/${id}/board`}>
+          Storyboardni ko'rish
+        </a>
+      )}
       {executeDone && (
         <a className="btn btn--dark" href={`#/p/${id}/edit`}>
           Muharrirga o'tish

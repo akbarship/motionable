@@ -1,12 +1,13 @@
 // Pure helpers for the pipeline screen: stage status, plan check, quote items, unknown-state detection.
 import type { ChatMsg, Task } from './api.js';
 
-export type StageId = 'study' | 'direct' | 'execute';
+export type StageId = 'study' | 'direct' | 'storyboard' | 'execute';
 export type StageState = 'idle' | 'queued' | 'running' | 'done' | 'failed';
 
 const STAGE_TYPES: Record<StageId, ReadonlySet<string>> = {
   study: new Set(['study_ref']),
   direct: new Set(['direct']),
+  storyboard: new Set(['storyboard', 'storyboard_edit']),
   execute: new Set(['execute', 'edit', 'render', 'generate']),
 };
 
@@ -48,7 +49,7 @@ export function lastProgress(tasks: Task[], stage: StageId, n = 5): string[] {
   return sorted.flatMap((t) => t.progress).slice(-n);
 }
 
-export type AssetSource = 'footage' | 'broll' | 'registry' | 'gen' | 'type';
+export type AssetSource = 'footage' | 'broll' | 'registry' | 'gen' | 'logo' | 'ui' | 'type';
 export interface PlanAsset {
   id: string;
   source: AssetSource;
@@ -66,6 +67,7 @@ export interface PlanScene {
   purpose: string;
   script: string;
   layout: string;
+  grammar?: string;
   motion: string;
   assets: PlanAsset[];
   fallback?: string;
@@ -85,7 +87,7 @@ export interface PlanView {
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-const SOURCES: ReadonlySet<string> = new Set<AssetSource>(['footage', 'broll', 'registry', 'gen', 'type']);
+const SOURCES: ReadonlySet<string> = new Set<AssetSource>(['footage', 'broll', 'registry', 'gen', 'logo', 'ui', 'type']);
 
 function readAsset(a: unknown): PlanAsset | null {
   if (!isObj(a) || typeof a.id !== 'string' || typeof a.what !== 'string') return null;
@@ -125,6 +127,7 @@ export function readPlan(raw: unknown): PlanView | null {
       purpose: s.purpose,
       script: str(s.script),
       layout: str(s.layout),
+      ...(typeof s.grammar === 'string' ? { grammar: s.grammar } : {}),
       motion: str(s.motion),
       assets,
       ...(typeof s.fallback === 'string' ? { fallback: s.fallback } : {}),
@@ -186,11 +189,16 @@ export function hasUnknownState(t: Task): boolean {
   return hint(t.output) || t.progress.some((l) => l.includes('unknown_job_state'));
 }
 
-/** Plan review shows until an execute is active or done; a failed newest execute brings it back for a retry. */
+/** Plan review shows until a storyboard or execute is active or done; a failed newest one brings it back for a retry. */
 export const showPlanReview = (tasks: Task[]): boolean => {
-  const last = newestTask(tasks.filter((t) => t.type === 'execute'));
+  const last = newestTask(tasks.filter((t) => t.type === 'execute' || t.type === 'storyboard'));
   return !last || last.status === 'failed';
 };
+
+/** useGen chosen at plan approval (carried by the newest storyboard task). */
+export function storyboardUseGen(tasks: Task[]): boolean {
+  return newestTask(tasks.filter((t) => t.type === 'storyboard'))?.input.useGen === true;
+}
 
 export const hasDirect = (tasks: Task[]): boolean => tasks.some((t) => t.type === 'direct');
 
@@ -207,10 +215,11 @@ export function canContinue(tasks: Task[], pickedStyles: number): boolean {
   return refs.some((t) => t.status === 'done') || pickedStyles > 0;
 }
 
-export function stageLinks(id: string): { key: 'refs' | 'pipeline' | 'edit'; label: string; href: string }[] {
+export function stageLinks(id: string): { key: 'refs' | 'pipeline' | 'board' | 'edit'; label: string; href: string }[] {
   return [
     { key: 'refs', label: 'Namunalar', href: `#/p/${id}/refs` },
     { key: 'pipeline', label: 'Jarayon', href: `#/p/${id}` },
+    { key: 'board', label: 'Storyboard', href: `#/p/${id}/board` },
     { key: 'edit', label: 'Muharrir', href: `#/p/${id}/edit` },
   ];
 }
@@ -226,4 +235,52 @@ export function chatWithReplies(chat: ChatMsg[], tasks: Task[]): ChatMsg[] {
     const text = t.status === 'failed' ? `Xato: ${t.error ?? "noma'lum xato"}` : summary || 'Tayyor.';
     return [m, { id: `reply-${m.id}`, role: 'assistant' as const, text, at: m.at }];
   });
+}
+
+/** Style id written by the newest finished study, or null. */
+export function studiedStyleId(tasks: Task[]): string | null {
+  const t = newestTask(tasks.filter((x) => x.type === 'study_ref' && x.status === 'done'));
+  const s = t?.input.styleId;
+  return typeof s === 'string' && s ? s : null;
+}
+
+/** "O'rganishni boshlash" is on when no study is active and some ref is new or failed. */
+export function canStudy(refs: { status: string }[], tasks: Task[]): boolean {
+  if (tasks.some((t) => t.type === 'study_ref' && (t.status === 'queued' || t.status === 'running'))) return false;
+  return refs.some((r) => r.status === 'added' || r.status === 'failed');
+}
+
+function hexToHsl(hex: string): { s: number; l: number } {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return { s, l };
+}
+
+/** Default accent: the most saturated mid-light palette colour (not the background). */
+export function pickAccent(palette: string[]): string {
+  const valid = palette.filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+  if (valid.length === 0) return '#e5302a';
+  let best = valid[0];
+  let score = -1;
+  for (const c of valid) {
+    const { s, l } = hexToHsl(c);
+    const v = s * (1 - Math.abs(l - 0.55) * 1.4);
+    if (v > score) {
+      score = v;
+      best = c;
+    }
+  }
+  return best.toLowerCase();
+}
+
+/** Parses "#aabbcc, #ddeeff" into valid hex colours (max 6). */
+export function parsePalette(text: string): string[] {
+  return (text.match(/#[0-9a-fA-F]{6}\b/g) ?? []).map((c) => c.toLowerCase()).slice(0, 6);
 }

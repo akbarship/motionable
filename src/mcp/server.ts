@@ -16,6 +16,8 @@ import { providerFor as defaultProviderFor } from '../providers/registry.js';
 const AGENTS: Record<TaskType, string> = {
   study_ref: 'ref-study',
   direct: 'director',
+  storyboard: 'executor',
+  storyboard_edit: 'executor',
   execute: 'executor',
   edit: 'executor',
   render: 'executor',
@@ -105,6 +107,20 @@ export async function ensureStudio(spawnFn: () => void = spawnStudio): Promise<s
   throw new Error('studio did not start within 10 s');
 }
 
+/** Types whose finished work changes the video: the Editor shows a fresh draft render after each. */
+const AUTO_RENDER: ReadonlySet<TaskType> = new Set<TaskType>(['execute', 'edit', 'generate']);
+
+/** After execute/edit/generate, queue one draft render unless one is already waiting. */
+export async function queueAutoRender(projectId: string, taskId: string): Promise<void> {
+  const tasks = await listTasks(projectId);
+  const t = tasks.find((x) => x.id === taskId);
+  if (!t || !AUTO_RENDER.has(t.type)) return;
+  // A generate during the storyboard stage only updates a still; the video is built by execute later.
+  if (t.type === 'generate' && !tasks.some((x) => x.type === 'execute' && x.status === 'done')) return;
+  if (tasks.some((x) => x.type === 'render' && x.status === 'queued')) return;
+  await addTask(projectId, 'render', { quality: 'draft', auto: true });
+}
+
 export function createMcpServer(
   opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor } = {},
 ): McpServer {
@@ -175,6 +191,7 @@ export function createMcpServer(
       await touchHeartbeat();
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
       tokens.delete(taskId);
+      await queueAutoRender(projectId, taskId);
       return text({ ok: true });
     },
   );

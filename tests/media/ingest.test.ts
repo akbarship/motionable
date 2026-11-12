@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../../src/media/ingest.js';
+import { FORMAT_SELECTORS, RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl, refErrorReason } from '../../src/media/ingest.js';
 
 describe('normalizeRefUrl', () => {
   test('rejects non-http', () => {
@@ -54,16 +54,16 @@ echo "$F"
   });
   test('non-zero exit', async () => {
     await fake('#!/bin/sh\nexit 1\n');
-    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow(new RefDownloadError('Faylni yuklang'));
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow(RefDownloadError);
   });
   test('missing binary', async () => {
     process.env.PATH = join(tmp, 'nothing');
     delete process.env.MOTIONABLE_YTDLP;
-    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('yt-dlp topilmadi');
   });
   test('rejects url starting with dash', async () => {
     await fake(ok);
-    await expect(downloadRef('proj', '--exec=evil')).rejects.toThrow('Faylni yuklang');
+    await expect(downloadRef('proj', '--exec=evil')).rejects.toThrow(RefDownloadError);
   });
   test('passes -- before url', async () => {
     await fake(`#!/bin/sh\nfor a in "$@"; do echo "$a" >> "${tmp}/args"; done\nexit 1\n`);
@@ -74,11 +74,11 @@ echo "$F"
   });
   test('printed path outside refs is rejected', async () => {
     await fake('#!/bin/sh\necho /etc/passwd\n');
-    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow(RefDownloadError);
   });
   test('disallowed extension rejected', async () => {
     await fake(ok.replace('mp4', 'exe'));
-    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow(RefDownloadError);
   });
   test('fallback ignores old files', async () => {
     const refs = join(tmp, 'projects', 'proj', 'refs');
@@ -86,10 +86,36 @@ echo "$F"
     await writeFile(join(refs, 'old.mp4'), 'x');
     await utimes(join(refs, 'old.mp4'), 1, 1);
     await fake('#!/bin/sh\necho /etc/passwd\n');
-    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow(RefDownloadError);
   });
   test('fallback picks new file', async () => {
     await fake(ok.replace('echo "$F"', 'echo /etc/passwd'));
     expect(await downloadRef('proj', 'https://example.com/v')).toBe(join(tmp, 'projects', 'proj', 'refs', 'abc.mp4'));
+  });
+  test('tries format selectors in order, each with --retries 3', async () => {
+    await fake(`#!/bin/sh\necho "$2 $4" >> "${tmp}/fmts"\necho 'ERROR: Requested format is not available' >&2\nexit 1\n`);
+    await downloadRef('proj', 'https://example.com/v').catch(() => {});
+    const lines = (await readFile(join(tmp, 'fmts'), 'utf8')).trim().split('\n');
+    expect(lines).toEqual(FORMAT_SELECTORS.map((f) => `${f} 3`));
+  });
+  test('falls back to the next selector after a DNS failure', async () => {
+    await fake(`#!/bin/sh
+if [ "$2" = "${FORMAT_SELECTORS[0]}" ]; then echo 'ERROR: [Errno -3] Temporary failure in name resolution' >&2; exit 1; fi
+${ok.split('\n').slice(1).join('\n')}`);
+    expect(await downloadRef('proj', 'https://example.com/v')).toBe(join(tmp, 'projects', 'proj', 'refs', 'abc.mp4'));
+  });
+  test('login error stops early with an Uzbek reason', async () => {
+    await fake(`#!/bin/sh\necho x >> "${tmp}/n"\necho 'ERROR: [Instagram] A: Requested content is not available, rate-limit reached or login required' >&2\nexit 1\n`);
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('kirishni talab');
+    expect((await readFile(join(tmp, 'n'), 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+});
+
+describe('refErrorReason', () => {
+  test('maps stderr to a reason', () => {
+    expect(refErrorReason('Temporary failure in name resolution')).toMatch(/tarmoq/);
+    expect(refErrorReason('login required')).toMatch(/kirishni/);
+    expect(refErrorReason('ERROR: This video is private')).toMatch(/yopiq/);
+    expect(refErrorReason('weird')).toMatch(/yuklab bo'lmadi/);
   });
 });

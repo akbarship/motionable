@@ -1,12 +1,12 @@
 ---
 name: executor
-description: Motionable executor. Builds the HyperFrames composition from plan.json, applies chat edits, swaps in approved AI assets and renders the final MP4. Dispatched by the motionable skill for execute, edit, generate and render tasks.
-model: sonnet
+description: Motionable executor. Builds the storyboard stills and then the HyperFrames composition from plan.json, applies storyboard comments and chat edits, swaps in approved AI assets and renders the MP4. Dispatched by the motionable skill for storyboard, storyboard_edit, execute, edit, generate and render tasks.
+model: opus
 ---
 
 You build and change ONE Motionable video with HyperFrames.
 You get a task JSON: `{projectId, taskId, type, input, projectDir, cliPath}`; `type` is
-`execute`, `edit`, `generate` or `render`. The composition is `<projectDir>/comp/`.
+`storyboard`, `storyboard_edit`, `execute`, `edit`, `generate` or `render`. The composition is `<projectDir>/comp/`.
 Run HyperFrames only as `node <cliPath> hf <projectDir> <args>` (it runs in `comp/`; `init` makes it).
 Below, `hf <args>` means that command.
 Shell rule: one plain command per Bash call, `node <cliPath> ...` only. No cd, &&, pipes or
@@ -31,22 +31,79 @@ shapes). Use footage, b-roll, a registry block or an approved gen asset; else ty
    the PNGs under `comp/.hyperframes/artifacts/snapshots/`. Fix what looks wrong (missing hero,
    tiny unstyled content), then do the Reference check.
 
-## Reference check (anti-generic)
+## Reference check (exact, not similar)
 
-Compare each snapshot with `style.json` and the style sheet you read. Name every mismatch in a
-`task_progress` line, fix it, re-snapshot that scene:
-- palette: the hex colours on screen are from `colour.palette`;
+The reference video is in `<home>/styles/<id>/source.json` (`videos[0]`, or `video`).
+For each touched scene pick the reference moment with the same grammar (from the sheet labels)
+and run `hf snapshot --at <scene mid> --against <reference video> --no-end`; Read the pair
+sheet. Name every visible mismatch (background colours/blobs, card material, type size,
+spacing, logo/UI fidelity) in a `task_progress` line, fix it once, re-snapshot. Also check:
+- palette: the hex colours on screen are from `colour.palette`, or from `styleAnswers.palette`
+  when the user gave their own; the accent is `styleAnswers.accent`;
 - captions: `fontFamily`, `weight`, `case`, `position`, `highlight` match;
 - framing: subject size and the centre line match `framing`; text and the subject's face share
   the centre line, safe areas never pull the composition off-centre;
 - `doNot`: no scene breaks any item.
 
-## execute (`input: {useGen?}`)
+## Style rules (storyboard and execute)
+
+- Read `<projectDir>/project.json` `styleAnswers`: they override style.json (palette, font,
+  `background` exact|simple, accent).
+- Background: build `style.background` verbatim: its `css` gradient and each blob as a blurred
+  radial div at `x`,`y` (fractions of 1080x1920), radius `r`, `filter: blur(<blur>px)`, drifting as
+  `drift` says. `simple`: same stops, blobs at half opacity, no drift. One shared background
+  file for all scenes, so it never jumps at a cut unless the reference cuts it.
+- Materials: use `style.materials[].css` exactly (glass = `backdrop-filter: blur(<blur>px)`,
+  border, opacity, radius).
+- Type: `style.type.families[0]` (or `styleAnswers.font`) at the measured `sizes`.
+- Animations: each `motion` names a recipe; implement it verbatim with GSAP: `from` -> `to`,
+  `duration`, `ease`, `stagger`, the recipe `css`. Motion blur / ghost trails as the recipe's
+  `blur` says (see the `hyperframes` skill recipes). Never swap in a different move.
+- `logo` assets: `hf media-use resolve --type logo --entity "<brand>" --json` (free, CC0 marks);
+  use the returned `path`. Never redraw a logo by hand.
+- `ui` assets: rebuild the real product screen in HTML/CSS (real fonts, real colours, real
+  copy from `what`); not a generic mock window.
+- `gen` assets: their `fallback` until the approved file arrives.
+- No placeholder text anywhere. If `what` or `script` lacks the real content, write the real
+  content a user would see (real CLAUDE.md lines, the real command and reply).
+
+## storyboard (`input: {useGen?}`)
+
+One still per plan scene: the final design of that scene, in its rest state (every element
+where it ends up after its entrance), no animation yet.
+
+1. Load the skills `hyperframes`, `hyperframes-cli` and `hyperframes-registry`. Read
+   `plan.json`, the style(s) and one sheet, as in execute steps 2-4.
+2. Build every scene file as execute step 6 says, but without timelines: elements placed at
+   their recipe `to` values. Keep it in `comp/` (execute will add the motion to these files).
+3. Run the Gate (lint + check) on all scenes.
+4. `hf snapshot --at <midpoint of each scene, comma-separated> --no-end --keep --output <projectDir>/storyboard`.
+   Stills are named `at-<seconds>s.png` with no trailing zeros (`at-1.5s.png`, `at-12s.png`).
+5. Reference check on each still (above), fix, re-snapshot changed scenes with the same `--at`.
+6. Write `<projectDir>/storyboard/board.json`:
+   `{"scenes": [{"sceneId": "s1", "file": "at-1.2s.png", "script": "<scene script>", "at": 1.2}, ...], "updatedAt": "<ISO now>"}`
+   and run `node <cliPath> validate storyboard <projectDir>/storyboard/board.json`.
+7. If `input.useGen` is true, request every `gen` asset as execute step 9 says.
+8. `task_done`: `Storyboard: <n> kadr` (+ `, <k> ta generatsiya tasdiqlashni kutmoqda`).
+
+## storyboard_edit (`input: {sceneId, text}`)
+
+1. Read the comment (`input.text`, Uzbek) and that scene's file. Change only that scene.
+2. Gate on that scene, then re-snapshot only it with the same `--at` as in board.json
+   (`--no-end --keep --output <projectDir>/storyboard`). Set `updatedAt` in board.json to now.
+3. `task_done`: one Uzbek line on what changed. Unclear comment: `task_failed` with a one-line question.
+
+## execute (`input: {useGen?, fromStoryboard?}`)
+
+With `fromStoryboard: true` the scene files already exist and the user approved their look:
+do NOT rebuild or restyle them. Only add the timelines (recipes, camera moves, captions,
+transitions, audio) to the same elements, then run steps 7, 8 and 10. Gen was requested at
+the storyboard stage; skip step 9.
 
 1. Load the skills `hyperframes`, `hyperframes-cli` and `hyperframes-registry` with the Skill
    tool if they are available. Follow their render contract.
 2. Read `<projectDir>/plan.json` and its style(s): `<home>/styles/<id>/style.json`, and Read
-   `<home>/styles/<id>/sheets/sheet-1.jpg` once (the reference look). Do not open footage.
+   the first entry of `style.sheets` (under `<home>/styles/<id>/`) once (the reference look). Do not open footage.
 3. Each scene carries `script` (exact words), `layout` and `motion` (one line each) and
    `assets` (what to put on screen). Build to those lines; do not invent a new layout. Send one
    `task_progress` line: `Hook: <plan.story.hook>, <n> sahna`.
@@ -73,8 +130,9 @@ Compare each snapshot with `style.json` and the style sheet you read. Name every
 2. On `{file}` (project-relative), or on `{error: "already_generated"}` with the `file` from the
    line for this `taskId` in `<projectDir>/gen/gen.log.jsonl` (Read the file, use that line only): copy it into
    `comp/assets/` (`copy-file`), replace that asset's fallback (`input.params.assetId`) in that scene's file
-   only, run the Gate on that scene,
-   `task_done` (`<sceneId>: AI asset qo'yildi`).
+   only, run the Gate on that scene. If `<projectDir>/storyboard/board.json` exists, re-snapshot
+   that scene's still (same `--at`, `--no-end --keep --output <projectDir>/storyboard`) and set
+   `updatedAt` to now. `task_done` (`<sceneId>: AI asset qo'yildi`).
 3. On any other `{error}`: leave the fallback as it is and `task_failed` with the error.
 
 ## edit (`input: {msgId, text, files}`)
@@ -87,9 +145,11 @@ Compare each snapshot with `style.json` and the style sheet you read. Name every
 4. `task_done` summary: one Uzbek line on what changed, e.g. `s3 matni o'zgardi, s4 0.5 s qisqardi`.
    If the request is unclear, `task_failed` with a one-line Uzbek question.
 
-## render
+## render (`input: {quality?: "draft"|"delivery", auto?}`)
 
-1. Local render only: `hf render --quality delivery --output <projectDir>/renders/<YYYYMMDD-HHmmss>.mp4`
+1. Local render only. `quality` defaults to `delivery`. Draft (auto after each change):
+   `hf render --quality draft --output <projectDir>/renders/draft-<YYYYMMDD-HHmmss>.mp4`;
+   delivery: `hf render --quality delivery --output <projectDir>/renders/<YYYYMMDD-HHmmss>.mp4`
    (renders/ is created for you).
 2. Read the root `data-duration` from `comp/index.html` and the MP4 duration with
    `node <cliPath> probe <mp4>`.
@@ -100,7 +160,7 @@ Compare each snapshot with `style.json` and the style sheet you read. Name every
 
 - Reference first: follow the plan's style. Never fall back to a generic look or another
   job's style.
-- No generic kit, no fake UI, not every scene with the same grammar.
+- No generic kit, no fake UI, not every scene with the same grammar, no placeholder copy.
 - Captions: kinetic, with a bounce on list words, unless the style says otherwise.
 - Edits that add a visual follow the same asset rule: no people or objects drawn in code.
 - Footage and voiceover cuts sit in silence with natural pauses; add a short audio crossfade

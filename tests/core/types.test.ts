@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { PlanSchema } from '../../src/core/types.js';
+import { PlanSchema, StyleSchema } from '../../src/core/types.js';
 
 type Json = Record<string, any>;
 const fixture = (): Json => JSON.parse(readFileSync(new URL('../fixtures/plan-v2.json', import.meta.url), 'utf8'));
@@ -121,6 +121,26 @@ describe('PlanSchema v2', () => {
     expect(issues(q)).toEqual([]);
   });
 
+  test('grammar: all or none, neighbours differ, enough distinct', () => {
+    const p = fixture();
+    p.scenes[0].grammar = 'icon carousel';
+    expectIssue(p, 'scenes.1.grammar', 'every scene needs a grammar');
+    const q = fixture();
+    q.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'chat bubbles', 'big type'][i]));
+    expect(issues(q)).toEqual([]);
+    q.scenes[1].grammar = 'Stat  Card';
+    expectIssue(q, 'scenes.1.grammar', 'same grammar as scene s1');
+    const r = fixture();
+    r.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'big type', 'stat card'][i]));
+    expectIssue(r, 'scenes', '2 distinct grammars; use at least 3');
+  });
+
+  test('logo and ui are asset sources', () => {
+    const p = fixture();
+    p.scenes[0].assets.push({ id: 'lg', source: 'logo', what: 'GitHub mark' }, { id: 'ui1', source: 'ui', what: 'Claude Code prompt' });
+    expect(issues(p)).toEqual([]);
+  });
+
   test('scene count stays within +-1 of beats, beats 0 skips the check', () => {
     const p = fixture();
     p.beats = 5;
@@ -142,5 +162,36 @@ describe('PlanSchema v2', () => {
   test('scene-level gen is gone: gen lives on assets', () => {
     const p = fixture();
     expect(PlanSchema.parse(p).scenes[1]).not.toHaveProperty('gen');
+  });
+});
+
+describe('StyleSchema exact-style fields', () => {
+  const base = {
+    pace: { avgShotSeconds: 2, cutsPerMin: 30 },
+    framing: 'centred',
+    captions: { fontFamily: 'Inter', weight: 700, case: 'sentence', position: 'centre', highlight: 'colour', wordsPerLine: 3 },
+    textCards: { when: 'x', look: 'y' },
+    transitions: ['cut'],
+    colour: { palette: ['#0b1a3a'], grade: 'cool' },
+    motion: [{ name: 'blur-in', timing: '0.4 s' }],
+    audio: { musicEnergy: 'mid', sfx: 'whoosh' },
+    doNot: [],
+    sheets: ['sheets/sheet-1.jpg'],
+  };
+  test('old styles still validate', () => {
+    expect(StyleSchema.safeParse(base).success).toBe(true);
+  });
+  test('recipes, background, materials, type, grammars, assetsNeeded', () => {
+    const r = StyleSchema.safeParse({
+      ...base,
+      recipes: [{ name: 'blur-in text', element: 'headline words', trigger: 'on spoken word', duration: 0.45, ease: 'power3.out', from: { opacity: 0, filter: 'blur(14px)', y: 24 }, to: { opacity: 1, filter: 'blur(0px)', y: 0 }, stagger: 0.06 }],
+      background: { kind: 'bokeh on gradient', stops: ['#0b1a3a', '#1e5bff'], blobs: [{ colour: '#3b7bff', x: 0.2, y: 0.3, r: 260, blur: 90, drift: '20px over 4 s' }] },
+      materials: [{ name: 'glass card', blur: 24, border: '1px solid rgba(255,255,255,.18)', opacity: 0.12, radius: 28 }],
+      type: { families: ['Inter'], sizes: [{ role: 'headline', px: 96 }] },
+      grammars: ['icon carousel', 'glass stat card'],
+      assetsNeeded: [{ what: 'GitHub logo', how: 'logo' }],
+    });
+    expect(r.success, JSON.stringify(r.error?.issues)).toBe(true);
+    expect(StyleSchema.safeParse({ ...base, recipes: [{ name: 'x' }] }).success).toBe(false);
   });
 });

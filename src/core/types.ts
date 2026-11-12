@@ -3,11 +3,24 @@ import { z } from 'zod';
 export const KindSchema = z.enum(['image', 'video', 'tts', 'stt']);
 export type Kind = z.infer<typeof KindSchema>;
 
-export const TaskTypeSchema = z.enum(['study_ref', 'direct', 'execute', 'edit', 'render', 'generate']);
+export const TaskTypeSchema = z.enum(['study_ref', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'edit', 'render', 'generate']);
 export type TaskType = z.infer<typeof TaskTypeSchema>;
 
 export const TaskStatusSchema = z.enum(['queued', 'awaiting_approval', 'running', 'done', 'failed']);
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
+
+const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'must be #rrggbb');
+
+/** The user's answers to the post-study questions. The director and executor treat them as hard rules. */
+export const StyleAnswersSchema = z.object({
+  /** 'reference' = the style palette as studied; else the user's own colours. */
+  palette: z.union([z.literal('reference'), z.array(hex).min(1).max(6)]),
+  font: z.string().min(1).max(80),
+  /** 'exact' = rebuild the reference background as measured; 'simple' = a calmer version in the same colours. */
+  background: z.enum(['exact', 'simple']),
+  accent: hex,
+});
+export type StyleAnswers = z.infer<typeof StyleAnswersSchema>;
 
 export const ProjectSchema = z.object({
   id: z.string().min(1),
@@ -16,8 +29,53 @@ export const ProjectSchema = z.object({
   status: z.string(),
   styleIds: z.array(z.string()),
   createdAt: z.string(),
+  styleAnswers: StyleAnswersSchema.optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
+
+/** One measured animation: what moves, when, how long, which ease, from/to values and the exact CSS. */
+export const RecipeSchema = z.object({
+  name: z.string().min(1),
+  element: z.string().min(1),
+  trigger: z.string().min(1),
+  duration: z.number().positive(),
+  ease: z.string().min(1),
+  from: z.record(z.string(), z.union([z.string(), z.number()])),
+  to: z.record(z.string(), z.union([z.string(), z.number()])),
+  stagger: z.number().min(0).optional(),
+  blur: z.string().optional(),
+  css: z.string().optional(),
+});
+export type Recipe = z.infer<typeof RecipeSchema>;
+
+export const BackgroundSchema = z.object({
+  kind: z.string().min(1),
+  css: z.string().optional(),
+  stops: z.array(z.string()).max(8).optional(),
+  blobs: z
+    .array(
+      z.object({
+        colour: z.string(),
+        x: z.number(),
+        y: z.number(),
+        r: z.number().positive(),
+        blur: z.number().min(0),
+        drift: z.string().optional(),
+      }),
+    )
+    .max(8)
+    .optional(),
+  notes: z.string().optional(),
+});
+
+export const MaterialSchema = z.object({
+  name: z.string().min(1),
+  blur: z.number().min(0).optional(),
+  border: z.string().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  radius: z.number().min(0).optional(),
+  css: z.string().optional(),
+});
 
 export const StyleSchema = z.object({
   id: z.string().optional(),
@@ -39,10 +97,27 @@ export const StyleSchema = z.object({
   doNot: z.array(z.string()),
   sheets: z.array(z.string()),
   keyFrames: z.array(z.object({ file: z.string(), shows: z.string() })).max(6).optional(),
+  /** Measured animations, implemented verbatim by the executor. */
+  recipes: z.array(RecipeSchema).max(16).optional(),
+  background: BackgroundSchema.optional(),
+  materials: z.array(MaterialSchema).max(6).optional(),
+  type: z
+    .object({
+      families: z.array(z.string().min(1)).min(1).max(4),
+      sizes: z.array(z.object({ role: z.string().min(1), px: z.number().positive() })).max(8),
+    })
+    .optional(),
+  /** Scene grammars seen in the reference (icon carousel, stat card, chat bubbles...). */
+  grammars: z.array(z.string().min(1)).max(16).optional(),
+  assetsNeeded: z
+    .array(z.object({ what: z.string().min(1), how: z.enum(['logo', 'gen', 'ui', 'footage', 'type']), note: z.string().optional() }))
+    .max(16)
+    .optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
 
-export const AssetSourceSchema = z.enum(['footage', 'broll', 'registry', 'gen', 'type']);
+/** `logo` = a real brand mark (media-use resolve), `ui` = a faithful HTML rebuild of a real product screen. */
+export const AssetSourceSchema = z.enum(['footage', 'broll', 'registry', 'gen', 'logo', 'ui', 'type']);
 
 /** Project-relative path: no leading slash, no drive letter, no `..` segment. */
 const relPath = z
@@ -80,6 +155,8 @@ const SceneSchema = z.object({
   purpose: z.string(),
   script: z.string(),
   layout: z.string().min(1),
+  /** Scene grammar from the style's `grammars` (icon carousel, stat card, chat bubbles...). */
+  grammar: z.string().min(1).optional(),
   motion: z.string().min(1),
   assets: z.array(AssetSchema).min(1, 'every scene needs at least one asset'),
   footage: z.object({ src: z.string(), in: z.number(), out: z.number() }).nullable(),
@@ -94,6 +171,8 @@ const SceneSchema = z.object({
 });
 
 export const MIN_SCENE_S = 0.8;
+/** Distinct grammars a video needs (fewer scenes: one per scene). */
+export const MIN_GRAMMARS = 4;
 export const MAX_WORDS_PER_S = 3;
 const EPS = 0.01;
 
@@ -139,6 +218,18 @@ export const PlanSchema = z
         ids.add(a.id);
       });
     });
+    const withGrammar = p.scenes.filter((s) => s.grammar);
+    if (withGrammar.length > 0) {
+      p.scenes.forEach((s, i) => {
+        if (!s.grammar) issue(['scenes', i, 'grammar'], 'every scene needs a grammar when one has it');
+        else if (i > 0 && p.scenes[i - 1].grammar && sameLayout(s.grammar, p.scenes[i - 1].grammar!)) {
+          issue(['scenes', i, 'grammar'], `same grammar as scene ${p.scenes[i - 1].id}; neighbours never share a grammar`);
+        }
+      });
+      const distinct = new Set(withGrammar.map((s) => s.grammar!.trim().toLowerCase())).size;
+      const need = Math.min(MIN_GRAMMARS, p.scenes.length);
+      if (distinct < need) issue(['scenes'], `${distinct} distinct grammars; use at least ${need}`);
+    }
     const last = p.scenes[p.scenes.length - 1];
     if (last && Math.abs(last.end - p.duration) > EPS) {
       issue(['duration'], `must equal the last scene end (${last.end})`);
@@ -176,6 +267,22 @@ export const ConfigSchema = z.object({
   port: z.number().int().default(4377),
 });
 export type Config = z.infer<typeof ConfigSchema>;
+
+/** `storyboard/board.json`: one still per plan scene, written by the executor's storyboard task. */
+export const StoryboardSchema = z.object({
+  scenes: z
+    .array(
+      z.object({
+        sceneId: z.string().min(1),
+        file: z.string().regex(/^[A-Za-z0-9._-]+\.(png|jpg|jpeg)$/, 'a plain .png/.jpg name inside storyboard/'),
+        script: z.string(),
+        at: z.number().min(0),
+      }),
+    )
+    .min(1),
+  updatedAt: z.string(),
+});
+export type Storyboard = z.infer<typeof StoryboardSchema>;
 
 export const WordsSchema = z.array(z.object({ w: z.string(), start: z.number(), end: z.number() }));
 export type Words = z.infer<typeof WordsSchema>;

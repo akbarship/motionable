@@ -4,9 +4,16 @@ const KEY = 'motionable.token';
 let token: string | null = null;
 
 export type TaskStatus = 'queued' | 'awaiting_approval' | 'running' | 'done' | 'failed';
-export type TaskType = 'study_ref' | 'direct' | 'execute' | 'edit' | 'render' | 'generate';
+export type TaskType = 'study_ref' | 'direct' | 'storyboard' | 'storyboard_edit' | 'execute' | 'edit' | 'render' | 'generate';
 export type Kind = 'image' | 'video' | 'tts' | 'stt';
 export type ProviderUse = 'off' | 'kie' | 'elevenlabs' | 'bot';
+
+export interface StyleAnswers {
+  palette: 'reference' | string[];
+  font: string;
+  background: 'exact' | 'simple';
+  accent: string;
+}
 
 export interface Project {
   id: string;
@@ -15,6 +22,19 @@ export interface Project {
   status: string;
   styleIds: string[];
   createdAt: string;
+  styleAnswers?: StyleAnswers;
+}
+
+export interface RefFile {
+  name: string;
+  size: number;
+  taskId: string | null;
+  status: 'added' | TaskStatus;
+}
+
+export interface Storyboard {
+  scenes: { sceneId: string; file: string; script: string; at: number }[];
+  updatedAt: string;
 }
 
 export interface Task {
@@ -57,6 +77,7 @@ export interface StyleSummary {
   palette: string[];
   fontFamily: string;
   transitions: string[];
+  background?: string;
 }
 
 export interface Config {
@@ -128,9 +149,14 @@ export const api = {
   listProjects: () => request<Project[]>('/api/projects'),
   createProject: (b: { name: string; brief: string }) => request<Project>('/api/projects', { method: 'POST', body: b }),
   getProject: (id: string) => request<ProjectView>(p(id)),
-  addRef: (id: string, url: string) => request<{ task: Task }>(`${p(id)}/refs`, { method: 'POST', body: { url } }),
+  addRef: (id: string, url: string) => request<{ ref: { name: string } }>(`${p(id)}/refs`, { method: 'POST', body: { url } }),
   addRefFile: (id: string, name: string) =>
-    request<{ task: Task }>(`${p(id)}/refs/file`, { method: 'POST', body: { name } }),
+    request<{ ref: { name: string } }>(`${p(id)}/refs/file`, { method: 'POST', body: { name } }),
+  refs: (id: string) => request<RefFile[]>(`${p(id)}/refs`),
+  deleteRef: (id: string, name: string) => request<{ ok: true }>(`${p(id)}/refs/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  startStudy: (id: string) => request<{ task: Task }>(`${p(id)}/refs/study`, { method: 'POST', body: {} }),
+  putStyleAnswers: (id: string, a: StyleAnswers) => request<Project>(`${p(id)}/style-answers`, { method: 'PUT', body: a }),
+  storyboard: (id: string) => request<Storyboard | null>(`${p(id)}/storyboard`),
   addTask: (id: string, type: TaskType, input: Record<string, unknown> = {}) =>
     request<Task>(`${p(id)}/tasks`, { method: 'POST', body: { type, input } }),
   quote: (id: string, items: { kind: Kind; params: Record<string, unknown> }[]) =>
@@ -139,7 +165,6 @@ export const api = {
     request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/approve`, { method: 'POST' }),
   declineTask: (id: string, tid: string) =>
     request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/decline`, { method: 'POST' }),
-  preview: (id: string) => request<{ url: string }>(`${p(id)}/preview`),
   renders: (id: string) => request<RenderFile[]>(`${p(id)}/renders`),
   sendChat: (id: string, text: string, files?: string[]) =>
     request<{ msg: ChatMsg; task: Task }>(`${p(id)}/chat`, { method: 'POST', body: { text, ...(files?.length ? { files } : {}) } }),
@@ -154,6 +179,11 @@ export const api = {
 /** URL for a finished render usable in <video src> / <a href> (token in the query, since those cannot send headers). */
 export function renderUrl(projectId: string, name: string): string {
   return `${p(projectId)}/renders/${encodeURIComponent(name)}?t=${encodeURIComponent(getToken())}`;
+}
+
+/** URL for a storyboard still usable in <img src>. `v` busts the cache after a rebuild. */
+export function stillUrl(projectId: string, file: string, v: string): string {
+  return `${p(projectId)}/storyboard/${encodeURIComponent(file)}?t=${encodeURIComponent(getToken())}&v=${encodeURIComponent(v)}`;
 }
 
 /** Uploads one file with progress (0..1). Resolves with the stored name (the server may suffix it). */

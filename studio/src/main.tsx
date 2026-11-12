@@ -6,6 +6,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Pipeline } from './screens/Pipeline';
 import { References } from './screens/References';
 import { Settings } from './screens/Settings';
+import { Storyboard } from './screens/Storyboard';
 import { ChatPanel, ProjectBar, TopBar } from './ui/TopBar';
 import { parseRoute, type Route } from './router';
 import { useEvents } from './useEvents';
@@ -96,6 +97,10 @@ function App() {
       break;
     case 'pipeline':
       body = <Pipeline key={route.id} id={route.id} tick={tick} />;
+      break;
+    case 'board':
+      body = <Storyboard key={route.id} id={route.id} tick={tick} />;
+      withChat = false;
       break;
     case 'edit':
       body = <Editor key={route.id} id={route.id} tick={tick} />;

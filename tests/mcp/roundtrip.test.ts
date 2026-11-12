@@ -153,4 +153,25 @@ describe('mcp roundtrip', () => {
     await post(`/api/projects/${id}/tasks`, { type: 'study_ref', input: {} });
     expect((await call('next_task')).data.type).toBe('study_ref');
   });
+  test('task_done on execute/edit queues one draft render; study does not', async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await post(`/api/projects/${id}/tasks`, { type: 'execute', input: {} });
+    const t = (await call('next_task')).data;
+    await call('task_done', { projectId: id, taskId: t.taskId, summary: 'built' });
+    let renders = (await listTasks(id)).filter((x) => x.type === 'render');
+    expect(renders).toHaveLength(1);
+    expect(renders[0].input).toEqual({ quality: 'draft', auto: true });
+    await post(`/api/projects/${id}/chat`, { text: 'change' });
+    const e = (await call('next_task')).data;
+    expect(e.type).toBe('render'); // the queued render is older than the edit
+    await call('task_done', { projectId: id, taskId: e.taskId, summary: 'r' });
+    const ed = (await call('next_task')).data;
+    expect(ed.type).toBe('edit');
+    await call('task_done', { projectId: id, taskId: ed.taskId, summary: 'e' });
+    renders = (await listTasks(id)).filter((x) => x.type === 'render');
+    expect(renders).toHaveLength(2);
+    await post(`/api/projects/${id}/tasks`, { type: 'study_ref', input: {} });
+    const s = (await call('next_task')).data;
+    expect(s.type).toBe('render');
+  });
 });

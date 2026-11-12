@@ -8,7 +8,7 @@ import type { ZodType } from 'zod';
 import { doctorReportOk, npxCommand, validateHfArgs } from './core/hf-cmd.js';
 import { appendBinDir } from './core/path-env.js';
 import { assertId, assertInHome, home } from './core/paths.js';
-import { PlanSchema, StyleSchema, WordsSchema } from './core/types.js';
+import { PlanSchema, StoryboardSchema, StyleSchema, WordsSchema } from './core/types.js';
 import { probe } from './media/ingest.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
 import { startStudio } from './server/studio.js';
@@ -65,13 +65,13 @@ export async function doctor() {
   return { ok: node && ffmpeg && hyperframes, node, ffmpeg, ytdlp, hyperframes, skillsMissing };
 }
 
-const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema };
+const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema, storyboard: StoryboardSchema };
 const MAX_ISSUES = 8;
 
-/** `motionable validate <style|plan|words> <file>`: code 0 + "ok", or 1 + a short issue list. */
+/** `motionable validate <style|plan|words|storyboard> <file>`: code 0 + "ok", or 1 + a short issue list. */
 export async function runValidate(kind: string | undefined, file: string | undefined): Promise<{ code: number; out: string }> {
   const schema = kind ? SCHEMAS[kind] : undefined;
-  if (!schema || !file) return { code: 1, out: 'usage: motionable validate <style|plan|words> <file>' };
+  if (!schema || !file) return { code: 1, out: 'usage: motionable validate <style|plan|words|storyboard> <file>' };
   let data: unknown;
   try {
     data = JSON.parse(await readFile(file, 'utf8'));
@@ -95,13 +95,18 @@ export async function runSheet(
   return JSON.stringify({ sheets: r.sheets, cuts: r.cuts.length, avgShot: r.avgShot });
 }
 
-/** `copy-sheets <sheetDir> <styleId>`: sheet-*.jpg into <home>/styles/<styleId>/sheets/, frames/*.jpg into .../frames/. */
-export async function runCopySheets(sheetDir: string, styleId: string): Promise<{ copied: string[]; frames: string[] }> {
+/**
+ * `copy-sheets <sheetDir> <styleId> [prefix]`: sheet-*.jpg into <home>/styles/<styleId>/sheets/, frames/*.jpg into .../frames/.
+ * With several refs per style, `prefix` (e.g. r2) keeps their files apart: r2-sheet-1.jpg, r2-f-003.0.jpg.
+ */
+export async function runCopySheets(sheetDir: string, styleId: string, prefix?: string): Promise<{ copied: string[]; frames: string[] }> {
+  if (prefix !== undefined && !/^[a-z0-9]{1,12}$/.test(prefix)) throw new Error('prefix must be 1-12 chars a-z0-9');
+  const pre = prefix ? `${prefix}-` : '';
   const src = assertInHome(sheetDir);
   const dest = assertInHome(join(home(), 'styles', assertId(styleId), 'sheets'));
   const names = (await readdir(src)).filter((n) => /^sheet-.*\.jpg$/.test(n)).sort();
   await mkdir(dest, { recursive: true });
-  for (const n of names) await copyFile(join(src, n), join(dest, n));
+  for (const n of names) await copyFile(join(src, n), join(dest, pre + n));
   let frames: string[] = [];
   try {
     frames = (await readdir(join(src, 'frames'))).filter((n) => /\.jpg$/.test(n)).sort();
@@ -111,9 +116,9 @@ export async function runCopySheets(sheetDir: string, styleId: string): Promise<
   if (frames.length) {
     const fdest = assertInHome(join(home(), 'styles', assertId(styleId), 'frames'));
     await mkdir(fdest, { recursive: true });
-    for (const n of frames) await copyFile(join(src, 'frames', n), join(fdest, n));
+    for (const n of frames) await copyFile(join(src, 'frames', n), join(fdest, pre + n));
   }
-  return { copied: names.map((n) => `sheets/${n}`), frames: frames.map((n) => `frames/${n}`) };
+  return { copied: names.map((n) => `sheets/${pre}${n}`), frames: frames.map((n) => `frames/${pre}${n}`) };
 }
 
 /** `copy-file <src> <dest>`: plain copy, both inside home. */
@@ -139,7 +144,11 @@ export async function runHf(
   }
   const init = args[0] === 'init';
   const finalArgs = init ? ['init', 'comp', ...args.slice(1).filter((a) => a !== 'comp')] : args;
-  const cwd = init ? proj : join(proj, 'comp');
+  // measure reads a video file, not the composition: run it in the project so it never creates comp/ before init.
+  const cwd = init || args[0] === 'measure' ? proj : join(proj, 'comp');
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '--out' || args[i] === '--against' || args[i] === '--compare') && args[i + 1]) assertInHome(args[i + 1]!);
+  }
   await mkdir(cwd, { recursive: true });
   if (args[0] === 'render') await mkdir(join(proj, 'renders'), { recursive: true });
   const bin = process.env.MOTIONABLE_HF_BIN;
@@ -178,8 +187,8 @@ async function main(cmd: string | undefined): Promise<void> {
         if (!a[0]) throw new Error('usage: motionable probe <file>');
         console.log(JSON.stringify(await probe(assertInHome(a[0]))));
       } else if (cmd === 'copy-sheets') {
-        if (!a[0] || !a[1]) throw new Error('usage: motionable copy-sheets <sheetDir> <styleId>');
-        console.log(JSON.stringify(await runCopySheets(a[0], a[1])));
+        if (!a[0] || !a[1]) throw new Error('usage: motionable copy-sheets <sheetDir> <styleId> [prefix]');
+        console.log(JSON.stringify(await runCopySheets(a[0], a[1], a[2])));
       } else {
         if (!a[0] || !a[1]) throw new Error('usage: motionable copy-file <src> <dest>');
         console.log(JSON.stringify(await runCopyFile(a[0], a[1])));
@@ -189,7 +198,7 @@ async function main(cmd: string | undefined): Promise<void> {
       process.exitCode = 1;
     }
   } else {
-    console.error('usage: motionable <studio|doctor|validate <style|plan|words> <file>|sheet <video> <outDir>|hf <projectDir> <args...>|copy-sheets <sheetDir> <styleId>|probe <file>|copy-file <src> <dest>>');
+    console.error('usage: motionable <studio|doctor|validate <style|plan|words|storyboard> <file>|sheet <video> <outDir>|hf <projectDir> <args...>|copy-sheets <sheetDir> <styleId> [prefix]|probe <file>|copy-file <src> <dest>>');
     process.exitCode = 1;
   }
 }

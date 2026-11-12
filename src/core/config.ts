@@ -19,11 +19,36 @@ function defaults(): Config {
   });
 }
 
+const ENV_KEYS = { kie: 'KIE_API_KEY', elevenlabs: 'ELEVENLABS_API_KEY' } as const;
+const ENV_FOR: Record<(typeof KINDS)[number], keyof typeof ENV_KEYS> = { image: 'kie', video: 'kie', tts: 'elevenlabs', stt: 'elevenlabs' };
+
+/**
+ * Env keys fill what the file leaves empty: a kind that is `off` with no stored key turns on with the
+ * env provider, and a kind set to that provider without a key gets the env key. Never written to disk.
+ */
+export function withEnvKeys(c: Config, env: NodeJS.ProcessEnv = process.env): Config {
+  const out: Config = { ...c, providers: { ...c.providers } };
+  for (const k of KINDS) {
+    const prov = ENV_FOR[k];
+    const key = env[ENV_KEYS[prov]]?.trim();
+    if (!key) continue;
+    const p = c.providers[k];
+    if (p.key) continue;
+    if (p.use === 'off' || p.use === prov) out.providers[k] = { use: prov, key };
+  }
+  return out;
+}
+
+/** Config with env key fallback (what providers use). */
+export async function loadConfig(): Promise<Config> {
+  return withEnvKeys(await loadStored());
+}
+
 /**
  * Missing file -> defaults. A file written by hand or by an older version may lack fields:
  * each missing provider kind falls back to {use:'off'} instead of crashing the Studio.
  */
-export async function loadConfig(): Promise<Config> {
+async function loadStored(): Promise<Config> {
   let raw: string;
   try {
     raw = await readFile(file(), 'utf8');
@@ -70,7 +95,7 @@ function pickKey(next: string | undefined, old: string | undefined): string | un
 }
 
 export async function saveConfig(patch: ConfigPatch): Promise<Config> {
-  const cur = await loadConfig();
+  const cur = await loadStored();
   const next: Config = { ...cur, providers: { ...cur.providers } };
   for (const k of KINDS) {
     const p = patch.providers?.[k];
@@ -85,5 +110,5 @@ export async function saveConfig(patch: ConfigPatch): Promise<Config> {
   if (patch.port !== undefined) next.port = patch.port;
   if (next.botKey === undefined) delete next.botKey;
   await writeJson(file(), ConfigSchema, next, 0o600);
-  return next;
+  return withEnvKeys(next);
 }

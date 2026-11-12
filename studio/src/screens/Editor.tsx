@@ -6,13 +6,11 @@ import { Chat } from '../ui/Chat';
 const active = (t: Task) => t.status === 'queued' || t.status === 'running';
 const doneCount = (tasks: Task[], type: Task['type']) => tasks.filter((t) => t.type === type && t.status === 'done').length;
 
-/** Editor: live HyperFrames preview, chat with Claude, render and finished renders. */
+/** Editor: the latest rendered video (re-rendered after every change), chat with Claude, finished renders. */
 export function Editor({ id, tick }: { id: string; tick: number }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [renders, setRenders] = useState<RenderFile[]>([]);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<'no_comp' | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
 
@@ -34,27 +32,8 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
     void load();
   }, [load, tick]);
 
-  const editsDone = doneCount(tasks, 'edit');
   const rendersDone = doneCount(tasks, 'render');
-
-  // (Re)start the preview server on mount, and again after Claude finishes an edit or the comp first appears.
   const hasExecute = tasks.some((t) => t.type === 'execute' && t.status === 'done');
-  useEffect(() => {
-    let live = true;
-    api
-      .preview(id)
-      .then((r) => {
-        if (!live) return;
-        setPreviewUrl(r.url);
-        setPreviewError(null);
-      })
-      .catch((e: Error) => {
-        if (live) setPreviewError(e.message);
-      });
-    return () => {
-      live = false;
-    };
-  }, [id, hasExecute]);
 
   useEffect(() => {
     let live = true;
@@ -69,12 +48,15 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
 
   const working = [...tasks].reverse().find((t) => t.type === 'edit' && active(t)) ?? null;
   const renderBusy = rendering || tasks.some((t) => t.type === 'render' && active(t));
+  // The video changes while an edit, generate or render is running: keep the old one with a badge.
+  const updating = tasks.some((t) => (t.type === 'render' || t.type === 'edit' || t.type === 'generate') && active(t));
+  const latest = renders[0] ?? null;
 
   const render = async () => {
     setRendering(true);
     setError(null);
     try {
-      await api.addTask(id, 'render');
+      await api.addTask(id, 'render', { quality: 'delivery' });
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -88,8 +70,8 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
       <section className="editor-main">
         <div className="editor-bar">
           <h1 className="h-screen">Tahrirlash</h1>
-          <button type="button" className="btn btn--dark" disabled={renderBusy || previewError === 'no_comp'} onClick={() => void render()}>
-            {renderBusy ? 'Render qilinmoqda…' : 'Render qilish'}
+          <button type="button" className="btn btn--dark" disabled={renderBusy || !hasExecute} onClick={() => void render()}>
+            {renderBusy ? 'Render qilinmoqda…' : 'Yakuniy render (yuqori sifat)'}
           </button>
         </div>
         {error && (
@@ -98,22 +80,23 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
           </p>
         )}
         <div className="player">
-          {previewError === 'no_comp' ? (
-            <div className="player-note">
-              <p>Video hali tayyor emas — Pipeline'da rejani tasdiqlang</p>
-              <a className="btn btn--ghost" href={`#/p/${id}`}>
-                Pipeline'ga qaytish
-              </a>
-            </div>
-          ) : previewError ? (
-            <div className="player-note" role="alert">
-              <p>Ko'rib chiqish ochilmadi: {previewError}</p>
-            </div>
-          ) : previewUrl ? (
-            <iframe key={`${previewUrl}#${editsDone}`} title="Video ko'rinishi" src={previewUrl} sandbox="allow-scripts allow-same-origin" />
-          ) : (
+          {latest ? (
+            <>
+              <video key={latest.name} controls playsInline preload="metadata" src={renderUrl(id, latest.name)} />
+              {updating && <span className="player-badge">yangilanmoqda…</span>}
+            </>
+          ) : updating ? (
             <div className="player-note" aria-busy="true">
-              <p className="muted">Ko'rib chiqish ishga tushmoqda…</p>
+              <p className="muted">Video render qilinmoqda…</p>
+            </div>
+          ) : (
+            <div className="player-note">
+              <p>{hasExecute ? "Hali render yo'q. «Yakuniy render»ni bosing." : "Video hali tayyor emas — Jarayon'da storyboardni tasdiqlang"}</p>
+              {!hasExecute && (
+                <a className="btn btn--ghost" href={`#/p/${id}`}>
+                  Jarayon'ga qaytish
+                </a>
+              )}
             </div>
           )}
         </div>

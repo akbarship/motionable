@@ -14,14 +14,16 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (items.length === 0) return;
     let live = true;
-    api.quote(projectId, items).then(
+    // With no gen items, a free probe quote still tells whether image gen is configured (for the banner).
+    const ask = items.length > 0 ? items : [{ kind: 'image' as const, params: { prompt: 'probe' } }];
+    api.quote(projectId, ask).then(
       (q) => {
         if (!live) return;
         setQuote(q);
         setQuoteError(null);
-        if (genUnavailable(q.missing)) setUseGen(false);
+        // Gen on by default when a provider is set; each paid item still needs its own Approve.
+        setUseGen(!genUnavailable(q.missing));
       },
       (e: Error) => live && setQuoteError(e.message),
     );
@@ -37,7 +39,7 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
     setSending(true);
     setError(null);
     try {
-      await api.addTask(projectId, 'execute', { useGen: useGen && !unavailable });
+      await api.addTask(projectId, 'storyboard', { useGen: useGen && !unavailable });
       onStarted();
     } catch (e) {
       setError((e as Error).message);
@@ -48,6 +50,11 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
   return (
     <section className="block" aria-labelledby="plan-h">
       <h2 id="plan-h" className="block-h">Reja</h2>
+      {unavailable && (
+        <p className="banner" role="status">
+          Rasm generatsiyasi o'chiq. Illyustratsiyalar o'rniga zaxira ko'rsatiladi. <a href="#/settings">Sozlamalar</a>da kie.ai kalitini qo'ying.
+        </p>
+      )}
       {plan.story && (
         <div className="plan-story">
           <p className="plan-hook">
@@ -68,6 +75,7 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
                 {num(s.start)}–{num(s.end)} s
               </span>
               <span className="scene-purpose">{s.purpose}</span>
+              {s.grammar && <span className="chip">{s.grammar}</span>}
             </div>
             {s.script && <p className="scene-script">{s.script}</p>}
             {s.layout && (
@@ -100,7 +108,6 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
             <span>Generatsiyadan foydalanish</span>
           </label>
           {quote && !unavailable && <p className="small">Taxminiy narx: {fmtUsd(quote.usd)}</p>}
-          {unavailable && <p className="muted small">Rasm/video generatsiyasi uchun Sozlamalarda provayder tanlang</p>}
           {quoteError && <p className="form-error" role="alert">{quoteError}</p>}
         </div>
       )}
@@ -112,7 +119,7 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
       )}
       <div className="actions">
         <button type="button" className="btn btn--dark btn--lg" disabled={sending} onClick={() => void approve()}>
-          {sending ? 'Yuborilmoqda…' : 'Rejani tasdiqlash'}
+          {sending ? 'Yuborilmoqda…' : 'Tasdiqlash va storyboard qilish'}
         </button>
       </div>
     </section>

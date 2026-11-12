@@ -14,6 +14,11 @@ import {
   readPlan,
   showPlanReview,
   stageState,
+  canStudy,
+  parsePalette,
+  pickAccent,
+  storyboardUseGen,
+  studiedStyleId,
 } from '../../studio/src/pipeline.js';
 
 let n = 0;
@@ -126,6 +131,25 @@ test('awaitingGenerate and showPlanReview', () => {
   expect(awaitingGenerate([g, task('generate', 'done'), task('execute', 'awaiting_approval')])).toEqual([g]);
   expect(showPlanReview([task('direct', 'done')])).toBe(true);
   expect(showPlanReview([task('execute', 'queued')])).toBe(false);
+  expect(showPlanReview([task('storyboard', 'running')])).toBe(false);
+  expect(showPlanReview([task('storyboard', 'failed')])).toBe(true);
+});
+
+test('study helpers', () => {
+  expect(studiedStyleId([task('study_ref', 'done', { input: { styleId: 's-1' } }), task('study_ref', 'failed', { input: { styleId: 's-2' } })])).toBe('s-1');
+  expect(studiedStyleId([])).toBeNull();
+  expect(canStudy([{ status: 'added' }], [])).toBe(true);
+  expect(canStudy([{ status: 'done' }], [])).toBe(false);
+  expect(canStudy([{ status: 'failed' }], [])).toBe(true);
+  expect(canStudy([{ status: 'added' }], [task('study_ref', 'running')])).toBe(false);
+});
+
+test('style question helpers', () => {
+  expect(pickAccent(['#0b1a3a', '#1e5bff', '#ffffff'])).toBe('#1e5bff');
+  expect(pickAccent(['bad'])).toBe('#e5302a');
+  expect(parsePalette('#F4F1EA, #c9643f; nope #123')).toEqual(['#f4f1ea', '#c9643f']);
+  expect(storyboardUseGen([task('storyboard', 'done', { input: { useGen: true } })])).toBe(true);
+  expect(storyboardUseGen([])).toBe(false);
 });
 
 test('hasUnknownState', () => {
@@ -167,6 +191,7 @@ test('stageLinks', () => {
   expect(stageLinks('p1')).toEqual([
     { key: 'refs', label: 'Namunalar', href: '#/p/p1/refs' },
     { key: 'pipeline', label: 'Jarayon', href: '#/p/p1' },
+    { key: 'board', label: 'Storyboard', href: '#/p/p1/board' },
     { key: 'edit', label: 'Muharrir', href: '#/p/p1/edit' },
   ]);
 });

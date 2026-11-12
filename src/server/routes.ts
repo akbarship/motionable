@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rm, stat, unlink } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
@@ -11,14 +11,13 @@ import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { prices } from '../providers/util.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
-import { createProject, getProject, listProjects, readJson, setLast, slugId } from '../core/store.js';
-import { ChatMsgSchema, PlanSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
+import { createProject, getProject, listProjects, readJson, setLast, slugId, writeJson } from '../core/store.js';
+import { ChatMsgSchema, PlanSchema, ProjectSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
-import { ensurePreview } from './preview.js';
-import { HttpError, checkFilename, handleUpload } from './upload.js';
+import { HttpError, VIDEO_EXTS, checkFilename, handleUpload } from './upload.js';
 
-const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'execute', 'render']);
+const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'render']);
 const HEARTBEAT_MAX_MS = 300_000;
 const BODY_MAX = 1024 * 1024;
 
@@ -111,8 +110,9 @@ async function listStyles() {
         framing: s.framing,
         pace: s.pace,
         palette: s.colour.palette,
-        fontFamily: s.captions.fontFamily,
+        fontFamily: s.type?.families[0] ?? s.captions.fontFamily,
         transitions: s.transitions,
+        ...(s.background ? { background: s.background.notes ?? s.background.kind } : {}),
       });
     } catch {
       // bad id, missing or invalid style.json
@@ -121,12 +121,90 @@ async function listStyles() {
   return out;
 }
 
-async function studyRef(id: string, file: string) {
+const stemOf = (name: string) => name.slice(0, name.length - extname(name).length);
+const sheetDirOf = (name: string) => `refs/${stemOf(name)}.sheet`;
+
+/** Builds the contact sheet for one stored ref. The ref waits ("qo'shildi") until the user starts the study. */
+async function addRef(id: string, file: string) {
   const name = basename(file);
-  const stem = name.slice(0, name.length - extname(name).length);
-  const sheetDir = `refs/${stem}.sheet`;
-  await buildRefSheet(file, join(projectDir(id), sheetDir));
-  return addTask(id, 'study_ref', { video: `refs/${name}`, sheetDir, styleId: slugId(stem) });
+  await buildRefSheet(file, join(projectDir(id), sheetDirOf(name)));
+  return { name, sheetDir: sheetDirOf(name) };
+}
+
+/** Ref video names inside a study_ref task input (`videos[]`, or the older single `video`). */
+export function studyVideos(input: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  if (Array.isArray(input.videos)) {
+    for (const v of input.videos) {
+      const p = (v as { video?: unknown } | null)?.video;
+      if (typeof p === 'string') out.push(basename(p));
+    }
+  } else if (typeof input.video === 'string') out.push(basename(input.video));
+  return out;
+}
+
+/** Stored ref videos (with a built sheet) and the newest study task that covers each. */
+async function listRefs(id: string) {
+  const dir = join(projectDir(id), 'refs');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw e;
+  }
+  const tasks = (await listTasks(id)).filter((t) => t.type === 'study_ref');
+  const out: { name: string; size: number; taskId: string | null; status: string }[] = [];
+  for (const name of names.sort()) {
+    if (!VIDEO_EXTS.has(extname(name).toLowerCase())) continue;
+    try {
+      const st = await stat(join(dir, name));
+      if (!st.isFile()) continue;
+      await stat(join(projectDir(id), sheetDirOf(name), 'cuts.json'));
+      const t = [...tasks].reverse().find((x) => studyVideos(x.input).includes(name));
+      out.push({ name, size: st.size, taskId: t?.id ?? null, status: t?.status ?? 'added' });
+    } catch {
+      // no sheet yet (still building or failed) or vanished
+    }
+  }
+  return out;
+}
+
+/** One study_ref task for every stored ref, so the agent writes one style from all of them. */
+async function startStudy(id: string, projectName: string) {
+  const tasks = await listTasks(id);
+  if (tasks.some((t) => t.type === 'study_ref' && (t.status === 'queued' || t.status === 'running'))) {
+    throw new HttpError(409, 'study_in_progress');
+  }
+  const refs = await listRefs(id);
+  if (refs.length === 0) throw new HttpError(400, 'no_refs');
+  const videos = refs.map((r) => ({ video: `refs/${r.name}`, sheetDir: sheetDirOf(r.name) }));
+  return addTask(id, 'study_ref', { videos, styleId: slugId(refs.length === 1 ? stemOf(refs[0].name) : projectName) });
+}
+
+/** storyboard/board.json, or null when the storyboard is not built yet (or is torn). */
+async function readBoard(id: string) {
+  try {
+    return await readJson(join(projectDir(id), 'storyboard', 'board.json'), StoryboardSchema);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT' || e instanceof SyntaxError || e instanceof ZodError) return null;
+    throw e;
+  }
+}
+
+const STILL_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+
+async function serveStill(req: IncomingMessage, res: ServerResponse, id: string, rawName: string): Promise<void> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawName);
+  } catch {
+    throw new HttpError(400, 'malformed filename');
+  }
+  const name = checkFilename(decoded, false, new Set(Object.keys(STILL_TYPES)));
+  const data = await readFile(join(projectDir(id), 'storyboard', name)); // ENOENT -> 404
+  res.writeHead(200, { 'content-type': STILL_TYPES[extname(name).toLowerCase()], 'content-length': data.length, 'cache-control': 'no-store' });
+  res.end(req.method === 'HEAD' ? undefined : data);
 }
 
 async function listRenders(id: string) {
@@ -217,8 +295,19 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
         return send(res, 200, { project, tasks, plan: planRead, chat });
       }
-      if (seg[2] === 'preview' && seg.length === 3 && method === 'GET') {
-        return send(res, 200, await ensurePreview(id));
+      if (seg[2] === 'storyboard' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await readBoard(id));
+      }
+      if (seg[2] === 'storyboard' && seg.length === 4 && (method === 'GET' || method === 'HEAD')) {
+        return serveStill(req, res, id, seg[3]);
+      }
+      if (seg[2] === 'style-answers' && seg.length === 3 && method === 'PUT') {
+        const b = await readBody(req);
+        const answers = StyleAnswersSchema.parse(b);
+        const project = await getProject(id);
+        const next = { ...project, styleAnswers: answers };
+        await writeJson(join(projectDir(id), 'project.json'), ProjectSchema, next);
+        return send(res, 200, next);
       }
       if (seg[2] === 'renders' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await listRenders(id));
@@ -242,7 +331,7 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
           if (e instanceof RefDownloadError) throw new HttpError(502, e.message);
           throw e;
         }
-        return send(res, 201, { task: await studyRef(id, file) });
+        return send(res, 201, { ref: await addRef(id, file) });
       }
       if (seg[2] === 'refs' && seg[3] === 'file' && seg.length === 4 && method === 'POST') {
         await getProject(id);
@@ -255,7 +344,31 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
           if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new HttpError(404, 'not found');
           throw e;
         }
-        return send(res, 201, { task: await studyRef(id, file) });
+        return send(res, 201, { ref: await addRef(id, file) });
+      }
+      if (seg[2] === 'refs' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await listRefs(id));
+      }
+      if (seg[2] === 'refs' && seg[3] === 'study' && seg.length === 4 && method === 'POST') {
+        const project = await getProject(id);
+        return send(res, 201, { task: await startStudy(id, project.name) });
+      }
+      if (seg[2] === 'refs' && seg.length === 4 && method === 'DELETE' && seg[3] !== 'file' && seg[3] !== 'study') {
+        await getProject(id);
+        let decoded: string;
+        try {
+          decoded = decodeURIComponent(seg[3]);
+        } catch {
+          throw new HttpError(400, 'malformed filename');
+        }
+        const name = checkFilename(decoded, false, VIDEO_EXTS);
+        const busy = (await listTasks(id)).some(
+          (t) => t.type === 'study_ref' && (t.status === 'queued' || t.status === 'running') && studyVideos(t.input).includes(name),
+        );
+        if (busy) throw new HttpError(409, 'study_in_progress');
+        await unlink(join(projectDir(id), 'refs', name)); // ENOENT -> 404
+        await rm(join(projectDir(id), sheetDirOf(name)), { recursive: true, force: true });
+        return send(res, 200, { ok: true });
       }
       if (seg[2] === 'tasks' && seg.length === 3 && method === 'POST') {
         await getProject(id);

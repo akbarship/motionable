@@ -355,4 +355,35 @@ describe('studio', () => {
     ]);
     expect((await fetch(`${base}/api/styles`)).status).toBe(401);
   });
+  test('style-answers: validated and stored in project.json', async () => {
+    const id = await mk();
+    const put = (b: unknown) => api(`/api/projects/${id}/style-answers`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+    expect((await put({ palette: 'reference', font: 'Inter', background: 'exact', accent: 'red' })).status).toBe(400);
+    const ok = await put({ palette: ['#0b1a3a', '#1e5bff'], font: 'Inter', background: 'simple', accent: '#1e5bff' });
+    expect(ok.status).toBe(200);
+    const p = JSON.parse(await readFile(join(projectDir(id), 'project.json'), 'utf8'));
+    expect(p.styleAnswers).toEqual({ palette: ['#0b1a3a', '#1e5bff'], font: 'Inter', background: 'simple', accent: '#1e5bff' });
+  });
+
+  test('storyboard: null before build, board + stills after', async () => {
+    const id = await mk();
+    expect(await (await api(`/api/projects/${id}/storyboard`)).json()).toBeNull();
+    const dir = join(projectDir(id), 'storyboard');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 's1.png'), 'PNG');
+    const board = { scenes: [{ sceneId: 's1', file: 's1.png', script: 'Salom', at: 1.2 }], updatedAt: '2026-11-13T00:00:00Z' };
+    await writeFile(join(dir, 'board.json'), JSON.stringify(board));
+    expect(await (await api(`/api/projects/${id}/storyboard`)).json()).toEqual(board);
+    const img = await fetch(`${base}/api/projects/${id}/storyboard/s1.png?t=${token}`);
+    expect(img.status).toBe(200);
+    expect(img.headers.get('content-type')).toBe('image/png');
+    expect((await api(`/api/projects/${id}/storyboard/..%2Fproject.json`)).status).toBe(400);
+    expect((await api(`/api/projects/${id}/storyboard/nope.png`)).status).toBe(404);
+  });
+
+  test('storyboard tasks are user-creatable', async () => {
+    const id = await mk();
+    expect((await api(`/api/projects/${id}/tasks`, json({ type: 'storyboard', input: { useGen: true } }))).status).toBe(200);
+    expect((await api(`/api/projects/${id}/tasks`, json({ type: 'storyboard_edit', input: { sceneId: 's1', text: 'x' } }))).status).toBe(200);
+  });
 });

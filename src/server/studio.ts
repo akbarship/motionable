@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { loadConfig } from '../core/config.js';
 import { home } from '../core/paths.js';
 import { readJson, writeJson } from '../core/store.js';
-import { stopAllPreviews } from './preview.js';
 import { handleApi, send } from './routes.js';
 import { createSse } from './sse.js';
 
@@ -104,7 +103,6 @@ export async function startStudio(
     url: `http://127.0.0.1:${actual}/?t=${token}`,
     async close() {
       sse.close();
-      await stopAllPreviews();
       const closed = new Promise<void>((r) => server.close(() => r()));
       server.closeAllConnections();
       await closed;

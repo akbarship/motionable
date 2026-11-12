@@ -14,12 +14,18 @@ Blocking error: `task_failed` with a short Uzbek reason.
 ## 1. Gather (look before you plan)
 
 1. `task_progress`: `Reja tuzilmoqda`.
-2. Read `<projectDir>/project.json` (`brief`, `styleIds`). Call `project_info {projectId}` once;
+2. Read `<projectDir>/project.json` (`brief`, `styleIds`, `styleAnswers`). Call `project_info {projectId}` once;
    note `providers`: is `image` or `video` on (not `off`)? That decides if `gen` is allowed.
+   `styleAnswers` (the user's answers after the study) are HARD rules over style.json:
+   - `palette`: `"reference"` = `style.colour.palette`; a list = use ONLY those colours;
+   - `font`: the only font family for headlines and captions;
+   - `background`: `exact` = rebuild `style.background` as measured; `simple` = same colours, calmer;
+   - `accent`: the one highlight colour (active caption word, key numbers, underlines).
 3. Style ids = `input.styleIds`, else `project.styleIds`. Both empty: `task_failed`
    `Uslub tanlanmagan: avval referens qo'shing yoki uslub tanlang`. Never invent a style.
-4. Read each `<home>/styles/<id>/style.json`. Then Read 1-2 sheets per style
-   (`<home>/styles/<id>/sheets/sheet-1.jpg`, `sheet-2.jpg` if present). Write down what you SEE:
+4. Read each `<home>/styles/<id>/style.json` (note `recipes`, `background`, `materials`,
+   `grammars`, `assetsNeeded`). Then Read 1-2 sheets per style
+   (the first two entries of `style.sheets`, under `<home>/styles/<id>/`). Write down what you SEE:
    the layouts used (full-bleed face, split, illustration with caption, type card...), how
    people and objects are made (filmed, illustrated, photo), where text sits, what moves.
    Gen refs are single frames: `style.keyFrames[].file` (under `<home>`) or `<home>/styles/<id>/frames/`.
@@ -55,12 +61,32 @@ Blocking error: `task_failed` with a short Uzbek reason.
 
 ## 4. Each scene
 - `purpose`: why this scene exists (hook, proof, step 2, payoff, cta...).
+- `grammar`: one scene kind from `style.grammars` (else from what the sheets show), e.g.
+  `icon carousel`, `glass stat card left`, `logo row`, `chat bubbles`, `real UI close-up`,
+  `full-bleed illustration`, `big blur-in type`, `connector chain`. At least 4 different
+  grammars per video (fewer scenes: all different); neighbours never share one. The validator
+  enforces this.
+- One HERO visual per scene, real and specific, in this order of preference:
+  1. a faithful rebuild of the real product UI the script talks about (`source: "ui"`, `what`
+     names the screen and its exact visible content, e.g. `Claude Code terminal: "> /compact"
+     typed, reply "Compacted. Summary: 3 files changed"`);
+  2. a real brand logo (`source: "logo"`, `what`: `GitHub logo`); the executor resolves it with
+     `media-use resolve --type logo --entity <brand>` (free);
+  3. an AI image (`source: "gen"`) when image gen is on: every illustration, object, device or
+     scene picture (a laptop, a desk, a character) comes from gen, never from code;
+  4. footage/b-roll of the user.
+  Typography alone is a hero only for the hook number or the CTA keyword.
+- No placeholder content. Never "Birinchi savol", "stek: Next.js", "Lorem", "Sarlavha", "Item 1".
+  Every on-screen line is what a real user would see or write. A `CLAUDE.md` card shows real
+  lines such as `- Javoblar o'zbekcha` / `- Avval reja, keyin kod`; a terminal shows the real
+  command and the real reply.
 - `layout`: one line, where things sit, using a grammar seen on the sheet, e.g.
   `presenter left third, illustration right two thirds, caption lower third`.
   Neighbours never share a layout. Text and the subject's face stay on the centre line;
   safe areas never pull the composition off-centre. Captions per `style.captions`.
-- `motion`: one line, what moves and when, naming a move from `style.motion`
-  (e.g. `pop-in on "10 daqiqa" at 0.6 s, slow push-in`).
+- `motion`: one line, what moves and when, naming a recipe from `style.recipes` by its `name`
+  (else a move from `style.motion`), e.g. `blur-in headline on "Shift+Tab" at 0.3 s, icon
+  carousel scroll 0.8 s`. Add a camera move (push-in, drift, parallax) to at least half the scenes.
 - `assets` (>= 1, ids unique in the plan), in this priority:
   1. `footage` / `broll`: the user's clips or images; `what` names file and seconds.
   2. `registry`: a HyperFrames registry block; `what` names it (e.g. `registry: kinetic-type`).
@@ -72,7 +98,8 @@ Blocking error: `task_failed` with a short Uzbek reason.
      `node <cliPath> copy-file <home>/<keyFrame.file> <projectDir>/gen/ref/<id>-<n>.jpg`; `kind` image (default) or video with `seconds`;
      `fallback` = what to show free (type card or b-roll). Use gen when the reference is
      illustrated or shows things the footage cannot.
-  4. `type`: typography or UI only.
+  4. `logo` / `ui`: see the hero rule above.
+  5. `type`: typography only.
   NEVER plan people, characters, buildings or objects drawn in code (SVG/CSS shapes). No
   footage and no gen: make the scene typography or UI driven.
 - `components`: kinds `title|lower-third|caption|card|chart|overlay|transition`, each with a
@@ -81,12 +108,23 @@ Blocking error: `task_failed` with a short Uzbek reason.
 
 ## 5. Self-critique (tick every box before writing; fix and recheck any "no")
 
+Slop check first. If ANY of these is true, rewrite the scenes before going on:
+- two neighbouring scenes share a grammar, or fewer than 4 grammars in the video;
+- every scene is "one card + one centred headline";
+- the same background blob/glow in every scene with nothing else changing;
+- any placeholder or generic text (see the list above), or a fake UI that no real product has;
+- a scene without a hero visual; an illustration planned as code;
+- the background is not `style.background` (or the `simple` version when the user chose it).
+
+Then:
+
 - [ ] Hook concrete in 1.5 s (visual + real number or sharp claim)?
 - [ ] One idea; every scene has a reason to exist?
 - [ ] Adjacent scenes differ in layout and motion; grammars come from the sheet?
 - [ ] Claims on screen are in that scene's `script`; plain speech, <= 3 words/s?
 - [ ] Assets fit the providers on; gen prompts end with the no-text line; no objects drawn in code?
-- [ ] Nothing breaks `style.doNot`; palette and captions match the style?
+- [ ] Nothing breaks `style.doNot`; palette, font, accent and background follow `styleAnswers`?
+- [ ] Every `assetsNeeded` item of the style that fits this script is used somewhere?
 
 ## 6. Write and validate
 
@@ -97,8 +135,9 @@ Blocking error: `task_failed` with a short Uzbek reason.
   "story": {"hook": "...", "idea": "...", "payoff": "...", "cta": "..."}, "beats": 8,
   "captions": {"on": true, "style": "<from style>", "source": "stt|script|none"},
   "scenes": [{ "id": "s1", "start": 0, "end": 2.4, "purpose": "hook",
-    "script": "<exact Uzbek words>", "layout": "<one line>", "motion": "<one line>",
-    "assets": [{"id": "a1", "source": "footage|broll|registry|gen|type", "what": "...",
+    "script": "<exact Uzbek words>", "layout": "<one line>", "grammar": "<from style.grammars>",
+    "motion": "<one line>",
+    "assets": [{"id": "a1", "source": "footage|broll|registry|gen|logo|ui|type", "what": "...",
                 "kind": "image", "prompt": "...", "refFrames": ["gen/ref/<id>-1.jpg"], "fallback": "..."}],
     "footage": {"src": "broll/a.mp4", "in": 1.2, "out": 3.6} | null,
     "components": [{"kind": "caption", "description": "...", "props": {}}] }],
