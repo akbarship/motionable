@@ -241,6 +241,18 @@ export async function claimNext(): Promise<{ projectId: string; task: Task; toke
   return null;
 }
 
+/** Put a claimed task back to queued, only while the lock still carries our token. Always tries a token-checked release. */
+async function requeueClaim(projectId: string, taskId: string, token: string): Promise<void> {
+  try {
+    await assertOwner(projectId, taskId, token);
+    await update(projectId, taskId, (t) => ({ ...t, status: 'queued' }));
+  } catch {
+    // lost ownership or write failed: do not touch another worker's task
+  } finally {
+    await release(projectId, taskId, token);
+  }
+}
+
 /**
  * Poll claimNext until a task is claimed or timeoutS passes. pollMs is injectable for tests.
  * When `signal` aborts, polling stops and null is returned; a claim that lands after the abort is put back to queued.
@@ -249,15 +261,15 @@ export async function waitForTask(
   timeoutS: number,
   pollMs = 1000,
   signal?: AbortSignal,
+  claim: typeof claimNext = claimNext,
 ): Promise<{ projectId: string; task: Task; token: string } | null> {
   const deadline = Date.now() + timeoutS * 1000;
   for (;;) {
     if (signal?.aborted) return null;
-    const c = await claimNext();
+    const c = await claim();
     if (c) {
       if (!signal?.aborted) return c;
-      await update(c.projectId, c.task.id, (t) => ({ ...t, status: 'queued' }));
-      await release(c.projectId, c.task.id, c.token);
+      await requeueClaim(c.projectId, c.task.id, c.token);
       return null;
     }
     if (Date.now() >= deadline) return null;

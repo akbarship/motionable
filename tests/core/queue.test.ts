@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -203,4 +203,32 @@ test('waitForTask stops on abort and leaves a later task queued', async () => {
   const t = await addTask(p, 'study_ref', {});
   await new Promise((r) => setTimeout(r, 50));
   expect((await listTasks(p)).find((x) => x.id === t.id)?.status).toBe('queued');
+});
+
+test('claim landing after abort is requeued and unlocked', async () => {
+  const t = await addTask(p, 'study_ref', {});
+  const ctl = new AbortController();
+  const late = async () => {
+    const c = await claimNext();
+    ctl.abort();
+    return c;
+  };
+  expect(await waitForTask(30, 10, ctl.signal, late)).toBeNull();
+  expect((await listTasks(p))[0]!.status).toBe('queued');
+  await expect(stat(join(projectDir(p), 'tasks', `${t.id}.lock`))).rejects.toThrow();
+});
+
+test('post-abort requeue leaves a reclaimed task alone', async () => {
+  const t = await addTask(p, 'study_ref', {});
+  const ctl = new AbortController();
+  const lock = join(projectDir(p), 'tasks', `${t.id}.lock`);
+  const late = async () => {
+    const c = await claimNext();
+    await writeFile(lock, 'other-owner');
+    ctl.abort();
+    return c;
+  };
+  expect(await waitForTask(30, 10, ctl.signal, late)).toBeNull();
+  expect((await listTasks(p))[0]!.status).toBe('running');
+  expect(await readFile(lock, 'utf8')).toBe('other-owner');
 });
