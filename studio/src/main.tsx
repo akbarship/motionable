@@ -1,6 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, getToken, type Project } from './api';
+import { Editor } from './screens/Editor';
 import { Onboarding } from './screens/Onboarding';
 import { Pipeline } from './screens/Pipeline';
 import { References } from './screens/References';
@@ -18,20 +19,6 @@ function useRoute(): Route {
     return () => window.removeEventListener('hashchange', on);
   }, []);
   return route;
-}
-
-/** Placeholder for screens built in later tasks (pipeline, editor). */
-function Placeholder({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="stage">
-      <div className="canvas canvas--empty" aria-label="Video maydoni">
-        <div className="canvas-note">
-          <h1 className="h-screen">{title}</h1>
-          <p className="muted">{text}</p>
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function App() {
@@ -111,7 +98,8 @@ function App() {
       body = <Pipeline key={route.id} id={route.id} tick={tick} />;
       break;
     case 'edit':
-      body = <Placeholder title="Tahrirlash" text="Tahrir ekrani keyingi versiyada qo'shiladi." />;
+      body = <Editor key={route.id} id={route.id} tick={tick} />;
+      withChat = false;
       break;
     case 'settings':
       body = <Settings />;

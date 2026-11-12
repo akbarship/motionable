@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename, extname, join } from 'node:path';
@@ -13,6 +14,7 @@ import { createProject, getProject, listProjects, readJson, setLast, slugId } fr
 import { ChatMsgSchema, PlanSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
+import { ensurePreview } from './preview.js';
 import { HttpError, checkFilename, handleUpload } from './upload.js';
 
 const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'execute', 'render']);
@@ -125,6 +127,73 @@ async function studyRef(id: string, file: string) {
   return addTask(id, 'study_ref', { video: `refs/${name}`, sheetDir, styleId: slugId(stem) });
 }
 
+async function listRenders(id: string) {
+  const dir = join(projectDir(id), 'renders');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw e;
+  }
+  const out: { name: string; size: number; mtime: string; ms: number }[] = [];
+  for (const name of names) {
+    if (extname(name).toLowerCase() !== '.mp4') continue;
+    try {
+      const st = await stat(join(dir, name));
+      if (st.isFile()) out.push({ name, size: st.size, mtime: st.mtime.toISOString(), ms: st.mtimeMs });
+    } catch {
+      // vanished
+    }
+  }
+  return out.sort((a, b) => b.ms - a.ms).map(({ ms: _ms, ...r }) => r);
+}
+
+/** Streams an mp4 from renders/ with single-range support. */
+async function serveRender(req: IncomingMessage, res: ServerResponse, id: string, rawName: string): Promise<void> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawName);
+  } catch {
+    throw new HttpError(400, 'malformed filename');
+  }
+  const name = checkFilename(decoded, false);
+  if (extname(name).toLowerCase() !== '.mp4') throw new HttpError(400, 'file type not allowed');
+  const file = join(projectDir(id), 'renders', name);
+  const size = (await stat(file)).size; // ENOENT -> 404
+  const headers: Record<string, string | number> = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes' };
+  const range = req.headers.range;
+  let start = 0;
+  let end = size - 1;
+  let status = 200;
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    const bad = () => {
+      res.writeHead(416, { 'content-range': `bytes */${size}` });
+      res.end();
+    };
+    if (!m || (m[1] === '' && m[2] === '')) return bad();
+    if (m[1] === '') {
+      const n = Number(m[2]);
+      if (n === 0 || size === 0) return bad();
+      start = Math.max(0, size - n);
+    } else {
+      start = Number(m[1]);
+      if (m[2] !== '') end = Math.min(Number(m[2]), size - 1);
+      if (start >= size || start > end) return bad();
+    }
+    status = 206;
+    headers['content-range'] = `bytes ${start}-${end}/${size}`;
+  }
+  headers['content-length'] = size === 0 ? 0 : end - start + 1;
+  res.writeHead(status, headers);
+  if (req.method === 'HEAD' || size === 0) return void res.end();
+  const stream = createReadStream(file, { start, end });
+  stream.on('error', () => res.destroy());
+  res.on('close', () => stream.destroy());
+  stream.pipe(res);
+}
+
 async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const method = req.method ?? 'GET';
   const seg = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
@@ -144,6 +213,15 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         await setLast(id);
         const [tasks, plan, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
         return send(res, 200, { project, tasks, plan, chat });
+      }
+      if (seg[2] === 'preview' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await ensurePreview(id));
+      }
+      if (seg[2] === 'renders' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await listRenders(id));
+      }
+      if (seg[2] === 'renders' && seg.length === 4 && (method === 'GET' || method === 'HEAD')) {
+        return serveRender(req, res, id, seg[3]);
       }
       if (seg[2] === 'upload' && seg.length === 3 && method === 'POST') {
         await getProject(id);

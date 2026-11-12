@@ -36,6 +36,12 @@ export interface ChatMsg {
   at: string;
 }
 
+export interface RenderFile {
+  name: string;
+  size: number;
+  mtime: string;
+}
+
 export interface ProjectView {
   project: Project;
   tasks: Task[];
@@ -132,12 +138,21 @@ export const api = {
     request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/approve`, { method: 'POST' }),
   declineTask: (id: string, tid: string) =>
     request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/decline`, { method: 'POST' }),
+  preview: (id: string) => request<{ url: string }>(`${p(id)}/preview`),
+  renders: (id: string) => request<RenderFile[]>(`${p(id)}/renders`),
+  sendChat: (id: string, text: string, files?: string[]) =>
+    request<{ msg: ChatMsg; task: Task }>(`${p(id)}/chat`, { method: 'POST', body: { text, ...(files?.length ? { files } : {}) } }),
   styles: () => request<StyleSummary[]>('/api/styles'),
   getConfig: () => request<Config>('/api/config'),
   putConfig: (patch: ConfigPatch) => request<Config>('/api/config', { method: 'PUT', body: patch }),
   balance: () => request<Record<string, unknown>>('/api/bot/balance'),
   claude: () => request<{ connected: boolean }>('/api/claude'),
 };
+
+/** URL for a finished render usable in <video src> / <a href> (token in the query, since those cannot send headers). */
+export function renderUrl(projectId: string, name: string): string {
+  return `${p(projectId)}/renders/${encodeURIComponent(name)}?t=${encodeURIComponent(getToken())}`;
+}
 
 /** Uploads one file with progress (0..1). Resolves with the stored name (the server may suffix it). */
 export function upload(

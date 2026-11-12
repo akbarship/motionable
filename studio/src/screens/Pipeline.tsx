@@ -39,6 +39,7 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
 
   const view = plan == null ? null : readPlan(plan);
   const pending = awaitingGenerate(tasks);
+  const executeDone = tasks.some((t) => t.type === 'execute' && t.status === 'done');
   const unknown = tasks.filter(hasUnknownState);
 
   return (
@@ -61,6 +62,11 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
         </p>
       )}
       {view && showPlanReview(tasks) && <PlanReview key={JSON.stringify(plan)} projectId={id} plan={view} onStarted={() => void load()} />}
+      {executeDone && (
+        <a className="btn btn--dark" href={`#/p/${id}/edit`}>
+          Muharrirga o'tish
+        </a>
+      )}
       <ApproveCost projectId={id} pending={pending} unknown={unknown} onChanged={() => void load()} />
     </div>
   );
