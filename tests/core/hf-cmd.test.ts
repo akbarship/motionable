@@ -16,6 +16,21 @@ describe('npxCommand', () => {
 });
 
 describe('doctorReportOk', () => {
+  const req = (ok: boolean) => ['Node.js', 'FFmpeg', 'FFprobe', 'Chrome'].map((name) => ({ name, ok }));
+  test('ignores optional checks when the required ones pass', () => {
+    const r = { ok: false, checks: [...req(true), { name: 'whisper-cpp', ok: false }, { name: 'Docker running', ok: false }] };
+    expect(doctorReportOk(JSON.stringify(r), true)).toBe(true);
+    expect(doctorReportOk(JSON.stringify(r), false)).toBe(true);
+  });
+  test('fails when a required check fails', () => {
+    const r = { ok: false, checks: [...req(true).slice(0, 3), { name: 'Chrome', ok: false }] };
+    expect(doctorReportOk(JSON.stringify(r), true)).toBe(false);
+  });
+  test('fails when a required check is missing from a partial report', () => {
+    const r = { ok: true, checks: req(true).slice(0, 2) };
+    expect(doctorReportOk(JSON.stringify(r), true)).toBe(false);
+  });
+
   test('gates on .ok', () => {
     expect(doctorReportOk('{"ok":true}', true)).toBe(true);
     expect(doctorReportOk('{"ok":false}', true)).toBe(false);

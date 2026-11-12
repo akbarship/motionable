@@ -13,12 +13,30 @@ export function npxCommand(platform: NodeJS.Platform, args: string[]): SpawnSpec
   return platform === 'win32' ? { cmd: 'npx.cmd', args, shell: true } : { cmd: 'npx', args, shell: false };
 }
 
-/** Reads `hyperframes doctor --json`: its `.ok` wins; without a usable `.ok` the exit status decides. */
+/** Checks a render needs. Everything else in `hyperframes doctor` (whisper, Kokoro, Docker...) is optional. */
+const REQUIRED_CHECKS = ['Node.js', 'FFmpeg', 'FFprobe', 'Chrome'];
+
+/**
+ * Reads `hyperframes doctor --json`. Its top-level `.ok` is false whenever any optional tool is
+ * missing, so when the report lists checks only the required ones decide. Without checks, `.ok`
+ * wins; without a usable report the exit status decides.
+ */
 export function doctorReportOk(stdout: string, exitedOk: boolean): boolean {
   try {
     const v: unknown = JSON.parse(stdout);
-    if (typeof v === 'object' && v !== null && typeof (v as { ok?: unknown }).ok === 'boolean') {
-      return exitedOk && (v as { ok: boolean }).ok;
+    if (typeof v === 'object' && v !== null) {
+      const checks = (v as { checks?: unknown }).checks;
+      if (Array.isArray(checks)) {
+        const byName = new Map<string, boolean>();
+        for (const c of checks) {
+          if (typeof c === 'object' && c !== null && typeof (c as { name?: unknown }).name === 'string') {
+            byName.set((c as { name: string }).name, (c as { ok?: unknown }).ok === true);
+          }
+        }
+        const present = REQUIRED_CHECKS.filter((n) => byName.has(n));
+        if (present.length > 0) return REQUIRED_CHECKS.every((n) => byName.get(n) === true);
+      }
+      if (typeof (v as { ok?: unknown }).ok === 'boolean') return exitedOk && (v as { ok: boolean }).ok;
     }
   } catch {
     // not JSON: fall through
