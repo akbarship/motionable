@@ -1,0 +1,50 @@
+{
+  "format": { "w": 1080, "h": 1920, "fps": 30 },
+  "duration": 9,
+  "styleIds": ["ref-a"],
+  "story": {
+    "hook": "Bitta prompt bilan 3 soatlik ishni 10 daqiqada qildim",
+    "idea": "Claude Code takrorlanadigan ishni o'zi bajaradi",
+    "payoff": "Siz ham bugun sinab ko'rishingiz mumkin",
+    "cta": "Izohga PROMPT deb yozing"
+  },
+  "beats": 3,
+  "captions": { "on": true, "style": "kinetic, bounce on list words", "source": "script" },
+  "scenes": [
+    {
+      "id": "s1", "start": 0, "end": 2.5, "purpose": "hook",
+      "script": "3 soatlik ishni 10 daqiqada qildim",
+      "layout": "presenter full frame centred, caption on the centre line",
+      "motion": "punch-in 1.08 on the number at 0.4 s",
+      "assets": [{ "id": "a1", "source": "footage", "what": "presenter talking, broll/main.mp4 1.2-3.7 s" }],
+      "footage": { "src": "broll/main.mp4", "in": 1.2, "out": 3.7 },
+      "components": [{ "kind": "caption", "description": "kinetic caption, centre line", "props": {} }]
+    },
+    {
+      "id": "s2", "start": 2.5, "end": 6, "purpose": "idea",
+      "script": "Claude Code takrorlanadigan ishni o'zi bajaradi",
+      "layout": "illustration full bleed, caption lower third",
+      "motion": "slow push-in over the scene, caption pops word by word",
+      "assets": [{
+        "id": "a2", "source": "gen", "kind": "image",
+        "what": "flat illustration of a desk with a laptop and a stack of finished papers",
+        "prompt": "Flat editorial illustration, cream #F4F1EA paper, coral #C9643F accents, thin ink linework: a tidy desk with a laptop and a stack of finished papers, 9:16",
+        "refFrames": ["gen/ref/ref-a-1.jpg"],
+        "fallback": "typography card: the sentence set big on cream, coral highlight on 'o'zi'"
+      }],
+      "footage": null,
+      "components": []
+    },
+    {
+      "id": "s3", "start": 6, "end": 9, "purpose": "cta",
+      "script": "Izohga PROMPT deb yozing",
+      "layout": "big type centred on cream, keyword boxed in coral",
+      "motion": "keyword box draws in at 0.3 s, hold",
+      "assets": [{ "id": "a3", "source": "type", "what": "CTA type card with PROMPT keyword" }],
+      "footage": null,
+      "components": [{ "kind": "title", "description": "CTA card", "props": { "text": "PROMPT" } }]
+    }
+  ],
+  "audio": { "voice": "footage", "music": null },
+  "genEstimate": { "items": 1, "usd": 0 }
+}

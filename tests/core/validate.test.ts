@@ -1,18 +1,12 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { runSheet, runValidate } from '../../src/cli.js';
 
-const plan = (scene: Record<string, unknown>) => ({
-  format: { w: 1080, h: 1920, fps: 30 },
-  duration: 3,
-  styleIds: ['a'],
-  captions: { on: true, style: 'kinetic', source: 'stt' },
-  scenes: [{ id: 's1', start: 0, end: 3, purpose: 'hook', footage: null, components: [], gen: null, ...scene }],
-  audio: { voice: 'footage', music: null },
-  genEstimate: { items: 0, usd: 0 },
-});
+const fixtureFile = fileURLToPath(new URL('../fixtures/plan-v2.json', import.meta.url));
+const fixture = async () => JSON.parse(await readFile(fixtureFile, 'utf8'));
 
 let dir: string;
 const put = async (name: string, v: unknown) => {
@@ -29,16 +23,43 @@ afterAll(async () => {
 });
 
 describe('motionable validate', () => {
-  test('plan with gen but no fallback exits 1 and names the path', async () => {
-    const f = await put('bad-plan.json', plan({ gen: { type: 'image', prompt: 'p' } }));
-    const r = await runValidate('plan', f);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('scenes.0.fallback');
+  test('v2 fixture plan exits 0', async () => {
+    expect(await runValidate('plan', fixtureFile)).toEqual({ code: 0, out: 'ok' });
   });
 
-  test('valid plan exits 0', async () => {
-    const f = await put('plan.json', plan({ gen: { type: 'image', prompt: 'p' }, fallback: 'typography card' }));
-    expect(await runValidate('plan', f)).toEqual({ code: 0, out: 'ok' });
+  test('gen asset without fallback exits 1 and names the path', async () => {
+    const p = await fixture();
+    delete p.scenes[1].assets[0].fallback;
+    const r = await runValidate('plan', await put('bad-plan.json', p));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('scenes.1.assets.0.fallback');
+  });
+
+  test('timing, word-rate and layout rules come back as short lines', async () => {
+    const p = await fixture();
+    p.scenes[1].start = 3; // gap
+    p.scenes[0].script = 'bir ikki uch tort besh olti yetti sakkiz'; // 3.2 words/s
+    p.scenes[2].layout = p.scenes[1].layout; // same as neighbour
+    const r = await runValidate('plan', await put('bad-plan-2.json', p));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('scenes.1.start');
+    expect(r.out).toContain('scenes.0.script');
+    expect(r.out).toContain('scenes.2.layout');
+  });
+
+  test('old v1 plan (scene gen, no story) exits 1', async () => {
+    const v1 = {
+      format: { w: 1080, h: 1920, fps: 30 },
+      duration: 3,
+      styleIds: ['a'],
+      captions: { on: true, style: 'kinetic', source: 'stt' },
+      scenes: [{ id: 's1', start: 0, end: 3, purpose: 'hook', footage: null, components: [], gen: null }],
+      audio: { voice: 'footage', music: null },
+      genEstimate: { items: 0, usd: 0 },
+    };
+    const r = await runValidate('plan', await put('v1.json', v1));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('story');
   });
 
   test('words: valid array ok, wrong shape fails', async () => {

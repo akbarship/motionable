@@ -97,22 +97,28 @@ Schemas live in `src/core/types.ts` (zod). Every file write validates first.
 style, words per line), `textCards` (when, look), `transitions[]`, `colour` (palette hex, grade note),
 `motion[]` (named moves with timing), `audio` (music energy, sfx use), `doNot[]`, `sheets[]` (paths).
 
-### plan.json (director output)
+### plan.json (director output, v2)
 ```
-{ "format": {"w":1080,"h":1920,"fps":30}, "duration": 33.0, "styleIds": [...],
+{ "format": {"w":1080,"h":1920,"fps":30}, "duration": 24.0, "styleIds": [...],
+  "story": {"hook": "...", "idea": "...", "payoff": "...", "cta": "..."}, "beats": 8,
   "captions": {"on": true, "style": "...", "source": "stt|script|none"},
   "scenes": [{
-     "id": "s1", "start": 0, "end": 3.2, "purpose": "hook",
-     "footage": {"src": "broll/a.mp4", "in": 1.2, "out": 4.4} | null,
+     "id": "s1", "start": 0, "end": 2.4, "purpose": "hook",
+     "script": "exact Uzbek words", "layout": "one line", "motion": "one line",
+     "assets": [{"id": "a1", "source": "footage|broll|registry|gen|type", "what": "...",
+                 "kind": "image|video", "prompt": "...", "refFrames": ["gen/ref/<style>-1.jpg"], "fallback": "..."}],
+     "footage": {"src": "broll/a.mp4", "in": 1.2, "out": 3.6} | null,
      "components": [{"kind": "title|lower-third|caption|card|chart|overlay|transition", "description": "...", "props": {}}],
-     "gen": {"type": "image|video", "prompt": "...", "seconds": 5} | null,
-     "fallback": "what to show when gen is off or fails (b-roll / typography / stock)"
+     "fallback": "optional whole-scene backup"
   }],
-  "audio": {"voice": "footage|tts|none", "music": "path|null"},
-  "genEstimate": {"items": 3, "usd": 1.4}
+  "audio": {"voice": "footage|none", "music": "path|null"},
+  "genEstimate": {"items": 1, "usd": 0}
 }
 ```
-Rule: `fallback` is required whenever `gen` is set. The executor builds the fallback version first.
+Rules (zod superRefine): a `gen` asset needs `prompt` + `fallback`; every scene has >= 1 asset; scenes are
+contiguous from 0, each >= 0.8 s, last end = `duration`; script <= 3 words/s per scene; neighbours never share a
+`layout`; scene count within +-1 of `beats` (unless 0); asset ids unique. The Studio quotes gen assets; the executor
+builds every gen asset's fallback first.
 
 ## 6. Queue
 

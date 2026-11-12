@@ -48,65 +48,122 @@ export function lastProgress(tasks: Task[], stage: StageId, n = 5): string[] {
   return sorted.flatMap((t) => t.progress).slice(-n);
 }
 
+export type AssetSource = 'footage' | 'broll' | 'registry' | 'gen' | 'type';
+export interface PlanAsset {
+  id: string;
+  source: AssetSource;
+  what: string;
+  kind?: 'image' | 'video';
+  seconds?: number;
+  prompt?: string;
+  refFrames?: string[];
+  fallback?: string;
+}
 export interface PlanScene {
   id: string;
   start: number;
   end: number;
   purpose: string;
-  components: { kind: string; description: string }[];
-  gen: { type: 'image' | 'video'; prompt: string; seconds?: number } | null;
+  script: string;
+  layout: string;
+  motion: string;
+  assets: PlanAsset[];
   fallback?: string;
+}
+export interface PlanStory {
+  hook: string;
+  idea: string;
+  payoff: string;
+  cta: string;
 }
 export interface PlanView {
   duration: number;
+  story?: PlanStory;
   scenes: PlanScene[];
   genEstimate?: { items: number; usd: number };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+const SOURCES: ReadonlySet<string> = new Set<AssetSource>(['footage', 'broll', 'registry', 'gen', 'type']);
 
-/** Light runtime check of plan.json (the server already validates on write). Null when unusable. */
+function readAsset(a: unknown): PlanAsset | null {
+  if (!isObj(a) || typeof a.id !== 'string' || typeof a.what !== 'string') return null;
+  if (typeof a.source !== 'string' || !SOURCES.has(a.source)) return null;
+  if (a.kind !== undefined && a.kind !== 'image' && a.kind !== 'video') return null;
+  if (a.source === 'gen' && typeof a.prompt !== 'string') return null;
+  const refs = Array.isArray(a.refFrames) ? a.refFrames.filter((x): x is string => typeof x === 'string') : undefined;
+  return {
+    id: a.id,
+    source: a.source as AssetSource,
+    what: a.what,
+    ...(a.kind ? { kind: a.kind } : {}),
+    ...(typeof a.seconds === 'number' ? { seconds: a.seconds } : {}),
+    ...(typeof a.prompt === 'string' ? { prompt: a.prompt } : {}),
+    ...(refs && refs.length > 0 ? { refFrames: refs } : {}),
+    ...(typeof a.fallback === 'string' ? { fallback: a.fallback } : {}),
+  };
+}
+
+/** Light runtime check of plan.json (the server already validates on read). Null when unusable. */
 export function readPlan(raw: unknown): PlanView | null {
   if (!isObj(raw) || !Array.isArray(raw.scenes) || typeof raw.duration !== 'number') return null;
   const scenes: PlanScene[] = [];
   for (const s of raw.scenes) {
     if (!isObj(s) || typeof s.id !== 'string' || typeof s.start !== 'number' || typeof s.end !== 'number') return null;
-    if (typeof s.purpose !== 'string' || !Array.isArray(s.components)) return null;
-    const components: PlanScene['components'] = [];
-    for (const c of s.components) {
-      if (!isObj(c) || typeof c.kind !== 'string' || typeof c.description !== 'string') return null;
-      components.push({ kind: c.kind, description: c.description });
-    }
-    let gen: PlanScene['gen'] = null;
-    if (s.gen != null) {
-      const g = s.gen;
-      if (!isObj(g) || (g.type !== 'image' && g.type !== 'video') || typeof g.prompt !== 'string') return null;
-      gen = { type: g.type, prompt: g.prompt, ...(typeof g.seconds === 'number' ? { seconds: g.seconds } : {}) };
+    if (typeof s.purpose !== 'string' || !Array.isArray(s.assets)) return null;
+    const assets: PlanAsset[] = [];
+    for (const a of s.assets) {
+      const r = readAsset(a);
+      if (!r) return null;
+      assets.push(r);
     }
     scenes.push({
       id: s.id,
       start: s.start,
       end: s.end,
       purpose: s.purpose,
-      components,
-      gen,
+      script: str(s.script),
+      layout: str(s.layout),
+      motion: str(s.motion),
+      assets,
       ...(typeof s.fallback === 'string' ? { fallback: s.fallback } : {}),
     });
   }
+  const st = raw.story;
   const est = raw.genEstimate;
   return {
     duration: raw.duration,
+    ...(isObj(st) && typeof st.hook === 'string'
+      ? { story: { hook: st.hook, idea: str(st.idea), payoff: str(st.payoff), cta: str(st.cta) } }
+      : {}),
     scenes,
     ...(isObj(est) && typeof est.items === 'number' && typeof est.usd === 'number' ? { genEstimate: { items: est.items, usd: est.usd } } : {}),
   };
 }
 
-/** Quote request items: one per scene with gen. */
-export function quoteItemsFor(plan: PlanView): { kind: 'image' | 'video'; params: { prompt: string; seconds?: number } }[] {
+export interface QuoteItem {
+  kind: 'image' | 'video';
+  params: { prompt: string; refFrames?: string[]; seconds?: number };
+}
+
+/** Quote request items: one per asset with source 'gen' (image unless the asset says video). */
+export function quoteItemsFor(plan: PlanView): QuoteItem[] {
   return plan.scenes.flatMap((s) =>
-    s.gen
-      ? [{ kind: s.gen.type, params: { prompt: s.gen.prompt, ...(s.gen.seconds !== undefined ? { seconds: s.gen.seconds } : {}) } }]
-      : [],
+    s.assets.flatMap((a): QuoteItem[] =>
+      a.source === 'gen' && a.prompt
+        ? [
+            {
+              kind: a.kind ?? 'image',
+              params: {
+                prompt: a.prompt,
+                ...(a.refFrames ? { refFrames: a.refFrames } : {}),
+                ...(a.seconds !== undefined ? { seconds: a.seconds } : {}),
+              },
+            },
+          ]
+        : [],
+    ),
   );
 }
 

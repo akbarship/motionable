@@ -4,7 +4,7 @@ import { fmtUsd, genUnavailable, quoteItemsFor, type PlanView } from '../pipelin
 
 const num = (n: number) => String(Math.round(n * 100) / 100);
 
-/** Director's plan: scenes, optional paid generation with a quote, and the Approve button. */
+/** Director's plan: hook, scenes (script, layout, motion, assets), optional paid generation with a quote, and Approve. */
 export function PlanReview({ projectId, plan, onStarted }: { projectId: string; plan: PlanView; onStarted: () => void }) {
   const items = useMemo(() => quoteItemsFor(plan), [plan]);
   const [useGen, setUseGen] = useState(false);
@@ -48,24 +48,46 @@ export function PlanReview({ projectId, plan, onStarted }: { projectId: string; 
   return (
     <section className="block" aria-labelledby="plan-h">
       <h2 id="plan-h" className="block-h">Reja</h2>
-      <p className="muted small">Davomiyligi: {num(plan.duration)} s · {plan.scenes.length} ta sahna</p>
+      {plan.story && (
+        <div className="plan-story">
+          <p className="plan-hook">
+            <span className="muted small">Hook</span> {plan.story.hook}
+          </p>
+          {plan.story.cta && <p className="muted small">CTA: {plan.story.cta}</p>}
+        </div>
+      )}
+      <p className="muted small">
+        Davomiyligi: {num(plan.duration)} s · {plan.scenes.length} ta sahna
+        {items.length > 0 ? ` · ${items.length} ta AI generatsiya` : ''}
+      </p>
       <ol className="scenes">
         {plan.scenes.map((s) => (
           <li key={s.id} className="scene">
             <div className="scene-head">
-              <span className="scene-time">{num(s.start)}–{num(s.end)} s</span>
+              <span className="scene-time">
+                {num(s.start)}–{num(s.end)} s
+              </span>
               <span className="scene-purpose">{s.purpose}</span>
-              {s.gen && <span className="chip chip--gen">gen · {s.gen.type}</span>}
             </div>
-            {s.components.length > 0 && (
-              <ul className="scene-comps">
-                {s.components.map((c, i) => (
-                  <li key={i}>
-                    <b>{c.kind}</b> {c.description}
-                  </li>
-                ))}
-              </ul>
+            {s.script && <p className="scene-script">{s.script}</p>}
+            {s.layout && (
+              <p className="scene-line small">
+                <b>Joylashuv</b> {s.layout}
+              </p>
             )}
+            {s.motion && (
+              <p className="scene-line small">
+                <b>Harakat</b> {s.motion}
+              </p>
+            )}
+            <ul className="scene-assets">
+              {s.assets.map((a) => (
+                <li key={a.id}>
+                  <span className={`chip chip--src${a.source === 'gen' ? ' chip--gen' : ''}`}>{a.source}</span> {a.what}
+                  {a.source === 'gen' && a.fallback && <span className="muted"> · zaxira: {a.fallback}</span>}
+                </li>
+              ))}
+            </ul>
             {s.fallback && <p className="scene-fallback muted small">Zaxira: {s.fallback}</p>}
           </li>
         ))}

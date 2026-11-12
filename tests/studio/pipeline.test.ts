@@ -29,15 +29,26 @@ const task = (type: Task['type'], status: Task['status'], extra: Partial<Task> =
   ...extra,
 });
 
-const scene = (id: string, gen: unknown = null) => ({
+const typeAsset = (id: string) => ({ id, source: 'type', what: 'big type card' });
+const genAsset = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  source: 'gen',
+  what: 'illustrated desk',
+  prompt: `prompt ${id}`,
+  fallback: 'typography card',
+  ...extra,
+});
+const scene = (id: string, assets: unknown[] = [typeAsset(`${id}-t`)]) => ({
   id,
   start: 0,
   end: 3,
   purpose: 'hook',
+  script: 'Salom, siz uchun 3 ta maslahat',
+  layout: 'presenter left third, type right',
+  motion: 'push-in',
   footage: null,
   components: [{ kind: 'title', description: 'big title', props: {} }],
-  gen,
-  ...(gen ? { fallback: 'stock' } : {}),
+  assets,
 });
 
 describe('stageState', () => {
@@ -60,26 +71,47 @@ test('lastProgress keeps the last 5 lines', () => {
 });
 
 describe('readPlan', () => {
-  test('accepts valid plan, rejects junk', () => {
-    const plan = readPlan({ duration: 6, scenes: [scene('s1'), scene('s2', { type: 'image', prompt: 'p', seconds: 2 })] });
+  test('accepts a v2 plan, keeps story, script, layout, motion and assets', () => {
+    const plan = readPlan({
+      duration: 6,
+      story: { hook: 'Bitta prompt, 3 soat tejaldi', idea: 'i', payoff: 'p', cta: 'PROMPT deb yozing' },
+      scenes: [scene('s1'), scene('s2', [genAsset('g1', { refFrames: ['gen/ref/a-1.jpg'] })])],
+    });
+    expect(plan?.story?.hook).toBe('Bitta prompt, 3 soat tejaldi');
     expect(plan?.scenes).toHaveLength(2);
-    expect(plan?.scenes[1].gen).toEqual({ type: 'image', prompt: 'p', seconds: 2 });
+    expect(plan?.scenes[0]).toMatchObject({ script: 'Salom, siz uchun 3 ta maslahat', layout: 'presenter left third, type right', motion: 'push-in' });
+    expect(plan?.scenes[1].assets[0]).toEqual({
+      id: 'g1',
+      source: 'gen',
+      what: 'illustrated desk',
+      prompt: 'prompt g1',
+      refFrames: ['gen/ref/a-1.jpg'],
+      fallback: 'typography card',
+    });
+  });
+  test('rejects junk', () => {
     expect(readPlan(null)).toBeNull();
     expect(readPlan('x')).toBeNull();
     expect(readPlan({ duration: 1, scenes: [{ id: 's' }] })).toBeNull();
-    expect(readPlan({ duration: 1, scenes: [scene('s', { type: 'audio', prompt: 'p' })] })).toBeNull();
+    expect(readPlan({ duration: 1, scenes: [scene('s', [{ id: 'x', source: 'audio', what: 'w' }])] })).toBeNull();
+    expect(readPlan({ duration: 1, scenes: [scene('s', [{ id: 'x', source: 'gen', what: 'w' }])] })).toBeNull(); // gen without prompt
   });
 });
 
-test('quoteItemsFor maps only gen scenes', () => {
+test('quoteItemsFor maps only gen assets, image by default', () => {
   const plan = readPlan({
     duration: 9,
-    scenes: [scene('a'), scene('b', { type: 'video', prompt: 'v', seconds: 4 }), scene('c', { type: 'image', prompt: 'i' })],
+    scenes: [
+      scene('a'),
+      scene('b', [typeAsset('b-t'), genAsset('g1', { refFrames: ['gen/ref/a-1.jpg', 'gen/ref/a-2.jpg'] })]),
+      scene('c', [genAsset('g2', { kind: 'video', seconds: 4 }), { id: 'c-f', source: 'footage', what: 'presenter' }]),
+    ],
   })!;
   expect(quoteItemsFor(plan)).toEqual([
-    { kind: 'video', params: { prompt: 'v', seconds: 4 } },
-    { kind: 'image', params: { prompt: 'i' } },
+    { kind: 'image', params: { prompt: 'prompt g1', refFrames: ['gen/ref/a-1.jpg', 'gen/ref/a-2.jpg'] } },
+    { kind: 'video', params: { prompt: 'prompt g2', seconds: 4 } },
   ]);
+  expect(quoteItemsFor(readPlan({ duration: 3, scenes: [scene('a')] })!)).toEqual([]);
 });
 
 test('genUnavailable', () => {
