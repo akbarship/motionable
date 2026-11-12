@@ -1,0 +1,159 @@
+// Studio API client. The session token comes from ?t= once and is kept in sessionStorage.
+
+const KEY = 'motionable.token';
+let token: string | null = null;
+
+export type TaskStatus = 'queued' | 'awaiting_approval' | 'running' | 'done' | 'failed';
+export type TaskType = 'study_ref' | 'direct' | 'execute' | 'edit' | 'render' | 'generate';
+export type Kind = 'image' | 'video' | 'tts' | 'stt';
+export type ProviderUse = 'off' | 'kie' | 'elevenlabs' | 'bot';
+
+export interface Project {
+  id: string;
+  name: string;
+  brief: string;
+  status: string;
+  styleIds: string[];
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  type: TaskType;
+  status: TaskStatus;
+  input: Record<string, unknown>;
+  progress: string[];
+  output: unknown;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface ChatMsg {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  files?: string[];
+  at: string;
+}
+
+export interface ProjectView {
+  project: Project;
+  tasks: Task[];
+  plan: unknown;
+  chat: ChatMsg[];
+}
+
+export interface StyleSummary {
+  id: string;
+  framing: string;
+  pace: { avgShotSeconds: number; cutsPerMin: number };
+  palette: string[];
+  fontFamily: string;
+  transitions: string[];
+}
+
+export interface Config {
+  providers: Record<Kind, { use: ProviderUse; key?: string }>;
+  botKey?: string;
+  botUrl?: string;
+  port: number;
+}
+
+export type ConfigPatch = Partial<Omit<Config, 'providers'>> & {
+  providers?: Partial<Record<Kind, { use: ProviderUse; key?: string }>>;
+};
+
+/** Token from the page URL (first call) or sessionStorage; empty string if neither has one. */
+export function getToken(): string {
+  if (token !== null) return token;
+  let t = '';
+  try {
+    t = new URLSearchParams(location.search).get('t') ?? '';
+  } catch {
+    // no location (non-browser)
+  }
+  try {
+    if (t) sessionStorage.setItem(KEY, t);
+    else t = sessionStorage.getItem(KEY) ?? '';
+  } catch {
+    // storage blocked: keep the in-memory token only
+  }
+  token = t;
+  return t;
+}
+
+/** Test hook: forget the cached token. */
+export function resetTokenForTests(): void {
+  token = null;
+}
+
+async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const headers: Record<string, string> = { 'x-motionable-token': getToken() };
+  let body: string | undefined;
+  if (init.body !== undefined) {
+    headers['content-type'] = 'application/json';
+    body = JSON.stringify(init.body);
+  }
+  const res = await fetch(path, { method: init.method ?? 'GET', headers, body });
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // empty or non-JSON body
+  }
+  if (!res.ok) {
+    const msg = (data as { error?: unknown } | null)?.error;
+    throw new Error(typeof msg === 'string' ? msg : `HTTP ${res.status}`);
+  }
+  return data as T;
+}
+
+const p = (id: string) => `/api/projects/${encodeURIComponent(id)}`;
+
+export const api = {
+  listProjects: () => request<Project[]>('/api/projects'),
+  createProject: (b: { name: string; brief: string }) => request<Project>('/api/projects', { method: 'POST', body: b }),
+  getProject: (id: string) => request<ProjectView>(p(id)),
+  addRef: (id: string, url: string) => request<{ task: Task }>(`${p(id)}/refs`, { method: 'POST', body: { url } }),
+  addRefFile: (id: string, name: string) =>
+    request<{ task: Task }>(`${p(id)}/refs/file`, { method: 'POST', body: { name } }),
+  addTask: (id: string, type: TaskType, input: Record<string, unknown> = {}) =>
+    request<Task>(`${p(id)}/tasks`, { method: 'POST', body: { type, input } }),
+  styles: () => request<StyleSummary[]>('/api/styles'),
+  getConfig: () => request<Config>('/api/config'),
+  putConfig: (patch: ConfigPatch) => request<Config>('/api/config', { method: 'PUT', body: patch }),
+  balance: () => request<Record<string, unknown>>('/api/bot/balance'),
+  claude: () => request<{ connected: boolean }>('/api/claude'),
+};
+
+/** Uploads one file with progress (0..1). Resolves with the stored name (the server may suffix it). */
+export function upload(
+  projectId: string,
+  kind: 'broll' | 'refs',
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<{ name: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${p(projectId)}/upload?kind=${kind}`);
+    xhr.setRequestHeader('x-motionable-token', getToken());
+    xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let data: { name?: string; error?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // non-JSON reply
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && typeof data.name === 'string') {
+        onProgress?.(1);
+        resolve({ name: data.name });
+      } else reject(new Error(data.error ?? `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('Tarmoq xatosi'));
+    xhr.send(file);
+  });
+}

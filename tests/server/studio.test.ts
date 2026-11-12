@@ -260,4 +260,37 @@ describe('studio', () => {
   test('SSE needs token', async () => {
     expect((await fetch(`${base}/api/events`)).status).toBe(401);
   });
+  test('GET /api/styles lists saved style summaries and skips unreadable ones', async () => {
+    expect(await (await api('/api/styles')).json()).toEqual([]);
+    const style = {
+      pace: { avgShotSeconds: 1.8, cutsPerMin: 33 },
+      framing: 'tight talking head',
+      captions: { fontFamily: 'Inter', weight: 800, case: 'upper', position: 'center', highlight: '#ff0', wordsPerLine: 3 },
+      textCards: { when: 'hook', look: 'white card' },
+      transitions: ['cut'],
+      colour: { palette: ['#F4F1EA', '#C9643F'], grade: 'warm' },
+      motion: [{ name: 'pop', timing: '200ms' }],
+      audio: { musicEnergy: 'low', sfx: 'whoosh' },
+      doNot: [],
+      sheets: ['s1.jpg'],
+    };
+    await mkdir(join(tmp, 'styles', 'warm-talk'), { recursive: true });
+    await writeFile(join(tmp, 'styles', 'warm-talk', 'style.json'), JSON.stringify(style));
+    await mkdir(join(tmp, 'styles', 'broken'), { recursive: true });
+    await writeFile(join(tmp, 'styles', 'broken', 'style.json'), '{nope');
+    await mkdir(join(tmp, 'styles', 'empty'), { recursive: true });
+    const res = await api('/api/styles');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([
+      {
+        id: 'warm-talk',
+        framing: 'tight talking head',
+        pace: { avgShotSeconds: 1.8, cutsPerMin: 33 },
+        palette: ['#F4F1EA', '#C9643F'],
+        fontFamily: 'Inter',
+        transitions: ['cut'],
+      },
+    ]);
+    expect((await fetch(`${base}/api/styles`)).status).toBe(401);
+  });
 });

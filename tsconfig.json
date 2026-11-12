@@ -10,5 +10,6 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "tests", "*.ts"]
+  "include": ["src", "tests", "*.ts"],
+  "exclude": ["studio", "dist", "node_modules"]
 }

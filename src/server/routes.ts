@@ -1,16 +1,16 @@
 import { randomBytes } from 'node:crypto';
-import { appendFile, mkdir, readFile, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
-import { assertId, home, projectDir } from '../core/paths.js';
+import { assertId, home, projectDir, styleDir } from '../core/paths.js';
 import { addTask, approve, listTasks } from '../core/queue.js';
 import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
 import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
-import { ChatMsgSchema, PlanSchema, type ChatMsg, type TaskType } from '../core/types.js';
+import { ChatMsgSchema, PlanSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
 import { HttpError, checkFilename, handleUpload } from './upload.js';
@@ -87,6 +87,34 @@ async function readPlan(id: string) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw e;
   }
+}
+
+/** Short summaries of saved styles for the picker; unreadable or invalid ones are skipped. */
+async function listStyles() {
+  let ids: string[];
+  try {
+    ids = await readdir(join(home(), 'styles'));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw e;
+  }
+  const out = [];
+  for (const id of ids.sort()) {
+    try {
+      const s = await readJson(join(styleDir(id), 'style.json'), StyleSchema);
+      out.push({
+        id,
+        framing: s.framing,
+        pace: s.pace,
+        palette: s.colour.palette,
+        fontFamily: s.captions.fontFamily,
+        transitions: s.transitions,
+      });
+    } catch {
+      // bad id, missing or invalid style.json
+    }
+  }
+  return out;
 }
 
 async function studyRef(id: string, file: string) {
@@ -210,6 +238,8 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         return send(res, 200, { msg, task });
       }
     }
+  } else if (seg[0] === 'styles' && seg.length === 1 && method === 'GET') {
+    return send(res, 200, await listStyles());
   } else if (seg[0] === 'config' && seg.length === 1) {
     if (method === 'GET') return send(res, 200, maskedConfig(await loadConfig()));
     if (method === 'PUT') {
