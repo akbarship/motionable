@@ -6,7 +6,7 @@ import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir } from '../core/paths.js';
 import { addTask, approve, listTasks } from '../core/queue.js';
-import { createBotProvider } from '../providers/bot.js';
+import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
 import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
@@ -219,6 +219,7 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
   } else if (seg[0] === 'bot' && seg[1] === 'balance' && seg.length === 2 && method === 'GET') {
     const cfg = await loadConfig();
     if (!cfg.botKey) throw new HttpError(400, 'no_bot_key');
+    if (!checkBotUrl(cfg.botUrl)) throw new HttpError(400, 'bad_bot_url');
     try {
       return send(res, 200, await createBotProvider({ botKey: cfg.botKey, botUrl: cfg.botUrl }).balance());
     } catch (e) {

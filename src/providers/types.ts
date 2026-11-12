@@ -6,6 +6,10 @@ export type GenReq = {
   outDir: string;
   /** Used as the downloaded file's base name. */
   taskId?: string;
+  /** Called as soon as the provider created a billable job, so a retry can resume it. */
+  onJobId?: (jobId: string) => void | Promise<void>;
+  /** Poll this existing job instead of creating a new one. */
+  resumeJobId?: string;
 };
 
 export interface GenerationProvider {

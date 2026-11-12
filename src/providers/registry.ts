@@ -1,5 +1,5 @@
 import type { Config, Kind } from '../core/types.js';
-import { createBotProvider } from './bot.js';
+import { checkBotUrl, createBotProvider } from './bot.js';
 import { createElevenLabs } from './elevenlabs.js';
 import { createKie } from './kie.js';
 import type { GenerationProvider, PollOpts } from './types.js';
@@ -16,7 +16,7 @@ export function providerFor(kind: Kind, cfg: Config, poll: PollOpts = {}): Gener
       if ((kind !== 'tts' && kind !== 'stt') || !p.key) return null;
       return createElevenLabs(kind === 'tts' ? { tts: p.key } : { stt: p.key });
     case 'bot':
-      return cfg.botKey ? createBotProvider({ botKey: cfg.botKey, botUrl: cfg.botUrl }, poll) : null;
+      return cfg.botKey && checkBotUrl(cfg.botUrl) ? createBotProvider({ botKey: cfg.botKey, botUrl: cfg.botUrl }, poll) : null;
   }
 }
 

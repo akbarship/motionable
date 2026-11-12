@@ -68,9 +68,14 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
     },
     async run(r) {
       const q = await this.quote(r);
-      const { taskId } = await api<{ taskId: string }>(CREATE, { method: 'POST', body: JSON.stringify(body(r)) });
+      let taskId = r.resumeJobId;
+      if (!taskId) {
+        taskId = (await api<{ taskId: string }>(CREATE, { method: 'POST', body: JSON.stringify(body(r)) })).taskId;
+        await r.onJobId?.(taskId);
+      }
+      const job = taskId;
       const rec = await poll(async () => {
-        const d = await api<Record_>(`${RECORD}?taskId=${encodeURIComponent(taskId)}`);
+        const d = await api<Record_>(`${RECORD}?taskId=${encodeURIComponent(job)}`);
         if (d.state === 'fail') throw new Error(`kie.ai task failed: ${d.failMsg || 'unknown error'}`);
         return d.state === 'success' ? d : undefined;
       }, o);

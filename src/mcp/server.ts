@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { appendFile, mkdir, readFile, realpath, stat, utimes, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, realpath, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -27,6 +27,8 @@ const waitSeconds = (): number => {
   return Number.isFinite(n) && n > 0 ? n : 240;
 };
 const HEARTBEAT_EVERY_MS = 30_000;
+/** A fresh quote or final cost above approved * this is refused or flagged. */
+const PRICE_SLACK = 1.2;
 
 const idStr = z.string().regex(/^[a-z0-9-]+$/);
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
@@ -216,10 +218,12 @@ export function createMcpServer(
     },
     async ({ projectId, sceneId, kind, params }) => {
       await getProject(projectId);
-      const p = providerFor(kind, await loadConfig());
+      const cfg = await loadConfig();
+      const p = providerFor(kind, cfg);
       if (!p) return text({ error: 'no_provider' });
       const { usd } = await p.quote({ kind, params, outDir: join(projectDir(projectId), 'gen') });
-      const task = await addTask(projectId, 'generate', { sceneId, kind, params, usd }, 'awaiting_approval');
+      const provider = cfg.providers[kind].use;
+      const task = await addTask(projectId, 'generate', { sceneId, kind, params, usd, provider }, 'awaiting_approval');
       return text({ taskId: task.id, usd });
     },
   );
@@ -228,7 +232,7 @@ export function createMcpServer(
     'generate',
     {
       description:
-        'Run an approved generate task (status running) through the provider. Returns {file, usd} (file is project-relative) or {error:"not_approved"}.',
+        'Run an approved generate task (status running) through the provider. Returns {file, usd, warning?} (file is project-relative) or {error}: not_approved, provider_changed, price_changed, already_started, already_generated.',
       inputSchema: { projectId: idStr, taskId: idStr },
     },
     async ({ projectId, taskId }) => {
@@ -236,22 +240,82 @@ export function createMcpServer(
       if (!task || task.type !== 'generate' || task.status !== 'running') return text({ error: 'not_approved' });
       const kind = KindSchema.safeParse(task.input.kind);
       const params = task.input.params;
-      if (!kind.success || typeof params !== 'object' || params === null) return text({ error: 'bad_task_input' });
+      const approved = task.input.usd;
+      if (!kind.success || typeof params !== 'object' || params === null || typeof approved !== 'number') {
+        return text({ error: 'bad_task_input' });
+      }
       const dir = projectDir(projectId);
-      const logFile = join(dir, 'gen', 'gen.log.jsonl');
+      const genDir = join(dir, 'gen');
+      const logFile = join(genDir, 'gen.log.jsonl');
+      const startedFile = join(genDir, `${taskId}.started`);
       const prior = await readFile(logFile, 'utf8').catch(() => '');
       if (prior.split('\n').some((l) => l.includes(`"taskId":"${taskId}"`))) return text({ error: 'already_generated' });
-      const p = providerFor(kind.data, await loadConfig());
+
+      // What the user approved: same provider, and roughly the same price.
+      const cfg = await loadConfig();
+      const use = cfg.providers[kind.data].use;
+      if (task.input.provider !== use) return text({ error: 'provider_changed' });
+      const p = providerFor(kind.data, cfg);
       if (!p) return text({ error: 'no_provider' });
-      const r = await p.run({ kind: kind.data, params: params as Record<string, unknown>, outDir: join(dir, 'gen'), taskId });
+
+      // A leftover .started with a job id means an earlier run paid but did not finish: resume that job.
+      let resumeJobId: string | undefined;
+      const left = await readFile(startedFile, 'utf8').catch(() => null);
+      if (left !== null) {
+        try {
+          const id = (JSON.parse(left) as { jobId?: unknown }).jobId;
+          if (typeof id === 'string' && id) resumeJobId = id;
+        } catch {
+          // empty or torn marker: treated as started without a job
+        }
+        if (!resumeJobId) return text({ error: 'already_started' });
+      } else {
+        const req = { kind: kind.data, params: params as Record<string, unknown>, outDir: genDir };
+        const q = await p.quote(req);
+        if (q.usd > approved * PRICE_SLACK) return text({ error: 'price_changed', usd: q.usd });
+        await mkdir(genDir, { recursive: true });
+        try {
+          await writeFile(startedFile, '', { flag: 'wx' });
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === 'EEXIST') return text({ error: 'already_started' });
+          throw e;
+        }
+      }
+
+      let jobId = resumeJobId;
+      let r: { file: string; usd: number };
+      try {
+        r = await p.run({
+          kind: kind.data,
+          params: params as Record<string, unknown>,
+          outDir: genDir,
+          taskId,
+          resumeJobId,
+          onJobId: async (id) => {
+            jobId = id;
+            await writeFile(startedFile, JSON.stringify({ jobId: id }));
+          },
+        });
+      } catch (e) {
+        // Nothing billable was created: allow a clean retry. With a job id the marker stays so a retry resumes it.
+        if (!jobId) await unlink(startedFile).catch(() => {});
+        throw e;
+      }
       const file = relative(dir, r.file).split('\\').join('/');
-      const use = (await loadConfig()).providers[kind.data].use;
-      await mkdir(join(dir, 'gen'), { recursive: true });
+      const warning = r.usd > approved * PRICE_SLACK ? 'price_exceeded' : undefined;
       await appendFile(
         logFile,
-        JSON.stringify({ taskId, kind: kind.data, provider: use, usd: r.usd, file, at: new Date().toISOString() }) + '\n',
+        JSON.stringify({
+          taskId,
+          kind: kind.data,
+          provider: use,
+          usd: r.usd,
+          file,
+          at: new Date().toISOString(),
+          ...(warning ? { warning } : {}),
+        }) + '\n',
       );
-      return text({ file, usd: r.usd });
+      return text({ file, usd: r.usd, ...(warning ? { warning } : {}) });
     },
   );
 
@@ -277,7 +341,7 @@ export function createMcpServer(
       const words = await p.transcribe(real);
       const wordsPath = join(dirname(abs), `${basename(abs, extname(abs))}.words.json`);
       await writeJson(wordsPath, WordsSchema, words);
-      return text({ wordsPath });
+      return text({ wordsPath: relative(dir, wordsPath).split('\\').join('/') });
     },
   );
 

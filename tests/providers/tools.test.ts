@@ -18,15 +18,22 @@ let tmp: string;
 let client: Client;
 let runs = 0;
 
+let quoteUsd = 0.5;
+let runUsd = 0.5;
+let runImpl: ((r: Parameters<GenerationProvider['run']>[0]) => Promise<void>) | null = null;
+const seenResume: (string | undefined)[] = [];
+
 const fake: GenerationProvider = {
   kinds: ['image', 'stt'],
-  quote: async () => ({ usd: 0.5 }),
+  quote: async () => ({ usd: quoteUsd }),
   run: async (r) => {
     runs += 1;
+    seenResume.push(r.resumeJobId);
+    await runImpl?.(r);
     const file = join(r.outDir, `${r.taskId}.png`);
     await mkdir(r.outDir, { recursive: true });
     await writeFile(file, 'img');
-    return { file, usd: 0.5 };
+    return { file, usd: runUsd };
   },
   transcribe: async () => [{ w: 'hi', start: 0, end: 1 }],
 };
@@ -37,6 +44,10 @@ beforeEach(async () => {
   tmp = await mkdtemp(join(tmpdir(), 'motionable-tools-'));
   process.env.MOTIONABLE_HOME = tmp;
   runs = 0;
+  quoteUsd = 0.5;
+  runUsd = 0.5;
+  runImpl = null;
+  seenResume.length = 0;
   withProvider = true;
   const [a, b] = InMemoryTransport.createLinkedPair();
   await createMcpServer({ providerFor: () => (withProvider ? fake : null) }).connect(a);
@@ -92,8 +103,8 @@ describe('generation tools', () => {
     const dir = projectDir(p.id);
     await writeFile(join(dir, 'broll', 'clip.mp3'), 'a');
     const r = await call('transcribe', { projectId: p.id, file: 'broll/clip.mp3' });
-    expect(r.data).toEqual({ wordsPath: join(dir, 'broll', 'clip.words.json') });
-    expect(JSON.parse(await readFile(r.data.wordsPath, 'utf8'))).toEqual([{ w: 'hi', start: 0, end: 1 }]);
+    expect(r.data).toEqual({ wordsPath: 'broll/clip.words.json' });
+    expect(JSON.parse(await readFile(join(dir, r.data.wordsPath), 'utf8'))).toEqual([{ w: 'hi', start: 0, end: 1 }]);
 
     expect((await call('transcribe', { projectId: p.id, file: '../../x.mp3' })).isError).toBe(true);
     expect((await call('transcribe', { projectId: p.id, file: '/etc/passwd' })).isError).toBe(true);
@@ -103,6 +114,74 @@ describe('generation tools', () => {
 
     withProvider = false;
     expect((await call('transcribe', { projectId: p.id, file: 'broll/clip.mp3' })).data).toEqual({ error: 'no_stt_provider' });
+  });
+});
+
+async function approved(): Promise<{ pid: string; id: string }> {
+  const p = await createProject({ name: 'G', brief: '' });
+  const r = await call('request_generation', { projectId: p.id, sceneId: 's', kind: 'image', params: { prompt: 'x' } });
+  await approve(p.id, r.data.taskId);
+  await claimNext();
+  return { pid: p.id, id: r.data.taskId };
+}
+
+describe('paid run safety', () => {
+  test('two concurrent generate calls run the provider once', async () => {
+    const { pid, id } = await approved();
+    runImpl = () => new Promise((r) => setTimeout(r, 80));
+    const [a, b] = await Promise.all([
+      call('generate', { projectId: pid, taskId: id }),
+      call('generate', { projectId: pid, taskId: id }),
+    ]);
+    expect(runs).toBe(1);
+    const results = [a.data, b.data];
+    expect(results.filter((d) => d.error === 'already_started')).toHaveLength(1);
+    expect(results.filter((d) => d.file)).toHaveLength(1);
+  });
+
+  test('retry after poll timeout resumes the same job', async () => {
+    const { pid, id } = await approved();
+    runImpl = async (r) => {
+      if (!r.resumeJobId) {
+        await r.onJobId?.('job-42');
+        throw new Error('generation timed out');
+      }
+    };
+    expect((await call('generate', { projectId: pid, taskId: id })).isError).toBe(true);
+    const g = await call('generate', { projectId: pid, taskId: id });
+    expect(g.data.file).toBe(`gen/${id}.png`);
+    expect(seenResume).toEqual([undefined, 'job-42']);
+  });
+
+  test('failure before a job exists allows a clean retry', async () => {
+    const { pid, id } = await approved();
+    runImpl = async () => {
+      runImpl = null;
+      throw new Error('boom');
+    };
+    expect((await call('generate', { projectId: pid, taskId: id })).isError).toBe(true);
+    expect((await call('generate', { projectId: pid, taskId: id })).data.file).toBeDefined();
+  });
+
+  test('provider_changed refuses', async () => {
+    const { pid, id } = await approved();
+    await saveConfig({ providers: { image: { use: 'kie', key: 'k' } } });
+    expect((await call('generate', { projectId: pid, taskId: id })).data).toEqual({ error: 'provider_changed' });
+    expect(runs).toBe(0);
+  });
+
+  test('price_changed refuses before running; price_exceeded keeps the file', async () => {
+    let t = await approved();
+    quoteUsd = 0.61;
+    expect((await call('generate', { projectId: t.pid, taskId: t.id })).data).toEqual({ error: 'price_changed', usd: 0.61 });
+    expect(runs).toBe(0);
+    quoteUsd = 0.5;
+    t = await approved();
+    runUsd = 0.9;
+    const g = await call('generate', { projectId: t.pid, taskId: t.id });
+    expect(g.data).toMatchObject({ file: `gen/${t.id}.png`, usd: 0.9, warning: 'price_exceeded' });
+    const log = (await readFile(join(projectDir(t.pid), 'gen', 'gen.log.jsonl'), 'utf8')).trim();
+    expect(JSON.parse(log).warning).toBe('price_exceeded');
   });
 });
 
@@ -144,5 +223,15 @@ describe('studio routes', () => {
     expect(await r.json()).toEqual({ usd: 0.8, missing: ['tts'] });
     expect(await (await api('/api/bot/balance')).json()).toEqual({ usd: 7 });
     expect((await api(`/api/projects/${p.id}/quote`, { items: [{ kind: 'nope' }] })).status).toBe(400);
+  });
+
+  test('non-https bot url is refused', async () => {
+    const p = await createProject({ name: 'U', brief: '' });
+    await saveConfig({ providers: { video: { use: 'bot' } }, botKey: 'testkey', botUrl: 'http://evil.example.com' });
+    const r = await api('/api/bot/balance');
+    expect(r.status).toBe(400);
+    expect(await r.json()).toEqual({ error: 'bad_bot_url' });
+    const q = await api(`/api/projects/${p.id}/quote`, { items: [{ kind: 'video', params: {} }] });
+    expect(await q.json()).toEqual({ usd: 0, missing: ['video'] });
   });
 });

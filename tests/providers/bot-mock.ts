@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 export type MockBot = {
   url: string;
-  calls: { method: string; path: string; auth: string | undefined; body: unknown }[];
+  calls: { method: string; path: string; auth: string | undefined; body: unknown; idem?: string }[];
   close: () => Promise<void>;
 };
 
@@ -23,7 +23,7 @@ export async function startMockBot(o: MockOpts = {}): Promise<MockBot> {
   const server: Server = createServer(async (req, res) => {
     const path = req.url ?? '/';
     const b = await body(req);
-    calls.push({ method: req.method ?? 'GET', path, auth: req.headers.authorization, body: b });
+    calls.push({ method: req.method ?? 'GET', path, auth: req.headers.authorization, body: b, idem: req.headers['idempotency-key'] as string | undefined });
     const json = (status: number, v: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(v));

@@ -8,7 +8,14 @@ export { prices };
 
 /** Error for a non-2xx answer. Never includes the request, headers or keys. */
 export function httpError(who: string, status: number): Error {
-  return new Error(`${who} request failed with status ${status}`);
+  return Object.assign(new Error(`${who} request failed with status ${status}`), {
+    transient: status >= 500 || status === 429,
+  });
+}
+
+/** Network failures (fetch throws TypeError) and 5xx/429 answers are worth retrying while polling. */
+function isTransient(e: unknown): boolean {
+  return e instanceof TypeError || (e as { transient?: boolean } | null)?.transient === true;
 }
 
 /** Calls `step` until it returns a value (not undefined), sleeping pollMs between tries. */
@@ -16,7 +23,12 @@ export async function poll<T>(step: () => Promise<T | undefined>, o: PollOpts = 
   const pollMs = o.pollMs ?? DEFAULT_POLL_MS;
   const deadline = Date.now() + (o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   for (;;) {
-    const v = await step();
+    let v: T | undefined;
+    try {
+      v = await step();
+    } catch (e) {
+      if (!isTransient(e)) throw e;
+    }
     if (v !== undefined) return v;
     if (Date.now() >= deadline) throw new Error('generation timed out');
     await new Promise((r) => setTimeout(r, pollMs));

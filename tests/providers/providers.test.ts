@@ -82,6 +82,25 @@ describe('bot adapter', () => {
     await expect(q.run({ kind: 'image', params: {}, outDir: tmp })).rejects.toThrow(/timed out/);
   });
 
+  test('run sends taskId as Idempotency-Key and resumes a given job without a new run', async () => {
+    bot = await startMockBot();
+    const p = createBotProvider({ botKey: 'testkey', botUrl: bot.url }, { ...FAST, allowInsecure: true });
+    const ids: string[] = [];
+    await p.run({ kind: 'image', params: {}, outDir: tmp, taskId: 'idem1', onJobId: (j) => void ids.push(j) });
+    const runCall = bot.calls.find((c) => c.path === '/v1/run')!;
+    expect(runCall.idem).toBe('idem1');
+    expect(ids).toEqual(['job1']);
+    const before = bot.calls.filter((c) => c.path === '/v1/run').length;
+    await p.run({ kind: 'image', params: {}, outDir: tmp, taskId: 'idem2', resumeJobId: 'job1' });
+    expect(bot.calls.filter((c) => c.path === '/v1/run').length).toBe(before);
+  });
+
+  test('rejects non-https bot url except localhost', () => {
+    expect(() => createBotProvider({ botKey: 'k', botUrl: 'http://example.com' })).toThrow('bad_bot_url');
+    expect(() => createBotProvider({ botKey: 'k', botUrl: 'http://localhost:9' })).not.toThrow();
+    expect(providerFor('image', cfg({ providers: { ...cfg().providers, image: { use: 'bot' } }, botKey: 'b', botUrl: 'ftp://x' }))).toBeNull();
+  });
+
   test('balance', async () => {
     bot = await startMockBot({ balance: 3 });
     const p = createBotProvider({ botKey: 'testkey', botUrl: bot.url }, FAST);
@@ -96,6 +115,18 @@ describe('download', () => {
     await expect(downloadResult('https://x.test/a.zip', tmp, 't')).rejects.toThrow(/type/);
     vi.stubGlobal('fetch', async () => new Response('x', { headers: { 'content-type': 'video/mp4', 'content-length': String(600 * 1024 ** 2) } }));
     await expect(downloadResult('https://x.test/a.mp4', tmp, 't')).rejects.toThrow(/large/);
+  });
+  test('refuses https to http redirect, follows https redirect, caps hops', async () => {
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 302, headers: { location: 'http://evil.test/a.mp4' } }));
+    await expect(downloadResult('https://x.test/a.mp4', tmp, 't')).rejects.toThrow(/https/);
+    vi.stubGlobal('fetch', async (u: string) =>
+      u === 'https://x.test/a.mp4'
+        ? new Response(null, { status: 302, headers: { location: '/b.mp4' } })
+        : new Response('ok', { headers: { 'content-type': 'video/mp4' } }),
+    );
+    expect(await downloadResult('https://x.test/a.mp4', tmp, 'r')).toBe(join(tmp, 'r.mp4'));
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 302, headers: { location: 'https://x.test/loop.mp4' } }));
+    await expect(downloadResult('https://x.test/a.mp4', tmp, 'l')).rejects.toThrow(/redirect/);
   });
   test('ext from url when content-type is generic', async () => {
     vi.stubGlobal('fetch', async () => new Response('png', { headers: { 'content-type': 'application/octet-stream' } }));
@@ -167,6 +198,29 @@ describe('kie', () => {
     const r = await p.run(req);
     expect(r.file).toBe(join(tmp, 'ki.png'));
     expect(urls[0]).toBe('POST https://api.kie.ai/api/v1/jobs/createTask');
+  });
+  test('polling survives 5xx and network errors; resume skips createTask', async () => {
+    let create = 0;
+    let rec = 0;
+    vi.stubGlobal('fetch', async (u: string) => {
+      if (u.endsWith('/createTask')) {
+        create += 1;
+        return Response.json({ code: 200, data: { taskId: 'kt9' } });
+      }
+      if (u.includes('/recordInfo')) {
+        rec += 1;
+        if (rec === 1) return new Response('x', { status: 503 });
+        if (rec === 2) throw new TypeError('fetch failed');
+        return Response.json({ code: 200, data: { state: 'success', resultJson: JSON.stringify({ resultUrls: ['https://cdn.test/o.png'] }) } });
+      }
+      return new Response('PNG', { headers: { 'content-type': 'image/png' } });
+    });
+    const ids: string[] = [];
+    const r = await createKie('k', FAST).run({ kind: 'image', params: { prompt: 'p' }, outDir: tmp, taskId: 'rs', onJobId: (j) => void ids.push(j) });
+    expect(r.file).toBe(join(tmp, 'rs.png'));
+    expect([create, rec, ids]).toEqual([1, 3, ['kt9']]);
+    await createKie('k', FAST).run({ kind: 'image', params: { prompt: 'p' }, outDir: tmp, taskId: 'rs2', resumeJobId: 'kt9' });
+    expect(create).toBe(1);
   });
   test('failed task throws', async () => {
     vi.stubGlobal('fetch', async (u: string) =>
