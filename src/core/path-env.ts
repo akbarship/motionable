@@ -1,13 +1,13 @@
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
-/** Where the installer puts static ffmpeg / yt-dlp. */
+/** Where the installer puts fallback static ffmpeg / yt-dlp. */
 export const binDir = (home: string = homedir()): string => join(home, '.motionable', 'bin');
 
-/** Put `dir` first on PATH (once). Honours the `Path` spelling used on Windows. */
-export function prependBinDir(dir: string = binDir(), env: NodeJS.ProcessEnv = process.env): void {
+/** Add `dir` to the END of PATH (once), so tools already on PATH win. Honours the `Path` spelling used on Windows. */
+export function appendBinDir(dir: string = binDir(), env: NodeJS.ProcessEnv = process.env): void {
   const key = 'PATH' in env ? 'PATH' : 'Path' in env ? 'Path' : 'PATH';
   const parts = (env[key] ?? '').split(delimiter).filter(Boolean);
-  if (parts[0] === dir) return;
-  env[key] = [dir, ...parts.filter((p) => p !== dir)].join(delimiter);
+  if (parts.includes(dir)) return;
+  env[key] = [...parts, dir].join(delimiter);
 }

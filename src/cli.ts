@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
-import { prependBinDir } from './core/path-env.js';
+import { appendBinDir } from './core/path-env.js';
 import { PlanSchema, StyleSchema, WordsSchema } from './core/types.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
 import { startStudio } from './server/studio.js';
@@ -103,6 +103,6 @@ async function main(cmd: string | undefined): Promise<void> {
 
 const entry = process.argv[1];
 if (entry && import.meta.url === pathToFileURL(entry).href) {
-  prependBinDir();
+  appendBinDir();
   await main(process.argv[2]);
 }
