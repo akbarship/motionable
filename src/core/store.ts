@@ -30,12 +30,12 @@ export async function readJson<T>(file: string, schema: z.ZodType<T>): Promise<T
 }
 
 /** Validate, write to a temp file in the same dir, then rename over the target. */
-export async function writeJson<T>(file: string, schema: z.ZodType<T>, value: T): Promise<void> {
+export async function writeJson<T>(file: string, schema: z.ZodType<T>, value: T, mode?: number): Promise<void> {
   const data = schema.parse(value);
   await mkdir(dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}-${randomSuffix(8)}`;
   try {
-    await writeFile(tmp, JSON.stringify(data, null, 2));
+    await writeFile(tmp, JSON.stringify(data, null, 2), mode === undefined ? undefined : { mode });
     await rename(tmp, file);
   } catch (e) {
     await unlink(tmp).catch(() => {});

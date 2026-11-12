@@ -40,6 +40,14 @@ describe('config', () => {
     expect((await loadConfig()).providers.image.use).toBe('kie');
   });
 
+  it('keeps the stored key when a patch changes only use', async () => {
+    await saveConfig({ providers: { image: { use: 'kie', key: 'k-1234' } } });
+    const c = await saveConfig({ providers: { image: { use: 'elevenlabs' } } });
+    expect(c.providers.image).toEqual({ use: 'elevenlabs', key: 'k-1234' });
+    const d = await saveConfig({ providers: { image: { use: 'kie', key: undefined } } });
+    expect(d.providers.image.key).toBe('k-1234');
+  });
+
   it('masks keys and never leaks the full key', async () => {
     const c = await saveConfig({
       providers: { tts: { use: 'elevenlabs', key: 'sk-supersecret-abcd' } } as never,
