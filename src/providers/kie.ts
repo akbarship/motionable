@@ -70,7 +70,11 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
       const q = await this.quote(r);
       let taskId = r.resumeJobId;
       if (!taskId) {
-        taskId = (await api<{ taskId: string }>(CREATE, { method: 'POST', body: JSON.stringify(body(r)) })).taskId;
+        const payload = JSON.stringify(body(r));
+        await r.onCreateAttempt?.();
+        const created = await api<{ taskId?: string }>(CREATE, { method: 'POST', body: payload });
+        if (!created?.taskId) throw new Error('kie.ai answered without a task id');
+        taskId = created.taskId;
         await r.onJobId?.(taskId);
       }
       const job = taskId;

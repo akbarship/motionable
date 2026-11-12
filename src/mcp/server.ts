@@ -268,7 +268,7 @@ export function createMcpServer(
         } catch {
           // empty or torn marker: treated as started without a job
         }
-        if (!resumeJobId) return text({ error: 'already_started' });
+        if (!resumeJobId) return text({ error: 'already_started', hint: 'unknown_job_state' });
       } else {
         const req = { kind: kind.data, params: params as Record<string, unknown>, outDir: genDir };
         const q = await p.quote(req);
@@ -283,6 +283,7 @@ export function createMcpServer(
       }
 
       let jobId = resumeJobId;
+      let attempted = false;
       let r: { file: string; usd: number };
       try {
         r = await p.run({
@@ -291,14 +292,17 @@ export function createMcpServer(
           outDir: genDir,
           taskId,
           resumeJobId,
+          onCreateAttempt: () => {
+            attempted = true;
+          },
           onJobId: async (id) => {
             jobId = id;
             await writeFile(startedFile, JSON.stringify({ jobId: id }));
           },
         });
       } catch (e) {
-        // Nothing billable was created: allow a clean retry. With a job id the marker stays so a retry resumes it.
-        if (!jobId) await unlink(startedFile).catch(() => {});
+        // Only a failure before the create request is safe to retry. After it the job state is unknown: keep the marker.
+        if (!jobId && !attempted) await unlink(startedFile).catch(() => {});
         throw e;
       }
       const file = relative(dir, r.file).split('\\').join('/');

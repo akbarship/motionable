@@ -222,6 +222,22 @@ describe('kie', () => {
     await createKie('k', FAST).run({ kind: 'image', params: { prompt: 'p' }, outDir: tmp, taskId: 'rs2', resumeJobId: 'kt9' });
     expect(create).toBe(1);
   });
+  test('createTask network error after attempt; 200 without taskId throws', async () => {
+    let attempts = 0;
+    const ids: string[] = [];
+    const req = { kind: 'image' as const, params: { prompt: 'p' }, outDir: tmp, onCreateAttempt: () => void attempts++, onJobId: (j: string) => void ids.push(j) };
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('fetch failed');
+    });
+    await expect(createKie('k', FAST).run(req)).rejects.toThrow();
+    expect(attempts).toBe(1);
+    vi.stubGlobal('fetch', async () => Response.json({ code: 200, data: {} }));
+    await expect(createKie('k', FAST).run(req)).rejects.toThrow(/task id/);
+    expect(ids).toEqual([]);
+    // validation failure happens before the attempt
+    await expect(createKie('k', FAST).run({ ...req, params: {} })).rejects.toThrow(/prompt/);
+    expect(attempts).toBe(2);
+  });
   test('failed task throws', async () => {
     vi.stubGlobal('fetch', async (u: string) =>
       u.endsWith('/createTask') ? Response.json({ code: 200, data: { taskId: 'x' } }) : Response.json({ code: 200, data: { state: 'fail', failMsg: 'nsfw' } }),

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -161,6 +161,29 @@ describe('paid run safety', () => {
     };
     expect((await call('generate', { projectId: pid, taskId: id })).isError).toBe(true);
     expect((await call('generate', { projectId: pid, taskId: id })).data.file).toBeDefined();
+    await expect(stat(join(projectDir(pid), 'gen', `${id}.started`))).resolves.toBeDefined(); // success leaves marker
+  });
+
+  test('error before the attempt removes the marker', async () => {
+    const { pid, id } = await approved();
+    runImpl = async () => {
+      throw new Error('validation');
+    };
+    expect((await call('generate', { projectId: pid, taskId: id })).isError).toBe(true);
+    await expect(stat(join(projectDir(pid), 'gen', `${id}.started`))).rejects.toThrow();
+  });
+
+  test('error after the create attempt keeps the marker; retry is already_started', async () => {
+    const { pid, id } = await approved();
+    runImpl = async (r) => {
+      await r.onCreateAttempt?.();
+      throw new TypeError('fetch failed');
+    };
+    expect((await call('generate', { projectId: pid, taskId: id })).isError).toBe(true);
+    const again = await call('generate', { projectId: pid, taskId: id });
+    expect(again.data).toEqual({ error: 'already_started', hint: 'unknown_job_state' });
+    expect(runs).toBe(1);
+    await stat(join(projectDir(pid), 'gen', `${id}.started`));
   });
 
   test('provider_changed refuses', async () => {

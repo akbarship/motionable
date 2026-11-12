@@ -55,7 +55,11 @@ export function createBotProvider(c: BotCfg, o: PollOpts & { allowInsecure?: boo
   async function finished(r: GenReq): Promise<Job & { status: 'done' }> {
     let jobId = r.resumeJobId;
     if (!jobId) {
-      jobId = (await call<{ jobId: string }>('POST', '/v1/run', payload(r), r.taskId)).jobId;
+      const body = payload(r);
+      await r.onCreateAttempt?.();
+      const created = await call<{ jobId?: string }>('POST', '/v1/run', body, r.taskId);
+      if (!created?.jobId) throw new Error('bot answered without a job id');
+      jobId = created.jobId;
       await r.onJobId?.(jobId);
     }
     const id = jobId;

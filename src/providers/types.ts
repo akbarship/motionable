@@ -6,6 +6,8 @@ export type GenReq = {
   outDir: string;
   /** Used as the downloaded file's base name. */
   taskId?: string;
+  /** Called right before the request that creates a billable job. After it, a failure may still have billed. */
+  onCreateAttempt?: () => void | Promise<void>;
   /** Called as soon as the provider created a billable job, so a retry can resume it. */
   onJobId?: (jobId: string) => void | Promise<void>;
   /** Poll this existing job instead of creating a new one. */
