@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
+import { prependBinDir } from './core/path-env.js';
 import { PlanSchema, StyleSchema, WordsSchema } from './core/types.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
 import { startStudio } from './server/studio.js';
@@ -21,6 +24,21 @@ async function works(cmd: string, args: string[]): Promise<boolean> {
 
 export const nodeOk = (version: string): boolean => Number(version.replace(/^v/, '').split('.')[0]) >= 22;
 
+const HF_SKILLS = ['hyperframes', 'hyperframes-cli', 'hyperframes-registry'];
+
+/** Names of HyperFrames skills missing from `<claudeDir>/skills`. Informational only. */
+export async function missingSkills(claudeDir: string = join(homedir(), '.claude')): Promise<string[]> {
+  const gone: string[] = [];
+  for (const n of HF_SKILLS) {
+    try {
+      await access(join(claudeDir, 'skills', n));
+    } catch {
+      gone.push(n);
+    }
+  }
+  return gone;
+}
+
 export async function doctor() {
   const node = nodeOk(process.versions.node);
   const [ffmpeg, ytdlp, hyperframes] = await Promise.all([
@@ -28,7 +46,8 @@ export async function doctor() {
     works('yt-dlp', ['--version']),
     works('npx', ['--no-install', 'hyperframes', 'doctor', '--json']),
   ]);
-  return { ok: node && ffmpeg && hyperframes, node, ffmpeg, ytdlp, hyperframes };
+  const skillsMissing = await missingSkills();
+  return { ok: node && ffmpeg && hyperframes, node, ffmpeg, ytdlp, hyperframes, skillsMissing };
 }
 
 const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema };
@@ -83,4 +102,7 @@ async function main(cmd: string | undefined): Promise<void> {
 }
 
 const entry = process.argv[1];
-if (entry && import.meta.url === pathToFileURL(entry).href) await main(process.argv[2]);
+if (entry && import.meta.url === pathToFileURL(entry).href) {
+  prependBinDir();
+  await main(process.argv[2]);
+}

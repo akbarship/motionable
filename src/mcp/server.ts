@@ -6,6 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { loadConfig } from '../core/config.js';
+import { prependBinDir } from '../core/path-env.js';
 import { home, projectDir } from '../core/paths.js';
 import { addTask, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
 import { getLast, getProject, readJson, writeJson } from '../core/store.js';
@@ -371,5 +372,6 @@ export function createMcpServer(
 
 const entry = process.argv[1];
 if (entry && import.meta.url === pathToFileURL(entry).href) {
+  prependBinDir();
   await createMcpServer().connect(new StdioServerTransport());
 }
