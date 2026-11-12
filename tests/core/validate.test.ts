@@ -63,7 +63,7 @@ describe('motionable sheet', () => {
   test('prints sheet paths and cut count from the builder', async () => {
     const out = await runSheet('a.mp4', '/o', async (v, o) => {
       expect([v, o]).toEqual(['a.mp4', '/o']);
-      return { cuts: [1, 2], sheets: ['/o/sheet-1.jpg'], avgShot: 1.5 };
+      return { cuts: [1, 2], sheets: ['/o/sheet-1.jpg'], avgShot: 1.5, frames: [0.5, 1.5] };
     });
     expect(JSON.parse(out)).toEqual({ sheets: ['/o/sheet-1.jpg'], cuts: 2, avgShot: 1.5 });
   });

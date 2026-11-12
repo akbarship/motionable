@@ -38,3 +38,48 @@ test('refsheet finds cuts in generated clip', async () => {
   expect(j.cuts).toEqual(r.cuts);
   expect(r.avgShot).toBeCloseTo(5 / 3, 1);
 });
+
+const slowClip = async (name: string, d: number) => {
+  const clip = join(tmp, name);
+  await run('ffmpeg', [
+    '-v', 'error', '-y',
+    '-f', 'lavfi', '-i', `color=c=0xF4F1EA:s=320x568:r=30:d=${d}`,
+    '-f', 'lavfi', '-i', 'color=c=0xC9643F:s=40x40:r=30',
+    '-filter_complex', "[0:v][1:v]overlay=x='10+t*6':y='20+t*10':shortest=1,format=yuv420p[v]",
+    '-map', '[v]', clip,
+  ]);
+  return clip;
+};
+
+test('refsheet samples by time when there are no hard cuts', async () => {
+  const clip = await slowClip('slow.mp4', 40);
+  const out = join(tmp, 'slow.sheet');
+  const r = await buildRefSheet(clip, out);
+  expect(r.cuts.length).toBe(0);
+  expect(r.frames.length).toBeGreaterThanOrEqual(10);
+  expect(r.sheets.length).toBeGreaterThanOrEqual(1);
+  for (const t of r.frames) expect(t).toBeLessThan(40);
+  const j = JSON.parse(await readFile(join(out, 'cuts.json'), 'utf8'));
+  expect(j.frames).toEqual(r.frames);
+});
+
+test('last sheet is sized to its remaining frames (no black padding)', async () => {
+  const clip = await slowClip('slow39.mp4', 39);
+  const r = await buildRefSheet(clip, join(tmp, 'slow39.sheet'));
+  const n = r.frames.length;
+  expect(n).toBeGreaterThan(12);
+  expect(n % 12).not.toBe(0);
+  expect(r.sheets.length).toBe(Math.ceil(n / 12));
+  const size = async (f: string) => {
+    const { stdout } = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f]);
+    const [w, h] = stdout.trim().split(',').map(Number);
+    return { w, h };
+  };
+  const first = await size(r.sheets[0]);
+  expect(first.w).toBe(1536);
+  const tileH = first.h / 3;
+  const rem = n - 12 * (r.sheets.length - 1);
+  const last = await size(r.sheets[r.sheets.length - 1]);
+  expect(last.w).toBe(Math.min(4, rem) * 384);
+  expect(last.h).toBe(Math.ceil(rem / 4) * tileH);
+});
