@@ -1,14 +1,16 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, stat, utimes, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { appendFile, mkdir, readFile, realpath, stat, utimes, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, join, relative, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { loadConfig } from '../core/config.js';
 import { home, projectDir } from '../core/paths.js';
-import { fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
-import { getLast, getProject, readJson } from '../core/store.js';
-import type { TaskType } from '../core/types.js';
+import { addTask, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
+import { getLast, getProject, readJson, writeJson } from '../core/store.js';
+import { KindSchema, WordsSchema, type TaskType } from '../core/types.js';
+import { providerFor as defaultProviderFor } from '../providers/registry.js';
 
 const AGENTS: Record<TaskType, string> = {
   study_ref: 'ref-study',
@@ -94,7 +96,10 @@ export async function ensureStudio(spawnFn: () => void = spawnStudio): Promise<s
   throw new Error('studio did not start within 10 s');
 }
 
-export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpServer {
+export function createMcpServer(
+  opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor } = {},
+): McpServer {
+  const providerFor = opts.providerFor ?? defaultProviderFor;
   const server = new McpServer({ name: 'motionable', version: '0.1.0' });
   /** taskId -> claim token from waitForTask. */
   const tokens = new Map<string, string>();
@@ -199,6 +204,80 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
         hasPlan,
         tasks: tasks.map((t) => ({ id: t.id, type: t.type, status: t.status })),
       });
+    },
+  );
+
+  server.registerTool(
+    'request_generation',
+    {
+      description:
+        'Ask for paid generation. Quotes it and queues a generate task that waits for the user Approve in Studio. Never runs anything. Returns {taskId, usd} or {error:"no_provider"}.',
+      inputSchema: { projectId: idStr, sceneId: z.string(), kind: KindSchema, params: z.record(z.string(), z.unknown()) },
+    },
+    async ({ projectId, sceneId, kind, params }) => {
+      await getProject(projectId);
+      const p = providerFor(kind, await loadConfig());
+      if (!p) return text({ error: 'no_provider' });
+      const { usd } = await p.quote({ kind, params, outDir: join(projectDir(projectId), 'gen') });
+      const task = await addTask(projectId, 'generate', { sceneId, kind, params, usd }, 'awaiting_approval');
+      return text({ taskId: task.id, usd });
+    },
+  );
+
+  server.registerTool(
+    'generate',
+    {
+      description:
+        'Run an approved generate task (status running) through the provider. Returns {file, usd} (file is project-relative) or {error:"not_approved"}.',
+      inputSchema: { projectId: idStr, taskId: idStr },
+    },
+    async ({ projectId, taskId }) => {
+      const task = (await listTasks(projectId)).find((t) => t.id === taskId);
+      if (!task || task.type !== 'generate' || task.status !== 'running') return text({ error: 'not_approved' });
+      const kind = KindSchema.safeParse(task.input.kind);
+      const params = task.input.params;
+      if (!kind.success || typeof params !== 'object' || params === null) return text({ error: 'bad_task_input' });
+      const dir = projectDir(projectId);
+      const logFile = join(dir, 'gen', 'gen.log.jsonl');
+      const prior = await readFile(logFile, 'utf8').catch(() => '');
+      if (prior.split('\n').some((l) => l.includes(`"taskId":"${taskId}"`))) return text({ error: 'already_generated' });
+      const p = providerFor(kind.data, await loadConfig());
+      if (!p) return text({ error: 'no_provider' });
+      const r = await p.run({ kind: kind.data, params: params as Record<string, unknown>, outDir: join(dir, 'gen'), taskId });
+      const file = relative(dir, r.file).split('\\').join('/');
+      const use = (await loadConfig()).providers[kind.data].use;
+      await mkdir(join(dir, 'gen'), { recursive: true });
+      await appendFile(
+        logFile,
+        JSON.stringify({ taskId, kind: kind.data, provider: use, usd: r.usd, file, at: new Date().toISOString() }) + '\n',
+      );
+      return text({ file, usd: r.usd });
+    },
+  );
+
+  server.registerTool(
+    'transcribe',
+    {
+      description:
+        'Speech to text for a project media file (project-relative path). Writes <base>.words.json next to it. Returns {wordsPath} or {error:"no_stt_provider"}.',
+      inputSchema: { projectId: idStr, file: z.string().min(1) },
+    },
+    async ({ projectId, file }) => {
+      const dir = projectDir(projectId);
+      const abs = resolve(dir, file);
+      const inside = (base: string, p: string) => {
+        const rel = relative(base, p);
+        return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+      };
+      if (isAbsolute(file) || !inside(dir, abs)) throw new Error('file must be inside the project');
+      const real = await realpath(abs);
+      if (!inside(await realpath(dir), real)) throw new Error('file must be inside the project');
+      const p = providerFor('stt', await loadConfig());
+      if (!p?.transcribe) return text({ error: 'no_stt_provider' });
+      const words = await p.transcribe(real);
+      const wordsPath = join(dirname(abs), `${basename(abs, extname(abs))}.words.json`);
+      await writeJson(wordsPath, WordsSchema, words);
+      return text({ wordsPath });
     },
   );
 

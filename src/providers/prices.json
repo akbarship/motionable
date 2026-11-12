@@ -1,0 +1,7 @@
+{
+  "_note": "Editable USD rates used to quote own-key calls. Check your provider's pricing page and adjust.",
+  "image": { "nano-banana-2": 0.04, "nano-banana-pro": 0.09 },
+  "video": { "veo3_fast": { "perSecond": 0.1 }, "kling": { "perSecond": 0.1 } },
+  "tts": { "per1kChars": 0.15 },
+  "stt": { "perMinute": 0.007 }
+}

@@ -6,6 +6,9 @@ import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir } from '../core/paths.js';
 import { addTask, approve, listTasks } from '../core/queue.js';
+import { createBotProvider } from '../providers/bot.js';
+import { quoteItems } from '../providers/registry.js';
+import { KindSchema } from '../core/types.js';
 import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
 import { ChatMsgSchema, PlanSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
@@ -154,6 +157,22 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         }
         return send(res, 200, await addTask(id, b.type as TaskType, input as Record<string, unknown>));
       }
+      if (seg[2] === 'quote' && seg.length === 3 && method === 'POST') {
+        await getProject(id);
+        const b = await readBody(req);
+        if (!Array.isArray(b.items)) throw new HttpError(400, 'items must be an array');
+        const items = b.items.map((it) => {
+          const o = (it ?? {}) as Record<string, unknown>;
+          const kind = KindSchema.safeParse(o.kind);
+          if (!kind.success) throw new HttpError(400, 'invalid kind');
+          const params = o.params ?? {};
+          if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+            throw new HttpError(400, 'params must be an object');
+          }
+          return { kind: kind.data, params: params as Record<string, unknown> };
+        });
+        return send(res, 200, await quoteItems(items, await loadConfig(), join(projectDir(id), 'gen')));
+      }
       if (seg[2] === 'tasks' && seg[4] === 'approve' && seg.length === 5 && method === 'POST') {
         const tid = assertId(seg[3]);
         await getProject(id);
@@ -196,6 +215,14 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
     if (method === 'PUT') {
       const b = await readBody(req);
       return send(res, 200, maskedConfig(await saveConfig(b as Parameters<typeof saveConfig>[0])));
+    }
+  } else if (seg[0] === 'bot' && seg[1] === 'balance' && seg.length === 2 && method === 'GET') {
+    const cfg = await loadConfig();
+    if (!cfg.botKey) throw new HttpError(400, 'no_bot_key');
+    try {
+      return send(res, 200, await createBotProvider({ botKey: cfg.botKey, botUrl: cfg.botUrl }).balance());
+    } catch (e) {
+      throw new HttpError(502, (e as Error).message);
     }
   } else if (seg[0] === 'claude' && seg.length === 1 && method === 'GET') {
     let connected = false;

@@ -56,7 +56,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 describe('mcp roundtrip', () => {
   test('lists tools', async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(['next_task', 'project_info', 'studio_open', 'task_done', 'task_failed', 'task_progress']);
+    expect(names).toEqual(['generate', 'next_task', 'project_info', 'request_generation', 'studio_open', 'task_done', 'task_failed', 'task_progress', 'transcribe']);
   });
 
   test('next_task -> progress -> done, SSE emits, project_info', async () => {

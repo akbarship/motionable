@@ -104,6 +104,9 @@ export const ConfigSchema = z.object({
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
+export const WordsSchema = z.array(z.object({ w: z.string(), start: z.number(), end: z.number() }));
+export type Words = z.infer<typeof WordsSchema>;
+
 export const ChatMsgSchema = z.object({
   id: z.string(),
   role: z.enum(['user', 'assistant']),
