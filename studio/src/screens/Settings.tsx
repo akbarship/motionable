@@ -28,6 +28,7 @@ export function Settings() {
   const [rows, setRows] = useState<Record<Kind, Row> | null>(null);
   const [botKey, setBotKey] = useState('');
   const [botUrl, setBotUrl] = useState('');
+  const [sttRate, setSttRate] = useState<number | null>(null); // USD per minute, read from the server's prices.json
   const [server, setServer] = useState<Config | null>(null); // last saved config (masked)
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -76,6 +77,7 @@ export function Settings() {
   }
 
   useEffect(() => {
+    api.prices().then((p) => setSttRate(p.stt.perMinute), () => {});
     api.getConfig().then(
       (c) => {
         fill(c);
@@ -180,7 +182,7 @@ export function Settings() {
               )}
               {kind === 'stt' && (
                 <p className="note">
-                  Subtitr yoqilganda har bir transkripsiya alohida tasdiqsiz ishlaydi (taxminan $0.004/daqiqa).
+                  Subtitr yoqilganda har bir transkripsiya alohida tasdiqsiz ishlaydi (taxminan {sttRate === null ? '…' : '$' + sttRate}/daqiqa).
                 </p>
               )}
             </div>

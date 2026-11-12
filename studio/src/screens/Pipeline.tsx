@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Task } from '../api';
-import { awaitingGenerate, hasUnknownState, lastProgress, readPlan, showPlanReview, stageState } from '../pipeline';
+import { api, type Project, type Task } from '../api';
+import { awaitingGenerate, directStyleIds, hasDirect, hasUnknownState, lastProgress, readPlan, showPlanReview, stageState } from '../pipeline';
 import { ApproveCost } from '../ui/ApproveCost';
 import { PlanReview } from '../ui/PlanReview';
 import { StageCard } from '../ui/StageCard';
@@ -9,6 +9,9 @@ import { StageCard } from '../ui/StageCard';
 export function Pipeline({ id, tick }: { id: string; tick: number }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [plan, setPlan] = useState<unknown>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [planError, setPlanError] = useState(false);
+  const [redoBusy, setRedoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Only the newest request may write state; older replies that land late are dropped.
@@ -20,6 +23,8 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
       if (seq !== loadSeq.current) return;
       setTasks(v.tasks);
       setPlan(v.plan);
+      setProject(v.project);
+      setPlanError(v.planError === 'invalid');
       setError(null);
     } catch (e) {
       if (seq !== loadSeq.current) return;
@@ -30,6 +35,19 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
   useEffect(() => {
     void load();
   }, [load, tick]);
+
+  async function redoPlan() {
+    setRedoBusy(true);
+    setError(null);
+    try {
+      await api.addTask(id, 'direct', { styleIds: directStyleIds(tasks, project?.styleIds ?? []) });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRedoBusy(false);
+    }
+  }
 
   const stages = [
     { id: 'study', title: "Namunani o'rganish" },
@@ -56,10 +74,20 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
         ))}
       </ol>
 
-      {plan != null && view === null && (
+      {!hasDirect(tasks) && (
+        <p className="muted">
+          Reja hali tuzilmagan. <a href={`#/p/${id}/refs`}>Namunalar sahifasiga qaytib</a>, davom etishni bosing.
+        </p>
+      )}
+      {((plan != null && view === null) || planError) && (
         <p className="form-error" role="alert">
           Reja o'qilmadi
         </p>
+      )}
+      {hasDirect(tasks) && (plan != null || planError) && (
+        <button type="button" className="btn btn--ghost" disabled={redoBusy} onClick={() => void redoPlan()}>
+          Rejani qayta tuzish
+        </button>
       )}
       {view && showPlanReview(tasks) && <PlanReview key={JSON.stringify(plan)} projectId={id} plan={view} onStarted={() => void load()} />}
       {executeDone && (

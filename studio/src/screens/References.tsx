@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, upload, type StyleSummary, type Task } from '../api';
+import { canContinue } from '../pipeline';
 import { go } from '../router';
 import { Dropzone, FileList, toRows, type FileRow } from '../ui/Dropzone';
 import { Icon, ICON } from '../ui/TopBar';
@@ -61,9 +62,9 @@ export function References({ id, tick }: { id: string; tick: number }) {
   }, []);
 
   const refs = tasks.filter((t) => t.type === 'study_ref');
-  const allDone = refs.length > 0 && refs.every((t) => t.status === 'done');
-  const canGo = (allDone || picked.length > 0) && !starting;
-  const waiting = refs.length > 0 && !allDone && picked.length === 0;
+  const ready = canContinue(tasks, picked.length);
+  const canGo = ready && !starting;
+  const waiting = refs.length > 0 && !ready && refs.some((t) => t.status !== 'failed' && t.status !== 'done');
 
   async function addLink(e: FormEvent) {
     e.preventDefault();

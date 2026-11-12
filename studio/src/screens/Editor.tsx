@@ -137,7 +137,7 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
           </ul>
         </div>
       </section>
-      <Chat projectId={id} chat={chat} working={working} onSent={() => void load()} />
+      <Chat projectId={id} chat={chat} tasks={tasks} working={working} onSent={() => void load()} />
     </div>
   );
 }

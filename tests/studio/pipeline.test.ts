@@ -2,6 +2,11 @@ import { describe, expect, test } from 'vitest';
 import type { Task } from '../../studio/src/api.js';
 import {
   awaitingGenerate,
+  canContinue,
+  chatWithReplies,
+  directStyleIds,
+  hasDirect,
+  stageLinks,
   genUnavailable,
   hasUnknownState,
   lastProgress,
@@ -97,4 +102,62 @@ test('hasUnknownState', () => {
   expect(hasUnknownState(task('generate', 'done', { output: { hint: 'unknown_job_state' } }))).toBe(true);
   expect(hasUnknownState(task('generate', 'running', { progress: ['hint: unknown_job_state'] }))).toBe(true);
   expect(hasUnknownState(task('execute', 'failed', { error: 'already_started' }))).toBe(false);
+});
+
+test('showPlanReview comes back when the newest execute failed', () => {
+  expect(showPlanReview([task('execute', 'failed')])).toBe(true);
+  expect(showPlanReview([task('execute', 'done'), task('execute', 'failed')])).toBe(true);
+  expect(showPlanReview([task('execute', 'failed'), task('execute', 'running')])).toBe(false);
+  expect(showPlanReview([task('execute', 'done')])).toBe(false);
+});
+
+test('directStyleIds and hasDirect', () => {
+  expect(hasDirect([task('study_ref', 'done')])).toBe(false);
+  const d = task('direct', 'done', { input: { styleIds: ['a', 'b'] } });
+  expect(hasDirect([d])).toBe(true);
+  expect(directStyleIds([d], ['z'])).toEqual(['a', 'b']);
+  expect(directStyleIds([], ['z'])).toEqual(['z']);
+  expect(directStyleIds([task('direct', 'done', { input: {} })], ['z'])).toEqual(['z']);
+});
+
+test('canContinue: one failed ref does not block', () => {
+  const ok = task('study_ref', 'done');
+  expect(canContinue([ok, task('study_ref', 'failed')], 0)).toBe(true);
+  expect(canContinue([task('study_ref', 'failed')], 0)).toBe(false);
+  expect(canContinue([ok, task('study_ref', 'running')], 0)).toBe(false);
+  expect(canContinue([ok, task('study_ref', 'queued')], 1)).toBe(false);
+  expect(canContinue([task('study_ref', 'failed')], 1)).toBe(true);
+  expect(canContinue([task('direct', 'done')], 0)).toBe(false);
+  expect(canContinue([], 0)).toBe(false);
+});
+
+test('stageLinks', () => {
+  expect(stageLinks('p1')).toEqual([
+    { key: 'refs', label: 'Namunalar', href: '#/p/p1/refs' },
+    { key: 'pipeline', label: 'Jarayon', href: '#/p/p1' },
+    { key: 'edit', label: 'Muharrir', href: '#/p/p1/edit' },
+  ]);
+});
+
+test('chatWithReplies adds assistant replies from finished edit tasks', () => {
+  const chat = [
+    { id: 'm1', role: 'user' as const, text: 'a', at: 'x' },
+    { id: 'm2', role: 'user' as const, text: 'b', at: 'x' },
+    { id: 'm3', role: 'user' as const, text: 'c', at: 'x' },
+  ];
+  const tasks = [
+    task('edit', 'done', { input: { msgId: 'm1' }, output: { summary: 'Sarlavha almashtirildi' } }),
+    task('edit', 'failed', { input: { msgId: 'm2' }, error: 'comp topilmadi' }),
+    task('edit', 'running', { input: { msgId: 'm3' } }),
+  ];
+  const out = chatWithReplies(chat, tasks);
+  expect(out.map((m) => [m.id, m.role, m.text])).toEqual([
+    ['m1', 'user', 'a'],
+    ['reply-m1', 'assistant', 'Sarlavha almashtirildi'],
+    ['m2', 'user', 'b'],
+    ['reply-m2', 'assistant', 'Xato: comp topilmadi'],
+    ['m3', 'user', 'c'],
+  ]);
+  const bare = chatWithReplies(chat.slice(0, 1), [task('edit', 'done', { input: { msgId: 'm1' }, output: null })]);
+  expect(bare[1].text).toBe('Tayyor.');
 });

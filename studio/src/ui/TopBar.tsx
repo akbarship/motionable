@@ -1,4 +1,5 @@
 import type { Project } from '../api';
+import { stageLinks } from '../pipeline';
 import { go, type Route } from '../router';
 import { ClaudePill } from './ClaudePill';
 
@@ -88,6 +89,13 @@ export function ProjectBar({ project, projects, route }: { project: Project | nu
           ))}
         </select>
       </div>
+      <nav className="seg" aria-label="Bosqichlar">
+        {stageLinks(id).map((l) => (
+          <a key={l.key} href={l.href} aria-current={route.name === l.key ? 'page' : undefined}>
+            {l.label}
+          </a>
+        ))}
+      </nav>
       {status && (
         <span className={project && ['ready', 'done'].includes(project.status) ? 'chip chip--done' : 'chip'}>
           <span className="dot" aria-hidden="true" />

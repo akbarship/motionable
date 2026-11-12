@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
+import { doctorReportOk, npxCommand } from './core/hf-cmd.js';
 import { appendBinDir } from './core/path-env.js';
 import { PlanSchema, StyleSchema, WordsSchema } from './core/types.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
@@ -15,10 +16,22 @@ const run = promisify(execFile);
 /** True when `cmd args` exits 0. Never uses a shell. */
 async function works(cmd: string, args: string[]): Promise<boolean> {
   try {
-    await run(cmd, args, { timeout: 60_000 });
+    await run(cmd, args, { timeout: 60_000, windowsHide: true });
     return true;
   } catch {
     return false;
+  }
+}
+
+/** True when `hyperframes doctor --json` runs and reports ok. Fixed literal args only (win32 uses a shell). */
+async function hyperframesOk(): Promise<boolean> {
+  const c = npxCommand(process.platform, ['--no-install', 'hyperframes', 'doctor', '--json']);
+  try {
+    const r = await run(c.cmd, c.args, { timeout: 60_000, shell: c.shell, windowsHide: true });
+    return doctorReportOk(String(r.stdout), true);
+  } catch (e) {
+    // a non-zero exit may still carry a report; it can only say "not ok" here
+    return doctorReportOk(String((e as { stdout?: unknown }).stdout ?? ''), false);
   }
 }
 
@@ -44,7 +57,7 @@ export async function doctor() {
   const [ffmpeg, ytdlp, hyperframes] = await Promise.all([
     works('ffmpeg', ['-version']),
     works('yt-dlp', ['--version']),
-    works('npx', ['--no-install', 'hyperframes', 'doctor', '--json']),
+    hyperframesOk(),
   ]);
   const skillsMissing = await missingSkills();
   return { ok: node && ffmpeg && hyperframes, node, ffmpeg, ytdlp, hyperframes, skillsMissing };

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { projectDir } from '../../src/core/paths.js';
-import { addTask } from '../../src/core/queue.js';
+import { addTask, fail } from '../../src/core/queue.js';
 import { startStudio } from '../../src/server/studio.js';
 
 let prev: string | undefined;
@@ -111,12 +111,56 @@ describe('studio', () => {
     expect(t.type).toBe('study_ref');
   });
 
-  test('approve task, bad task id 400', async () => {
+  test('approve task, bad task id 400, 409 when not awaiting', async () => {
     const id = await mk();
-    const t = (await (await api(`/api/projects/${id}/tasks`, json({ type: 'execute', input: {} }))).json()) as any;
+    const t = await addTask(id, 'generate', {}, 'awaiting_approval');
     expect((await api(`/api/projects/${id}/tasks/${t.id}/approve`, { method: 'POST' })).status).toBe(200);
+    const again = await api(`/api/projects/${id}/tasks/${t.id}/approve`, { method: 'POST' });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toEqual({ error: 'not_awaiting_approval' });
     expect((await api(`/api/projects/${id}/tasks/..%2F..%2Fx/approve`, { method: 'POST' })).status).toBe(400);
     expect((await api(`/api/projects/${id}/tasks/abc/approve`, { method: 'POST' })).status).toBe(404);
+  });
+
+  test('execute: 409 while another execute is queued or running', async () => {
+    const id = await mk();
+    const post = () => api(`/api/projects/${id}/tasks`, json({ type: 'execute', input: {} }));
+    expect((await post()).status).toBe(200);
+    const r = await post();
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: 'execute_in_progress' });
+  });
+
+  test('execute allowed again after the previous one failed', async () => {
+    const id = await mk();
+    const ex = await addTask(id, 'execute', {});
+    await fail(id, ex.id, 'boom');
+    expect((await api(`/api/projects/${id}/tasks`, json({ type: 'execute', input: {} }))).status).toBe(200);
+  });
+
+  test('torn plan.json gives plan:null + planError, not an error status', async () => {
+    const id = await mk();
+    await writeFile(join(projectDir(id), 'plan.json'), '{"scenes": [');
+    let g = (await (await api(`/api/projects/${id}`)).json()) as any;
+    expect(g.plan).toBeNull();
+    expect(g.planError).toBe('invalid');
+    await writeFile(join(projectDir(id), 'plan.json'), '{"nope": 1}');
+    g = (await (await api(`/api/projects/${id}`)).json()) as any;
+    expect(g.plan).toBeNull();
+    expect(g.planError).toBe('invalid');
+  });
+
+  test('refs upload accepts video only', async () => {
+    const id = await mk();
+    const up = (name: string) => api(`/api/projects/${id}/upload?kind=refs`, { method: 'POST', headers: { 'x-filename': name }, body: 'd' });
+    expect((await up('a.png')).status).toBe(400);
+    expect((await up('a.mp3')).status).toBe(400);
+    expect((await up('a.webm')).status).toBe(200);
+  });
+
+  test('GET /api/prices returns the rate table', async () => {
+    const p = (await (await api('/api/prices')).json()) as any;
+    expect(p.stt.perMinute).toBe(0.007);
   });
 
   test('decline: only awaiting_approval generate tasks', async () => {
@@ -189,7 +233,8 @@ describe('studio', () => {
     expect((await up('x'.repeat(201) + '.mp4')).status).toBe(400);
     expect((await up(encodeURIComponent("Ko'chmas mulk.mp4"))).status).toBe(200);
     expect(await readdir(join(projectDir(id), 'broll'))).toContain("Ko'chmas mulk.mp4");
-    expect((await up('r.png', 'refs')).status).toBe(200);
+    expect((await up('r.png', 'refs')).status).toBe(400);
+    expect((await up('r.png', 'broll')).status).toBe(200);
   });
 
   test('interrupted upload leaves no file', async () => {

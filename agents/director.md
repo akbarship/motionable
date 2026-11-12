@@ -15,7 +15,7 @@ Run the Motionable CLI as `node <cliPath> ...`. `home` = the parent of the `proj
 
 1. `task_progress`: `Reja tuzilmoqda`.
 2. Read `<projectDir>/project.json` (`brief`, `styleIds`). Call `project_info {projectId}` once
-   and note `providers` (which of image, video, tts, stt are enabled).
+   and note `providers` (which of image, video, stt are enabled).
 3. Style ids = `input.styleIds`, else `project.styleIds`. If both are empty call
    `task_failed` with `Uslub tanlanmagan: avval referens qo'shing yoki uslub tanlang` and stop.
    Never invent a style without a reference or a saved style.
@@ -54,14 +54,14 @@ On a blocking error call `task_failed` with a short Uzbek reason.
     "gen": {"type": "image" | "video", "prompt": "<English prompt, 9:16>", "seconds": 5} | null,
     "fallback": "<what to show when gen is off or fails: b-roll / typography / stock>"
   }],
-  "audio": {"voice": "footage" | "tts" | "none", "music": "<path>" | null},
+  "audio": {"voice": "footage" | "none", "music": "<path>" | null},
   "genEstimate": {"items": <scenes with gen>, "usd": 0} }
 ```
 
 - Every scene with `gen` MUST have a non-empty `fallback` that works without paid calls.
   Use `gen` only where footage cannot carry the idea. Leave `usd` at 0; the Studio quotes it.
-- `audio.voice`: `tts` only when `providers.tts` is true; else `footage` (clips have speech)
-  or `none`.
+- `audio.voice`: always `footage` (clips have speech) or `none`. Never `tts`: TTS comes later via
+  `request_generation` kind:tts with a voice setting.
 - No paid media outside `gen` (with its fallback). Music, voice and images come only from the
   project (`broll/`, footage audio), the HyperFrames registry or approved generation.
 - Captions `source`: `stt` when words exist, `script` when the brief holds the voiceover text,

@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import { npxCommand } from '../core/hf-cmd.js';
 import { projectDir } from '../core/paths.js';
 import { HttpError } from './upload.js';
 
@@ -76,13 +77,17 @@ async function start(id: string): Promise<Entry> {
   const cwd = join(projectDir(id), 'comp');
   const port = await freePort();
   const override = process.env.MOTIONABLE_HF_BIN;
-  const cmd = override ?? (process.platform === 'win32' ? 'npx.cmd' : 'npx');
-  const args = [...(override ? [] : ['hyperframes']), 'preview', '--foreground', '--port', String(port)];
+  const hfArgs = ['preview', '--foreground', '--port', String(port)]; // port is a number we picked, no user input
+  const spec = override
+    ? { cmd: override, args: hfArgs, shell: false }
+    : npxCommand(process.platform, ['hyperframes', ...hfArgs]);
   // BROWSER=none keeps the CLI from opening a tab; the Studio embeds the URL itself.
-  const child = spawn(cmd, args, {
+  const child = spawn(spec.cmd, spec.args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
+    shell: spec.shell,
+    windowsHide: true,
     env: { ...process.env, BROWSER: 'none' },
   });
   const entry = {} as Entry;

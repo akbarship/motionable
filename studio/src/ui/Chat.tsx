@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, upload, type ChatMsg, type Task } from '../api';
+import { chatWithReplies } from '../pipeline';
 import { Icon, ICON } from './TopBar';
 
 const ACCEPT = 'video/*,audio/*,image/*,.mp4,.mov,.m4v,.webm,.mp3,.wav,.m4a,.png,.jpg,.jpeg,.webp';
@@ -8,11 +9,13 @@ const ACCEPT = 'video/*,audio/*,image/*,.mp4,.mov,.m4v,.webm,.mp3,.wav,.m4a,.png
 export function Chat({
   projectId,
   chat,
+  tasks,
   working,
   onSent,
 }: {
   projectId: string;
   chat: ChatMsg[];
+  tasks: Task[];
   working: Task | null;
   onSent: () => void;
 }) {
@@ -20,11 +23,12 @@ export function Chat({
   const [files, setFiles] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const log = chatWithReplies(chat, tasks);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' });
-  }, [chat.length, working?.progress.length]);
+  }, [log.length, working?.progress.length]);
 
   const send = async () => {
     const t = text.trim();
@@ -68,7 +72,7 @@ export function Chat({
       </div>
       <div className="chat-log" role="log" aria-live="polite">
         {chat.length === 0 && <p className="muted small">Hozircha xabar yo'q. Kadrni almashtirish, matnni tuzatish yoki tempni o'zgartirishni yozing.</p>}
-        {chat.map((m) => (
+        {log.map((m) => (
           <div key={m.id} className={`msg msg--${m.role}`}>
             <p>{m.text}</p>
             {m.files && m.files.length > 0 && <p className="msg-files">{m.files.join(', ')}</p>}

@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { projectDir } from '../core/paths.js';
 
 export const MAX_UPLOAD = 2 * 1024 ** 3;
+export const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
 export const ALLOWED_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mp3', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.webp']);
 
 export class HttpError extends Error {
@@ -20,7 +21,7 @@ export class HttpError extends Error {
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
 /** Decodes a percent-encoded x-filename and returns a safe plain filename, or throws a 400. */
-export function checkFilename(raw: string | undefined, encoded = true): string {
+export function checkFilename(raw: string | undefined, encoded = true, allowed: ReadonlySet<string> = ALLOWED_EXTS): string {
   if (!raw) throw new HttpError(400, 'x-filename header required');
   let name = raw;
   if (encoded) {
@@ -35,7 +36,7 @@ export function checkFilename(raw: string | undefined, encoded = true): string {
   if (/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'bad filename');
   if (basename(name) !== name || name.includes('..')) throw new HttpError(400, 'bad filename');
   const ext = extname(name);
-  if (!ALLOWED_EXTS.has(ext.toLowerCase())) throw new HttpError(400, 'file type not allowed');
+  if (!allowed.has(ext.toLowerCase())) throw new HttpError(400, 'file type not allowed');
   if (RESERVED.test(name.slice(0, name.length - ext.length).split('.')[0])) throw new HttpError(400, 'reserved filename');
   return name;
 }
@@ -62,7 +63,7 @@ export async function handleUpload(
 ): Promise<{ name: string }> {
   if (kind !== 'broll' && kind !== 'refs') throw new HttpError(400, 'kind must be broll or refs');
   const header = req.headers['x-filename'];
-  const wanted = checkFilename(Array.isArray(header) ? header[0] : header);
+  const wanted = checkFilename(Array.isArray(header) ? header[0] : header, true, kind === 'refs' ? VIDEO_EXTS : ALLOWED_EXTS);
   if (Number(req.headers['content-length'] ?? 0) > MAX_UPLOAD) throw new HttpError(413, 'file too large');
 
   const dir = join(projectDir(projectId), kind);

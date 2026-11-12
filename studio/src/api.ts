@@ -46,6 +46,7 @@ export interface ProjectView {
   project: Project;
   tasks: Task[];
   plan: unknown;
+  planError?: 'invalid';
   chat: ChatMsg[];
 }
 
@@ -143,6 +144,7 @@ export const api = {
   sendChat: (id: string, text: string, files?: string[]) =>
     request<{ msg: ChatMsg; task: Task }>(`${p(id)}/chat`, { method: 'POST', body: { text, ...(files?.length ? { files } : {}) } }),
   styles: () => request<StyleSummary[]>('/api/styles'),
+  prices: () => request<{ stt: { perMinute: number } }>('/api/prices'),
   getConfig: () => request<Config>('/api/config'),
   putConfig: (patch: ConfigPatch) => request<Config>('/api/config', { method: 'PUT', body: patch }),
   balance: () => request<Record<string, unknown>>('/api/bot/balance'),

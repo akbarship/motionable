@@ -8,6 +8,7 @@ import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir, styleDir } from '../core/paths.js';
 import { addTask, approve, fail, listTasks } from '../core/queue.js';
 import { checkBotUrl, createBotProvider } from '../providers/bot.js';
+import { prices } from '../providers/util.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
 import { createProject, getProject, listProjects, readJson, setLast, slugId } from '../core/store.js';
@@ -87,6 +88,7 @@ async function readPlan(id: string) {
     return await readJson(join(projectDir(id), 'plan.json'), PlanSchema);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if (e instanceof SyntaxError || e instanceof ZodError) return 'invalid' as const; // torn or invalid plan.json
     throw e;
   }
 }
@@ -211,8 +213,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       if (seg.length === 2 && method === 'GET') {
         const project = await getProject(id);
         await setLast(id);
-        const [tasks, plan, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
-        return send(res, 200, { project, tasks, plan, chat });
+        const [tasks, planRead, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
+        if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
+        return send(res, 200, { project, tasks, plan: planRead, chat });
       }
       if (seg[2] === 'preview' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await ensurePreview(id));
@@ -262,6 +265,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         if (typeof input !== 'object' || input === null || Array.isArray(input)) {
           throw new HttpError(400, 'input must be an object');
         }
+        if (b.type === 'execute' && (await listTasks(id)).some((t) => t.type === 'execute' && (t.status === 'queued' || t.status === 'running'))) {
+          throw new HttpError(409, 'execute_in_progress');
+        }
         return send(res, 200, await addTask(id, b.type as TaskType, input as Record<string, unknown>));
       }
       if (seg[2] === 'quote' && seg.length === 3 && method === 'POST') {
@@ -283,6 +289,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       if (seg[2] === 'tasks' && seg[4] === 'approve' && seg.length === 5 && method === 'POST') {
         const tid = assertId(seg[3]);
         await getProject(id);
+        const before = (await listTasks(id)).find((t) => t.id === tid);
+        if (!before) throw new HttpError(404, 'task not found');
+        if (before.status !== 'awaiting_approval') throw new HttpError(409, 'not_awaiting_approval');
         await approve(id, tid);
         const task = (await listTasks(id)).find((t) => t.id === tid);
         if (!task) throw new HttpError(404, 'task not found');
@@ -336,6 +345,8 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       const b = await readBody(req);
       return send(res, 200, maskedConfig(await saveConfig(b as Parameters<typeof saveConfig>[0])));
     }
+  } else if (seg[0] === 'prices' && seg.length === 1 && method === 'GET') {
+    return send(res, 200, prices);
   } else if (seg[0] === 'bot' && seg[1] === 'balance' && seg.length === 2 && method === 'GET') {
     const cfg = await loadConfig();
     if (!cfg.botKey) throw new HttpError(400, 'no_bot_key');

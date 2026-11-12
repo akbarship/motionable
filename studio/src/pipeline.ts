@@ -1,5 +1,5 @@
 // Pure helpers for the pipeline screen: stage status, plan check, quote items, unknown-state detection.
-import type { Task } from './api.js';
+import type { ChatMsg, Task } from './api.js';
 
 export type StageId = 'study' | 'direct' | 'execute';
 export type StageState = 'idle' | 'queued' | 'running' | 'done' | 'failed';
@@ -129,4 +129,44 @@ export function hasUnknownState(t: Task): boolean {
   return hint(t.output) || t.progress.some((l) => l.includes('unknown_job_state'));
 }
 
-export const showPlanReview = (tasks: Task[]): boolean => !tasks.some((t) => t.type === 'execute');
+/** Plan review shows until an execute is active or done; a failed newest execute brings it back for a retry. */
+export const showPlanReview = (tasks: Task[]): boolean => {
+  const last = newestTask(tasks.filter((t) => t.type === 'execute'));
+  return !last || last.status === 'failed';
+};
+
+export const hasDirect = (tasks: Task[]): boolean => tasks.some((t) => t.type === 'direct');
+
+/** Style ids for re-running the director: the newest direct task's, else the project's. */
+export function directStyleIds(tasks: Task[], projectStyleIds: string[]): string[] {
+  const ids = newestTask(tasks.filter((t) => t.type === 'direct'))?.input.styleIds;
+  return Array.isArray(ids) && ids.every((x) => typeof x === 'string') ? (ids as string[]) : projectStyleIds;
+}
+
+/** "Davom etish" is on when no reference is still being studied and something usable exists. */
+export function canContinue(tasks: Task[], pickedStyles: number): boolean {
+  const refs = tasks.filter((t) => t.type === 'study_ref');
+  if (refs.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'awaiting_approval')) return false;
+  return refs.some((t) => t.status === 'done') || pickedStyles > 0;
+}
+
+export function stageLinks(id: string): { key: 'refs' | 'pipeline' | 'edit'; label: string; href: string }[] {
+  return [
+    { key: 'refs', label: 'Namunalar', href: `#/p/${id}/refs` },
+    { key: 'pipeline', label: 'Jarayon', href: `#/p/${id}` },
+    { key: 'edit', label: 'Muharrir', href: `#/p/${id}/edit` },
+  ];
+}
+
+/** Chat log with an assistant reply after each user message whose edit task finished or failed. */
+export function chatWithReplies(chat: ChatMsg[], tasks: Task[]): ChatMsg[] {
+  const byMsg = new Map<string, Task>();
+  for (const t of tasks) if (t.type === 'edit' && typeof t.input.msgId === 'string') byMsg.set(t.input.msgId, t);
+  return chat.flatMap((m) => {
+    const t = m.role === 'user' ? byMsg.get(m.id) : undefined;
+    if (!t || (t.status !== 'done' && t.status !== 'failed')) return [m];
+    const summary = isObj(t.output) && typeof t.output.summary === 'string' ? t.output.summary : '';
+    const text = t.status === 'failed' ? `Xato: ${t.error ?? "noma'lum xato"}` : summary || 'Tayyor.';
+    return [m, { id: `reply-${m.id}`, role: 'assistant' as const, text, at: m.at }];
+  });
+}

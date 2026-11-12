@@ -85,7 +85,7 @@ async function studioAlive(info: z.infer<typeof StudioInfoSchema>): Promise<bool
 
 function spawnStudio(): void {
   const cli = join(dirname(fileURLToPath(import.meta.url)), 'cli.js');
-  const child = spawn(process.execPath, [cli, 'studio'], { detached: true, stdio: 'ignore' });
+  const child = spawn(process.execPath, [cli, 'studio'], { detached: true, stdio: 'ignore', windowsHide: true });
   child.on('error', () => {});
   child.unref();
 }
