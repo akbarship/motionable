@@ -1,0 +1,13 @@
+{
+  "name": "motionable",
+  "description": "Motionable: reels from your references and footage.",
+  "owner": { "name": "akbarship", "url": "https://github.com/akbarship" },
+  "plugins": [
+    {
+      "name": "motionable",
+      "description": "Short vertical videos (reels) from your references and footage.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
