@@ -8,7 +8,7 @@ import { assertId, home, projectDir } from '../core/paths.js';
 import { addTask, approve, listTasks } from '../core/queue.js';
 import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
 import { ChatMsgSchema, PlanSchema, type ChatMsg, type TaskType } from '../core/types.js';
-import { HttpError, handleUpload } from './upload.js';
+import { HttpError, checkFilename, handleUpload } from './upload.js';
 
 const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'execute', 'render']);
 const HEARTBEAT_MAX_MS = 300_000;
@@ -62,6 +62,17 @@ async function readChat(id: string): Promise<ChatMsg[]> {
     }
   }
   return out;
+}
+
+async function findAsset(id: string, name: string): Promise<string | null> {
+  for (const kind of ['broll', 'refs']) {
+    try {
+      if ((await stat(join(projectDir(id), kind, name))).isFile()) return `${kind}/${name}`;
+    } catch {
+      // try next dir
+    }
+  }
+  return null;
 }
 
 async function readPlan(id: string) {
@@ -120,7 +131,18 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         await getProject(id);
         const b = await readBody(req);
         const text = str(b.text, 'text');
-        const files = Array.isArray(b.files) ? b.files.filter((f): f is string => typeof f === 'string') : undefined;
+        let files: string[] | undefined;
+        if (b.files !== undefined) {
+          if (!Array.isArray(b.files)) throw new HttpError(400, 'files must be an array');
+          files = [];
+          for (const f of b.files) {
+            if (typeof f !== 'string') throw new HttpError(400, 'files must be strings');
+            const name = checkFilename(f, false);
+            const rel = await findAsset(id, name);
+            if (!rel) throw new HttpError(400, `file not found: ${name}`);
+            files.push(rel);
+          }
+        }
         const msg = ChatMsgSchema.parse({
           id: `m-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`,
           role: 'user',

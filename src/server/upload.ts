@@ -1,5 +1,4 @@
-import { createWriteStream } from 'node:fs';
-import { rename, stat, unlink } from 'node:fs/promises';
+import { link, mkdir, open, stat, unlink, type FileHandle } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { basename, extname, join } from 'node:path';
 import { Transform } from 'node:stream';
@@ -18,14 +17,27 @@ export class HttpError extends Error {
   }
 }
 
-/** Returns a safe plain filename or throws a 400. */
-export function checkFilename(raw: string | undefined): string {
+const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/** Decodes a percent-encoded x-filename and returns a safe plain filename, or throws a 400. */
+export function checkFilename(raw: string | undefined, encoded = true): string {
   if (!raw) throw new HttpError(400, 'x-filename header required');
-  if (basename(raw) !== raw || raw.includes('..') || raw.includes('\\') || raw.includes('\0')) {
-    throw new HttpError(400, 'bad filename');
+  let name = raw;
+  if (encoded) {
+    try {
+      name = decodeURIComponent(raw);
+    } catch {
+      throw new HttpError(400, 'malformed filename');
+    }
   }
-  if (!EXTS.has(extname(raw).toLowerCase())) throw new HttpError(400, 'file type not allowed');
-  return raw;
+  if (!name || Buffer.byteLength(name) > 200) throw new HttpError(400, 'bad filename length');
+  // eslint-disable-next-line no-control-regex
+  if (/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'bad filename');
+  if (basename(name) !== name || name.includes('..')) throw new HttpError(400, 'bad filename');
+  const ext = extname(name);
+  if (!EXTS.has(ext.toLowerCase())) throw new HttpError(400, 'file type not allowed');
+  if (RESERVED.test(name.slice(0, name.length - ext.length).split('.')[0])) throw new HttpError(400, 'reserved filename');
+  return name;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -37,12 +49,10 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-async function freeName(dir: string, name: string): Promise<string> {
+function suffixed(name: string, i: number): string {
+  if (i === 0) return name;
   const ext = extname(name);
-  const stem = name.slice(0, name.length - ext.length);
-  let candidate = name;
-  for (let i = 1; await exists(join(dir, candidate)); i++) candidate = `${stem}-${i}${ext}`;
-  return candidate;
+  return `${name.slice(0, name.length - ext.length)}-${i}${ext}`;
 }
 
 export async function handleUpload(
@@ -56,9 +66,22 @@ export async function handleUpload(
   if (Number(req.headers['content-length'] ?? 0) > MAX_UPLOAD) throw new HttpError(413, 'file too large');
 
   const dir = join(projectDir(projectId), kind);
-  const name = await freeName(dir, wanted);
-  const final = join(dir, name);
-  const part = `${final}.part`;
+  await mkdir(dir, { recursive: true });
+
+  // Claim a free name by creating its .part exclusively; we only ever delete a .part we created.
+  let handle: FileHandle | null = null;
+  let idx = 0;
+  for (; !handle; idx++) {
+    const cand = suffixed(wanted, idx);
+    if (await exists(join(dir, cand))) continue;
+    try {
+      handle = await open(join(dir, `${cand}.part`), 'wx');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    }
+  }
+  const claimed = idx - 1;
+  const part = join(dir, `${suffixed(wanted, claimed)}.part`);
 
   let size = 0;
   const counter = new Transform({
@@ -69,12 +92,21 @@ export async function handleUpload(
     },
   });
   try {
-    await pipeline(req, counter, createWriteStream(part, { flags: 'wx' }));
+    await pipeline(req, counter, handle.createWriteStream());
     if (!req.complete) throw new Error('upload aborted');
-    await rename(part, final);
+    // Publish without clobbering: link fails with EEXIST if the final name appeared meanwhile.
+    for (let i = claimed; ; i++) {
+      const name = suffixed(wanted, i);
+      try {
+        await link(part, join(dir, name));
+        await unlink(part);
+        return { name };
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      }
+    }
   } catch (e) {
     await unlink(part).catch(() => {});
     throw e;
   }
-  return { name };
 }

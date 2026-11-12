@@ -1,5 +1,5 @@
 import { connect } from 'node:net';
-import { mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -12,12 +12,17 @@ let url: string;
 let base: string;
 let token: string;
 let close: () => Promise<void>;
+let staticDir: string;
 
 beforeEach(async () => {
   prev = process.env.MOTIONABLE_HOME;
   tmp = await mkdtemp(join(tmpdir(), 'motionable-'));
   process.env.MOTIONABLE_HOME = tmp;
-  const s = await startStudio({ port: 0 });
+  staticDir = join(tmp, 'static');
+  await mkdir(staticDir);
+  await writeFile(join(staticDir, 'index.html'), '<h1>hi</h1>');
+  await writeFile(join(tmp, 'secret.txt'), 'SECRET');
+  const s = await startStudio({ port: 0, staticDir });
   url = s.url;
   close = s.close;
   base = new URL(url).origin;
@@ -58,11 +63,29 @@ describe('studio', () => {
     expect((await stat(f)).mode & 0o777).toBe(0o600);
   });
 
-  test('static does not need token, 404 when missing', async () => {
+  const raw = (path: string) =>
+    new Promise<string>((resolve) => {
+      const s = connect(Number(new URL(url).port), '127.0.0.1', () =>
+        s.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`),
+      );
+      let buf = '';
+      s.on('data', (d) => (buf += d));
+      s.on('close', () => resolve(buf));
+    });
+
+  test('static serves index without token', async () => {
     const r = await fetch(`${base}/`);
-    expect([200, 404]).toContain(r.status);
-    expect((await fetch(`${base}/../package.json`)).status).not.toBe(200);
-    expect((await fetch(`${base}/%2e%2e/%2e%2e/package.json`)).status).not.toBe(200);
+    expect(r.status).toBe(200);
+    expect(await r.text()).toContain('<h1>hi</h1>');
+    expect((await fetch(`${base}/nope.js`)).status).toBe(404);
+  });
+
+  test('static blocks traversal (raw paths)', async () => {
+    for (const p of ['/..%2f..%2fpackage.json', '/%2e%2e/secret.txt', '/..%2fsecret.txt', '/../secret.txt', '/%2e%2e%2fsecret.txt']) {
+      const out = await raw(p);
+      expect(out).toMatch(/^HTTP\/1\.1 (400|404)/);
+      expect(out).not.toContain('SECRET');
+    }
   });
 
   test('project create, get, tasks, bad id', async () => {
@@ -136,11 +159,19 @@ describe('studio', () => {
     expect((await up('a.mp4')).status).toBe(200);
     expect((await up('a.mp4')).status).toBe(200);
     expect((await readdir(join(projectDir(id), 'broll'))).sort()).toEqual(['a-1.mp4', 'a.mp4']);
+    await rm(join(projectDir(id), 'broll'), { recursive: true });
+    expect((await up('b.mp4')).status).toBe(200);
     expect((await up('../evil.mp4')).status).toBe(400);
     expect((await up('sub/evil.mp4')).status).toBe(400);
     expect((await up('a..b.mp4')).status).toBe(400);
     expect((await up('x.exe')).status).toBe(400);
     expect((await up('a.mp4', 'other')).status).toBe(400);
+    expect((await up('CON.mp4')).status).toBe(400);
+    expect((await up('a%3Ab.mp4')).status).toBe(400);
+    expect((await up('%E0%A4%A.mp4')).status).toBe(400);
+    expect((await up('x'.repeat(201) + '.mp4')).status).toBe(400);
+    expect((await up(encodeURIComponent("Ko'chmas mulk.mp4"))).status).toBe(200);
+    expect(await readdir(join(projectDir(id), 'broll'))).toContain("Ko'chmas mulk.mp4");
     expect((await up('r.png', 'refs')).status).toBe(200);
   });
 
@@ -160,6 +191,50 @@ describe('studio', () => {
     });
     await new Promise((r) => setTimeout(r, 300));
     expect(await readdir(join(projectDir(id), 'broll'))).toEqual([]);
+  });
+
+  test('concurrent same-name uploads both succeed', async () => {
+    const id = await mk();
+    const sock = connect(Number(new URL(url).port), '127.0.0.1');
+    await new Promise<void>((r) => sock.once('connect', () => r()));
+    sock.write(
+      `POST /api/projects/${id}/upload?kind=broll HTTP/1.1\r\nHost: x\r\nx-motionable-token: ${token}\r\nx-filename: a.mp4\r\nContent-Length: 10\r\n\r\nabcde`,
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    const second = await api(`/api/projects/${id}/upload?kind=broll`, {
+      method: 'POST',
+      headers: { 'x-filename': 'a.mp4' },
+      body: 'second',
+    });
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as any).name).toBe('a-1.mp4');
+    const done = new Promise<string>((r) => {
+      let b = '';
+      sock.on('data', (d) => {
+        b += d;
+        if (b.includes('\r\n\r\n')) r(b);
+      });
+    });
+    sock.write('fghij');
+    const out = await done;
+    sock.destroy();
+    expect(out).toMatch(/^HTTP\/1\.1 200/);
+    const dir = join(projectDir(id), 'broll');
+    expect((await readdir(dir)).sort()).toEqual(['a-1.mp4', 'a.mp4']);
+    expect(await readFile(join(dir, 'a.mp4'), 'utf8')).toBe('abcdefghij');
+  });
+
+  test('chat files must exist in broll/refs', async () => {
+    const id = await mk();
+    await api(`/api/projects/${id}/upload?kind=broll`, { method: 'POST', headers: { 'x-filename': 'x.mp4' }, body: 'd' });
+    const chat = (files: unknown) => api(`/api/projects/${id}/chat`, json({ text: 'hi', files }));
+    expect((await chat(['missing.mp4'])).status).toBe(400);
+    expect((await chat(['../x.mp4'])).status).toBe(400);
+    expect((await chat(['broll/x.mp4'])).status).toBe(400);
+    expect((await chat('x.mp4')).status).toBe(400);
+    const ok = (await (await chat(['x.mp4'])).json()) as any;
+    expect(ok.msg.files).toEqual(['broll/x.mp4']);
+    expect(ok.task.input.files).toEqual(['broll/x.mp4']);
   });
 
   test('SSE emits project event after task added', async () => {

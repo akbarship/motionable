@@ -41,8 +41,8 @@ function staticRoot(): string {
 }
 const existsPkg = (d: string) => existsSync(join(d, 'package.json'));
 
-async function serveStatic(res: ServerResponse, pathname: string): Promise<void> {
-  const root = resolve(staticRoot());
+async function serveStatic(res: ServerResponse, pathname: string, rootDir: string): Promise<void> {
+  const root = resolve(rootDir);
   let rel: string;
   try {
     rel = decodeURIComponent(pathname);
@@ -70,7 +70,7 @@ function tokenOk(given: string | null | undefined, token: string): boolean {
 }
 
 export async function startStudio(
-  opts: { port?: number; token?: string } = {},
+  opts: { port?: number; token?: string; staticDir?: string } = {},
 ): Promise<{ url: string; close(): Promise<void> }> {
   const token = opts.token ?? randomBytes(32).toString('hex');
   const port = opts.port ?? (await loadConfig()).port;
@@ -88,7 +88,7 @@ export async function startStudio(
       return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method not allowed' });
-    void serveStatic(res, url.pathname);
+    void serveStatic(res, url.pathname, opts.staticDir ?? staticRoot());
   });
 
   await new Promise<void>((ok, fail) => {
