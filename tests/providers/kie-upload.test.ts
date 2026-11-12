@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { createKie, REF_PROMPT } from '../../src/providers/kie.js';
+import { createKie, NO_TEXT, REF_PROMPT } from '../../src/providers/kie.js';
 import { UPLOAD_URL, uploadRef } from '../../src/providers/kie-upload.js';
 
 const FAST = { pollMs: 5, timeoutMs: 2000 };
@@ -92,7 +92,11 @@ describe('kie run with refFrames', () => {
     await run({ model: 'nano-banana-2', refFrames: refs });
     expect(uploads).toHaveLength(2);
     expect(created[0].input.image_urls).toHaveLength(2);
-    expect(created[0].input.prompt).toBe(`${REF_PROMPT} cat`);
+    expect(created[0].input.prompt).toBe(`${REF_PROMPT} cat ${NO_TEXT}`);
+  });
+  test('no-text line is not duplicated', async () => {
+    await run({ model: 'nano-banana-2', refFrames: refs, prompt: `cat. ${NO_TEXT}` });
+    expect(created[0].input.prompt).toBe(`${REF_PROMPT} cat. ${NO_TEXT}`);
   });
   test('nano-banana-pro uses image_input', async () => {
     await run({ model: 'nano-banana-pro', refFrames: refs });

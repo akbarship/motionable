@@ -28,6 +28,8 @@ const VIDEO_TIMEOUT_MS = 20 * 60_000;
 export const REF_PROMPT =
   'Match the art style, line weight, palette and character design of the reference images exactly. Plain off-white background unless described.';
 
+export const NO_TEXT = 'No text, no letters, no logos in the image.';
+
 /** Veo only takes 4, 6 or 8 s. Nearest wins; a tie (5, 7) rounds up so the clip is never shorter than asked. */
 export function snapVeoSeconds(v: unknown): number {
   const s = num(v, 8);
@@ -83,6 +85,7 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
     let prompt = strParam(p.prompt, '');
     if (!prompt) throw new Error('prompt is required');
     if (refUrls?.length) prompt = `${REF_PROMPT} ${prompt}`;
+    if (refUrls?.length && r.kind === 'image' && !prompt.includes(NO_TEXT)) prompt = `${prompt} ${NO_TEXT}`;
     const imageUrls = refUrls?.length ? refUrls : Array.isArray(p.imageUrls) ? p.imageUrls : undefined;
     const aspect = typeof p.aspectRatio === 'string' ? p.aspectRatio : undefined;
     if (r.kind === 'image') {

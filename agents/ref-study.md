@@ -30,7 +30,9 @@ redirects; no raw npx, ffprobe, ffmpeg, mkdir or cp (data lives outside the sess
      `node -e` line: word count, words per second, average gap between words.
    - On `{error: "no_stt_provider"}` or any error: go on without words.
 5. `task_progress`: `Uslub yozilmoqda`.
-6. Copy the sheets: `node <cliPath> copy-sheets <projectDir>/<sheetDir> <styleId>`.
+6. Copy the sheets and single frames: `node <cliPath> copy-sheets <projectDir>/<sheetDir> <styleId>`.
+   Frames land in `<home>/styles/<styleId>/frames/f-<seconds>.jpg` (`frameFiles` in cuts.json lists them).
+   Read 2-4 single frames (not all) that best show the recurring character(s) and the illustration style.
 7. Write `<home>/styles/<styleId>/style.json` (keep it under 2 KB):
 
    ```
@@ -46,7 +48,8 @@ redirects; no raw npx, ffprobe, ffmpeg, mkdir or cp (data lives outside the sess
      "motion": [{"name": "<move>", "timing": "<duration / easing / when>"}],
      "audio": {"musicEnergy": "<low|mid|high + note>", "sfx": "<use of whooshes, pops, none>"},
      "doNot": ["<things this style clearly avoids>"],
-     "sheets": ["sheets/sheet-1.jpg", ...] }
+     "sheets": ["sheets/sheet-1.jpg", ...],
+     "keyFrames": [{"file": "styles/<styleId>/frames/f-012.4.jpg", "shows": "presenter full body, left third"}] }
    ```
 
 8. Write `<home>/styles/<styleId>/source.json`: `{"video": "<projectDir>/<input.video>", "at": "<ISO time>"}`.
@@ -69,6 +72,7 @@ On any blocking error call `task_failed {projectId, taskId, error}` with a short
   `highlight: "kinetic, bounce on list words"` as the default.
 - Note the cut rhythm: do cuts land in pauses (silence) or on beats? Put it in `motion`
   or `transitions`.
+- `keyFrames`: 2-4 single frames (max 6) showing the recurring character(s) and illustration style; `shows` is one line.
 - Hex colours come from the frames (backgrounds, text, accents), at most 5.
 - `doNot` lists things this reel avoids (fake UI, busy kits, every scene the same, etc.)
   only when you can see that.

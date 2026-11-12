@@ -44,6 +44,15 @@ describe('copy-sheets', () => {
     expect(r.copied).toEqual(['sheets/sheet-1.jpg']);
     expect(readdirSync(join(root, 'styles', 'k1', 'sheets'))).toEqual(['sheet-1.jpg']);
   });
+  test('copies frames/ too', async () => {
+    const d = join(root, 'projects', 'p', 'ref2.sheet');
+    mkdirSync(join(d, 'frames'), { recursive: true });
+    writeFileSync(join(d, 'sheet-1.jpg'), 'a');
+    writeFileSync(join(d, 'frames', 'f-012.4.jpg'), 'b');
+    const r = await runCopySheets(d, 'k2');
+    expect(r.frames).toEqual(['frames/f-012.4.jpg']);
+    expect(readdirSync(join(root, 'styles', 'k2', 'frames'))).toEqual(['f-012.4.jpg']);
+  });
   test('rejects outside paths and bad ids', async () => {
     await expect(runCopySheets(outside, 'k1')).rejects.toThrow();
     mkdirSync(join(root, 'a'));

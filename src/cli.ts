@@ -95,14 +95,25 @@ export async function runSheet(
   return JSON.stringify({ sheets: r.sheets, cuts: r.cuts.length, avgShot: r.avgShot });
 }
 
-/** `copy-sheets <sheetDir> <styleId>`: sheet-*.jpg into <home>/styles/<styleId>/sheets/. */
-export async function runCopySheets(sheetDir: string, styleId: string): Promise<{ copied: string[] }> {
+/** `copy-sheets <sheetDir> <styleId>`: sheet-*.jpg into <home>/styles/<styleId>/sheets/, frames/*.jpg into .../frames/. */
+export async function runCopySheets(sheetDir: string, styleId: string): Promise<{ copied: string[]; frames: string[] }> {
   const src = assertInHome(sheetDir);
   const dest = assertInHome(join(home(), 'styles', assertId(styleId), 'sheets'));
   const names = (await readdir(src)).filter((n) => /^sheet-.*\.jpg$/.test(n)).sort();
   await mkdir(dest, { recursive: true });
   for (const n of names) await copyFile(join(src, n), join(dest, n));
-  return { copied: names.map((n) => `sheets/${n}`) };
+  let frames: string[] = [];
+  try {
+    frames = (await readdir(join(src, 'frames'))).filter((n) => /\.jpg$/.test(n)).sort();
+  } catch {
+    // older sheets have no frames/
+  }
+  if (frames.length) {
+    const fdest = assertInHome(join(home(), 'styles', assertId(styleId), 'frames'));
+    await mkdir(fdest, { recursive: true });
+    for (const n of frames) await copyFile(join(src, 'frames', n), join(fdest, n));
+  }
+  return { copied: names.map((n) => `sheets/${n}`), frames: frames.map((n) => `frames/${n}`) };
 }
 
 /** `copy-file <src> <dest>`: plain copy, both inside home. */

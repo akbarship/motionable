@@ -37,6 +37,11 @@ test('refsheet finds cuts in generated clip', async () => {
   const j = JSON.parse(await readFile(join(out, 'cuts.json'), 'utf8'));
   expect(j.cuts).toEqual(r.cuts);
   expect(r.avgShot).toBeCloseTo(5 / 3, 1);
+  expect(r.frameFiles.length).toBe(r.frames.length);
+  expect(j.frameFiles).toEqual(r.frameFiles);
+  expect(r.frameFiles[0]).toMatch(/^frames\/f-\d{3}\.\d\.jpg$/);
+  const { stdout } = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width', '-of', 'csv=p=0', join(out, r.frameFiles[0])]);
+  expect(Number(stdout.trim())).toBe(768);
 });
 
 const slowClip = async (name: string, d: number) => {

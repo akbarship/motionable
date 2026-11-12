@@ -11,6 +11,7 @@ const run = promisify(execFile);
 const MAX_FRAMES = 36;
 const PER_SHEET = 12;
 const COLS = 4;
+const KEEP_W = 768;
 const TILE_W = 384; // 4 columns * 384 = 1536
 const BUF = 64 * 1024 * 1024;
 
@@ -19,6 +20,7 @@ const CutsSchema = z.object({
   avgShot: z.number(),
   duration: z.number(),
   frames: z.array(z.number()),
+  frameFiles: z.array(z.string()).default([]),
 });
 
 export interface RefSheet {
@@ -26,6 +28,7 @@ export interface RefSheet {
   sheets: string[];
   avgShot: number;
   frames: number[];
+  frameFiles: string[];
 }
 
 const SCENE_THRESHOLD = 0.15;
@@ -82,14 +85,14 @@ export function pickFrames(cuts: number[], duration: number): number[] {
   return Array.from({ length: MAX_FRAMES }, (_, i) => chosen[Math.floor((i * chosen.length) / MAX_FRAMES)]);
 }
 
-async function grabFrame(video: string, t: number, file: string, font: string | undefined, label: boolean): Promise<boolean> {
-  let vf = `scale=${TILE_W}:-2`;
+async function grabFrame(video: string, t: number, file: string, font: string | undefined, label: boolean, keepW?: number): Promise<boolean> {
+  let vf = `scale=${keepW ?? TILE_W}:-2`;
   if (label) {
     const fontOpt = font ? `fontfile='${escapeDrawtext(font)}':` : '';
     vf += `,drawtext=${fontOpt}text='${escapeDrawtext(`${t.toFixed(1)}s`)}':x=6:y=h-th-6:fontsize=16:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=4`;
   }
   try {
-    await run('ffmpeg', ['-v', 'error', '-y', '-ss', t.toFixed(3), '-i', video, '-frames:v', '1', '-vf', vf, file], { maxBuffer: BUF });
+    await run('ffmpeg', ['-v', 'error', '-y', '-ss', t.toFixed(3), '-i', video, '-frames:v', '1', '-vf', vf, ...(keepW ? ['-q:v', '3'] : []), file], { maxBuffer: BUF });
     return true;
   } catch (e) {
     if (!label) throw e;
@@ -113,6 +116,13 @@ export async function buildRefSheet(video: string, outDir: string): Promise<RefS
       if (label && !(await grabFrame(video, frames[i], file, font, true))) label = false;
       if (!label) await grabFrame(video, frames[i], file, font, false);
     }
+    const frameFiles: string[] = [];
+    await mkdir(join(outDir, 'frames'), { recursive: true });
+    for (const t of frames) {
+      const rel = `frames/f-${t.toFixed(1).padStart(5, '0')}.jpg`;
+      await grabFrame(video, t, join(outDir, rel), font, false, KEEP_W);
+      frameFiles.push(rel);
+    }
     const sheets: string[] = [];
     for (let s = 0; s * PER_SHEET < frames.length; s++) {
       const n = Math.min(PER_SHEET, frames.length - s * PER_SHEET);
@@ -127,8 +137,8 @@ export async function buildRefSheet(video: string, outDir: string): Promise<RefS
       sheets.push(file);
     }
     const avgShot = duration / (cuts.length + 1);
-    await writeJson(join(outDir, 'cuts.json'), CutsSchema, { cuts, avgShot, duration, frames });
-    return { cuts, sheets, avgShot, frames };
+    await writeJson(join(outDir, 'cuts.json'), CutsSchema, { cuts, avgShot, duration, frames, frameFiles });
+    return { cuts, sheets, avgShot, frames, frameFiles };
   } finally {
     await rm(work, { recursive: true, force: true });
   }

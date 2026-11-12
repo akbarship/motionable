@@ -38,6 +38,7 @@ export const StyleSchema = z.object({
   audio: z.object({ musicEnergy: z.string(), sfx: z.string() }),
   doNot: z.array(z.string()),
   sheets: z.array(z.string()),
+  keyFrames: z.array(z.object({ file: z.string(), shows: z.string() })).max(6).optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
 
