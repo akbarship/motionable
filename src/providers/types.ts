@@ -4,6 +4,8 @@ export type GenReq = {
   kind: Kind;
   params: Record<string, unknown>;
   outDir: string;
+  /** Project directory; project-relative params.refFrames resolve against it. */
+  projectDir?: string;
   /** Used as the downloaded file's base name. */
   taskId?: string;
   /** Called right before the request that creates a billable job. After it, a failure may still have billed. */

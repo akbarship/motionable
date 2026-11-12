@@ -307,6 +307,7 @@ export function createMcpServer(
           kind: kind.data,
           params: params as Record<string, unknown>,
           outDir: genDir,
+          projectDir: dir,
           taskId,
           resumeJobId,
           onCreateAttempt: () => {

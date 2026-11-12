@@ -1,4 +1,5 @@
 import { downloadResult } from './download.js';
+import { resolveRefs, uploadRef } from './kie-upload.js';
 import type { GenReq, GenerationProvider, PollOpts } from './types.js';
 import { httpError, num, poll, prices, strParam, usd } from './util.js';
 
@@ -24,6 +25,8 @@ const VIDEO_MODELS: Record<string, { model: string; tier?: string; seconds: numb
   kling: { model: 'kling-4.0/reference-to-video', seconds: 5 },
 };
 const VIDEO_TIMEOUT_MS = 20 * 60_000;
+export const REF_PROMPT =
+  'Match the art style, line weight, palette and character design of the reference images exactly. Plain off-white background unless described.';
 
 /** Veo only takes 4, 6 or 8 s. Nearest wins; a tie (5, 7) rounds up so the clip is never shorter than asked. */
 export function snapVeoSeconds(v: unknown): number {
@@ -71,11 +74,16 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
     return m;
   }
 
-  function body(r: GenReq): Record<string, unknown> {
+  /** Models that take reference images through a createTask field. Veo is left out: refFrames are ignored there
+   * (its image_urls means first/last frame, not style reference); pass explicit params.imageUrls for that. */
+  const takesRefs = (r: GenReq): boolean => r.kind === 'image' || modelOf(r) === 'kling';
+
+  function body(r: GenReq, refUrls?: string[]): Record<string, unknown> {
     const p = r.params;
-    const prompt = strParam(p.prompt, '');
+    let prompt = strParam(p.prompt, '');
     if (!prompt) throw new Error('prompt is required');
-    const imageUrls = Array.isArray(p.imageUrls) ? p.imageUrls : undefined;
+    if (refUrls?.length) prompt = `${REF_PROMPT} ${prompt}`;
+    const imageUrls = refUrls?.length ? refUrls : Array.isArray(p.imageUrls) ? p.imageUrls : undefined;
     const aspect = typeof p.aspectRatio === 'string' ? p.aspectRatio : undefined;
     if (r.kind === 'image') {
       const m = modelOf(r);
@@ -89,10 +97,10 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
     const m = modelOf(r);
     const v = VIDEO_MODELS[m];
     if (m === 'kling') {
-      // verify on first live run
+      // verify on first live run: image_urls name taken from the playground / sibling Kling models, not confirmed
       return {
         model: v.model,
-        input: { prompt, duration: klingSeconds(p.seconds), resolution: strParam(p.resolution, '720P'), aspect_ratio: aspect ?? '9:16' },
+        input: { prompt, ...(imageUrls ? { image_urls: imageUrls } : {}), duration: klingSeconds(p.seconds), resolution: strParam(p.resolution, '720P'), aspect_ratio: aspect ?? '9:16' },
       };
     }
     return {
@@ -120,7 +128,16 @@ export function createKie(key: string, o: PollOpts = {}): GenerationProvider {
       const q = await this.quote(r);
       let taskId = r.resumeJobId;
       if (!taskId) {
-        const payload = JSON.stringify(body(r));
+        // Uploads happen here only (after approval), never in quote().
+        let refUrls: string[] | undefined;
+        const refs = r.params.refFrames;
+        if (Array.isArray(refs) && refs.length && takesRefs(r)) {
+          if (!r.projectDir) throw new Error('refFrames need projectDir');
+          const files = resolveRefs(r.projectDir, refs);
+          refUrls = [];
+          for (const f of files) refUrls.push(await uploadRef(key, f, { projectDir: r.projectDir }));
+        }
+        const payload = JSON.stringify(body(r, refUrls));
         await r.onCreateAttempt?.();
         const created = await api<{ taskId?: string }>(CREATE, { method: 'POST', body: payload });
         if (!created?.taskId) throw new Error('kie.ai answered without a task id');
