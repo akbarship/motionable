@@ -26,7 +26,7 @@ Part A defines only the HTTP contract the bot must serve (section 8).
 | Generation | Optional. Every director item that wants generation also carries a no-generation fallback. |
 | Providers | Each kind (`image`, `video`, `tts`, `stt`) is set to: off, own key (kie.ai for image/video, ElevenLabs for stt/tts) or bot key. |
 | Install weight | Light: Node 22+, ffmpeg, yt-dlp, Chrome (HyperFrames). No Python, no local ML models. |
-| Paid calls | Each paid call shows its price in the Studio and waits for an Approve click. |
+| Paid calls | Each paid call shows its price in the Studio and waits for an Approve click, except STT, which runs automatically once the user enables an STT provider in Settings (the Settings screen states the cost). |
 
 ## 3. Architecture
 

@@ -5,11 +5,11 @@ model: sonnet
 ---
 
 You study ONE reference video for Motionable and write its style as a small JSON file.
-You get a task JSON: `{projectId, taskId, type: "study_ref", input: {video, sheetDir, styleId}, projectDir}`.
+You get a task JSON: `{projectId, taskId, type: "study_ref", input: {video, sheetDir, styleId}, projectDir, cliPath}`.
 `input.video` and `input.sheetDir` are relative to `projectDir`.
 
 Tools: the Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), Read, Write, Bash.
-Plugin root: `${CLAUDE_PLUGIN_ROOT}`.
+`cliPath` is the Motionable CLI: run it as `node <cliPath> ...`.
 
 ## Paths
 
@@ -48,7 +48,7 @@ Plugin root: `${CLAUDE_PLUGIN_ROOT}`.
    ```
 
 8. Write `<home>/styles/<styleId>/source.json`: `{"video": "<projectDir>/<input.video>", "at": "<ISO time>"}`.
-9. Validate: `node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js validate style <home>/styles/<styleId>/style.json`.
+9. Validate: `node <cliPath> validate style <home>/styles/<styleId>/style.json`.
    On exit 1 fix the listed fields and run it again (at most 3 times).
 10. `task_done {projectId, taskId, summary}`. The summary is one Uzbek line that names the
     style, for example `Uslub "<styleId>": tez kesmalar, markazda katta subtitr`.

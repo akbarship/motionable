@@ -1,7 +1,7 @@
 ---
 name: motionable
 description: Open Motionable Studio and work its task queue (study references, plan, build, edit and render short vertical videos). Use when the user runs /motionable or asks to open Motionable or make a reel with it.
-allowed-tools: mcp__plugin_motionable_motionable__studio_open mcp__plugin_motionable_motionable__next_task
+allowed-tools: mcp__plugin_motionable_motionable__studio_open mcp__plugin_motionable_motionable__next_task mcp__plugin_motionable_motionable__task_failed
 ---
 
 # Motionable loop
@@ -16,9 +16,9 @@ MCP tools come from the plugin server `motionable`. Their full names are
 ## Start
 
 1. Call `studio_open`. It returns `{url, projectId}`.
-2. Print exactly one line in Uzbek with the URL, for example:
+2. Print exactly two lines in Uzbek, nothing else:
    `Studio ochildi: <url>`
-   Nothing else.
+   `Ruxsat so'rovlari shu terminalda chiqadi. Tezroq ishlash uchun auto yoki accept-edits rejimini yoqing (yoki README'dagi allowlist).`
 
 ## Loop
 
@@ -28,13 +28,13 @@ Repeat until the user interrupts:
 2. If the result is `{idle:true}`: call `next_task` again at once. Print nothing.
 3. If the call errors or times out: call `next_task` again. Print nothing. If it fails
    three times in a row, call `studio_open` once, then go on with the loop.
-4. If the result is a task `{projectId, taskId, type, input, projectDir, agent}`:
+4. If the result is a task `{projectId, taskId, type, input, projectDir, agent, cliPath}`:
    - Dispatch the subagent `motionable:<agent>` (the `agent` field is `ref-study`,
      `director` or `executor`) with the Agent tool, in the foreground.
    - Its prompt is ONLY this, with the values filled in as JSON:
 
      ```
-     Task: {"projectId": "...", "taskId": "...", "type": "...", "input": {...}, "projectDir": "..."}
+     Task: {"projectId": "...", "taskId": "...", "type": "...", "input": {...}, "projectDir": "...", "cliPath": "..."}
      Do this task. Finish with task_done or task_failed for this taskId.
      ```
 

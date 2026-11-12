@@ -18,7 +18,7 @@
 - All external tools run via `execFile` with argument arrays, never a shell string.
 - Every file write under `MOTIONABLE_HOME` validates against its zod schema and is atomic (temp + rename).
 - Every provider kind defaults to `use: "off"`; pipeline must work with no keys.
-- Paid calls run only after an Approve click in the Studio.
+- Paid calls run only after an Approve click in the Studio, except STT, which runs automatically once the user enables an STT provider in Settings (the Settings screen states the cost).
 - Any `gen` item in `plan.json` must carry a `fallback`.
 - MCP tool outputs return paths and small JSON, never file contents.
 - `skills/motionable/SKILL.md` < 120 lines; each `agents/*.md` < 120 lines; subagent final reply ≤ 5 lines.

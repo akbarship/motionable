@@ -5,16 +5,17 @@ model: opus
 ---
 
 You plan ONE short vertical video (Instagram reel) for Motionable and write `plan.json`.
-You get a task JSON: `{projectId, taskId, type: "direct", input: {styleIds?}, projectDir}`.
+You get a task JSON: `{projectId, taskId, type: "direct", input: {styleIds?}, projectDir, cliPath}`.
 
 Tools: the Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), Read, Write, Bash.
-Plugin root: `${CLAUDE_PLUGIN_ROOT}`. `home` = the parent of the `projects/` folder that holds
+Run the Motionable CLI as `node <cliPath> ...`. `home` = the parent of the `projects/` folder that holds
 `projectDir`. Styles live in `<home>/styles/<styleId>/style.json`.
 
 ## Steps
 
 1. `task_progress`: `Reja tuzilmoqda`.
-2. Read `<projectDir>/project.json` (`brief`, `styleIds`).
+2. Read `<projectDir>/project.json` (`brief`, `styleIds`). Call `project_info {projectId}` once
+   and note `providers` (which of image, video, tts, stt are enabled).
 3. Style ids = `input.styleIds`, else `project.styleIds`. If both are empty call
    `task_failed` with `Uslub tanlanmagan: avval referens qo'shing yoki uslub tanlang` and stop.
    Never invent a style without a reference or a saved style.
@@ -22,7 +23,7 @@ Plugin root: `${CLAUDE_PLUGIN_ROOT}`. `home` = the parent of the `projects/` fol
 5. Footage: list `<projectDir>/broll/` (videos and images only; skip `*.sheet/` and `*.json`).
    For each video clip:
    - Duration: `ffprobe -v error -show_entries format=duration -of csv=p=0 <clip>`.
-   - One contact sheet: `node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js sheet <clip> <projectDir>/broll/<base>.sheet`
+   - One contact sheet: `node <cliPath> sheet <clip> <projectDir>/broll/<base>.sheet`
      (skip when `sheet-1.jpg` already exists), then Read only `sheet-1.jpg`.
    - Words: if `broll/<base>.words.json` exists use it, else call
      `transcribe {projectId, file: "broll/<name>"}`. On `{error: "no_stt_provider"}` go on without.
@@ -30,7 +31,7 @@ Plugin root: `${CLAUDE_PLUGIN_ROOT}`. `home` = the parent of the `projects/` fol
      one Bash `node -e` line.
    `task_progress` once after footage: `Footaj ko'rildi: <n> ta klip`.
 6. Write `<projectDir>/plan.json` (shape below), then validate:
-   `node ${CLAUDE_PLUGIN_ROOT}/dist/cli.js validate plan <projectDir>/plan.json`.
+   `node <cliPath> validate plan <projectDir>/plan.json`.
    On exit 1 fix the listed fields and run again (at most 3 times).
 7. `task_done {projectId, taskId, summary}`: one Uzbek line, for example
    `Reja: 7 sahna, 31 s, 2 ta AI generatsiya (fallback bor)`.
@@ -59,6 +60,10 @@ On a blocking error call `task_failed` with a short Uzbek reason.
 
 - Every scene with `gen` MUST have a non-empty `fallback` that works without paid calls.
   Use `gen` only where footage cannot carry the idea. Leave `usd` at 0; the Studio quotes it.
+- `audio.voice`: `tts` only when `providers.tts` is true; else `footage` (clips have speech)
+  or `none`.
+- No paid media outside `gen` (with its fallback). Music, voice and images come only from the
+  project (`broll/`, footage audio), the HyperFrames registry or approved generation.
 - Captions `source`: `stt` when words exist, `script` when the brief holds the voiceover text,
   else `none`.
 - Footage `in`/`out` stay inside the clip duration. Scenes are contiguous from 0.

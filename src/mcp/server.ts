@@ -44,6 +44,12 @@ async function touchHeartbeat(): Promise<void> {
   }
 }
 
+/** Absolute path of the bundled CLI (dist/cli.js), from the bundle or from src/mcp in dev/tests. */
+export function cliPath(): string {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  return basename(dir) === 'mcp' ? resolve(dir, '..', '..', 'dist', 'cli.js') : join(dir, 'cli.js');
+}
+
 /** Open a URL in the default browser. execFile with arg arrays only. */
 export function openBrowser(url: string): void {
   if (process.env.MOTIONABLE_NO_OPEN === '1') return;
@@ -121,7 +127,7 @@ export function createMcpServer(
     'next_task',
     {
       description:
-        'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent} or {idle:true}.',
+        'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent, cliPath} or {idle:true}.',
     },
     async (extra) => {
       await touchHeartbeat();
@@ -137,6 +143,7 @@ export function createMcpServer(
           input: c.task.input,
           projectDir: projectDir(c.projectId),
           agent: AGENTS[c.task.type],
+          cliPath: cliPath(),
         });
       } finally {
         clearInterval(timer);
@@ -151,6 +158,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, line: z.string() },
     },
     async ({ projectId, taskId, line }) => {
+      await touchHeartbeat();
       await progress(projectId, taskId, line, tokens.get(taskId));
       return text({ ok: true });
     },
@@ -163,6 +171,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, summary: z.string() },
     },
     async ({ projectId, taskId, summary }) => {
+      await touchHeartbeat();
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
       tokens.delete(taskId);
       return text({ ok: true });
@@ -176,6 +185,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, error: z.string() },
     },
     async ({ projectId, taskId, error }) => {
+      await touchHeartbeat();
       await fail(projectId, taskId, error, tokens.get(taskId));
       tokens.delete(taskId);
       return text({ ok: true });
@@ -185,13 +195,15 @@ export function createMcpServer(
   server.registerTool(
     'project_info',
     {
-      description: 'Paths and status for a project.',
+      description: 'Paths and status for a project, plus which provider kinds are enabled ({image, video, tts, stt}: boolean).',
       inputSchema: { projectId: idStr },
     },
     async ({ projectId }) => {
+      await touchHeartbeat();
       const p = await getProject(projectId);
       const dir = projectDir(projectId);
       const tasks = await listTasks(projectId);
+      const cfg = await loadConfig();
       let hasPlan = true;
       try {
         await stat(join(dir, 'plan.json'));
@@ -204,6 +216,8 @@ export function createMcpServer(
         name: p.name,
         status: p.status,
         hasPlan,
+        cliPath: cliPath(),
+        providers: Object.fromEntries(KindSchema.options.map((k) => [k, providerFor(k, cfg) != null])),
         tasks: tasks.map((t) => ({ id: t.id, type: t.type, status: t.status })),
       });
     },
@@ -217,6 +231,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, sceneId: z.string(), kind: KindSchema, params: z.record(z.string(), z.unknown()) },
     },
     async ({ projectId, sceneId, kind, params }) => {
+      await touchHeartbeat();
       await getProject(projectId);
       const cfg = await loadConfig();
       const p = providerFor(kind, cfg);
@@ -236,6 +251,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr },
     },
     async ({ projectId, taskId }) => {
+      await touchHeartbeat();
       const task = (await listTasks(projectId)).find((t) => t.id === taskId);
       if (!task || task.type !== 'generate' || task.status !== 'running') return text({ error: 'not_approved' });
       const kind = KindSchema.safeParse(task.input.kind);
@@ -331,6 +347,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, file: z.string().min(1) },
     },
     async ({ projectId, file }) => {
+      await touchHeartbeat();
       const dir = projectDir(projectId);
       const abs = resolve(dir, file);
       const inside = (base: string, p: string) => {

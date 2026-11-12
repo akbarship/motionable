@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -71,6 +71,8 @@ describe('mcp roundtrip', () => {
     const t = (await call('next_task')).data;
     expect(t).toMatchObject({ projectId: id, type: 'study_ref', agent: 'ref-study', input: { url: 'x' } });
     expect(t.projectDir).toContain(id);
+    expect(isAbsolute(t.cliPath)).toBe(true);
+    expect(t.cliPath).toMatch(/dist[\\/]cli\.js$/);
 
     expect((await call('task_progress', { projectId: id, taskId: t.taskId, line: 'half' })).data).toEqual({ ok: true });
     expect((await call('task_done', { projectId: id, taskId: t.taskId, summary: 'did it' })).data).toEqual({ ok: true });
@@ -90,7 +92,8 @@ describe('mcp roundtrip', () => {
     expect(buf).toContain(`"type":"project","id":"${id}"`);
 
     const info = (await call('project_info', { projectId: id })).data;
-    expect(info).toMatchObject({ projectId: id, name: 'Demo', hasPlan: false });
+    expect(info).toMatchObject({ projectId: id, name: 'Demo', hasPlan: false, cliPath: t.cliPath });
+    expect(info.providers).toEqual({ image: false, video: false, tts: false, stt: false });
     expect(info.tasks).toEqual([{ id: t.taskId, type: 'study_ref', status: 'done' }]);
   });
 
@@ -111,6 +114,17 @@ describe('mcp roundtrip', () => {
     expect(Date.now() - t0).toBeLessThan(2000);
     const hb = await fetch(`${base}/api/claude?t=${token}`);
     expect(JSON.stringify(await hb.json())).toContain('true');
+  });
+
+  test('task_progress refreshes heartbeat mtime', async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await post(`/api/projects/${id}/tasks`, { type: 'direct', input: {} });
+    const t = (await call('next_task')).data;
+    const hbFile = join(tmp, 'heartbeat');
+    const old = new Date(Date.now() - 600_000);
+    await utimes(hbFile, old, old);
+    await call('task_progress', { projectId: id, taskId: t.taskId, line: 'x' });
+    expect(Date.now() - (await stat(hbFile)).mtimeMs).toBeLessThan(5000);
   });
 
   test('studio_open reuses running studio', async () => {
