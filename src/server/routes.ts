@@ -1,13 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir } from '../core/paths.js';
 import { addTask, approve, listTasks } from '../core/queue.js';
 import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
 import { ChatMsgSchema, PlanSchema, type ChatMsg, type TaskType } from '../core/types.js';
+import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
+import { buildRefSheet } from '../media/refsheet.js';
 import { HttpError, checkFilename, handleUpload } from './upload.js';
 
 const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'execute', 'render']);
@@ -84,6 +86,13 @@ async function readPlan(id: string) {
   }
 }
 
+async function studyRef(id: string, file: string) {
+  const name = basename(file);
+  const sheetDir = `refs/${name.slice(0, name.length - extname(name).length)}.sheet`;
+  await buildRefSheet(file, join(projectDir(id), sheetDir));
+  return addTask(id, 'study_ref', { video: `refs/${name}`, sheetDir });
+}
+
 async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const method = req.method ?? 'GET';
   const seg = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
@@ -108,6 +117,32 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         await getProject(id);
         const out = await handleUpload(req, id, url.searchParams.get('kind'));
         return send(res, 200, out);
+      }
+      if (seg[2] === 'refs' && seg.length === 3 && method === 'POST') {
+        await getProject(id);
+        const b = await readBody(req);
+        let file: string;
+        try {
+          file = await downloadRef(id, normalizeRefUrl(str(b.url, 'url')));
+        } catch (e) {
+          if (e instanceof RefUrlError) throw new HttpError(400, e.message);
+          if (e instanceof RefDownloadError) throw new HttpError(502, e.message);
+          throw e;
+        }
+        return send(res, 201, { task: await studyRef(id, file) });
+      }
+      if (seg[2] === 'refs' && seg[3] === 'file' && seg.length === 4 && method === 'POST') {
+        await getProject(id);
+        const b = await readBody(req);
+        const name = checkFilename(str(b.name, 'name'), false);
+        const file = join(projectDir(id), 'refs', name);
+        try {
+          if (!(await stat(file)).isFile()) throw new HttpError(404, 'not found');
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new HttpError(404, 'not found');
+          throw e;
+        }
+        return send(res, 201, { task: await studyRef(id, file) });
       }
       if (seg[2] === 'tasks' && seg.length === 3 && method === 'POST') {
         await getProject(id);
