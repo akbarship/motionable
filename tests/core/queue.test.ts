@@ -188,3 +188,19 @@ test('old worker cannot finish or unlock after its task was reclaimed', async ()
   await finish(p, t.id, { ok: 1 }, b!.token);
   expect((await listTasks(p))[0]!.status).toBe('done');
 });
+
+test('rejects path-like task ids', async () => {
+  await expect(progress(p, '../../x', 'l')).rejects.toThrow(/invalid id/);
+  await expect(finish(p, '../x', {})).rejects.toThrow(/invalid id/);
+  await expect(fail(p, 'a/b', 'e')).rejects.toThrow(/invalid id/);
+});
+
+test('waitForTask stops on abort and leaves a later task queued', async () => {
+  const ctl = new AbortController();
+  const w = waitForTask(30, 10, ctl.signal);
+  setTimeout(() => ctl.abort(), 50);
+  expect(await w).toBeNull();
+  const t = await addTask(p, 'study_ref', {});
+  await new Promise((r) => setTimeout(r, 50));
+  expect((await listTasks(p)).find((x) => x.id === t.id)?.status).toBe('queued');
+});

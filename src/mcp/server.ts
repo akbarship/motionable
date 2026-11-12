@@ -20,8 +20,13 @@ const AGENTS: Record<TaskType, string> = {
 };
 
 const StudioInfoSchema = z.object({ port: z.number(), token: z.string(), pid: z.number() });
+const waitSeconds = (): number => {
+  const n = Number(process.env.MOTIONABLE_WAIT_S);
+  return Number.isFinite(n) && n > 0 ? n : 240;
+};
 const HEARTBEAT_EVERY_MS = 30_000;
 
+const idStr = z.string().regex(/^[a-z0-9-]+$/);
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
 
 async function touchHeartbeat(): Promise<void> {
@@ -42,7 +47,7 @@ export function openBrowser(url: string): void {
     process.platform === 'darwin'
       ? ['open', [url]]
       : process.platform === 'win32'
-        ? ['cmd', ['/c', 'start', '""', url]]
+        ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
         : ['xdg-open', [url]];
   execFile(cmd, args, () => {}).on('error', () => {});
 }
@@ -111,11 +116,11 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
       description:
         'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent} or {idle:true}.',
     },
-    async () => {
+    async (extra) => {
       await touchHeartbeat();
       const timer = setInterval(() => void touchHeartbeat().catch(() => {}), HEARTBEAT_EVERY_MS);
       try {
-        const c = await waitForTask(Number(process.env.MOTIONABLE_WAIT_S ?? 240));
+        const c = await waitForTask(waitSeconds(), 1000, extra.signal);
         if (!c) return text({ idle: true });
         tokens.set(c.task.id, c.token);
         return text({
@@ -136,7 +141,7 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
     'task_progress',
     {
       description: 'Append a short progress line to a running task.',
-      inputSchema: { projectId: z.string(), taskId: z.string(), line: z.string() },
+      inputSchema: { projectId: idStr, taskId: idStr, line: z.string() },
     },
     async ({ projectId, taskId, line }) => {
       await progress(projectId, taskId, line, tokens.get(taskId));
@@ -148,7 +153,7 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
     'task_done',
     {
       description: 'Mark a task done with a short summary.',
-      inputSchema: { projectId: z.string(), taskId: z.string(), summary: z.string() },
+      inputSchema: { projectId: idStr, taskId: idStr, summary: z.string() },
     },
     async ({ projectId, taskId, summary }) => {
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
@@ -161,7 +166,7 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
     'task_failed',
     {
       description: 'Mark a task failed with an error message.',
-      inputSchema: { projectId: z.string(), taskId: z.string(), error: z.string() },
+      inputSchema: { projectId: idStr, taskId: idStr, error: z.string() },
     },
     async ({ projectId, taskId, error }) => {
       await fail(projectId, taskId, error, tokens.get(taskId));
@@ -174,7 +179,7 @@ export function createMcpServer(opts: { spawnStudio?: () => void } = {}): McpSer
     'project_info',
     {
       description: 'Paths and status for a project.',
-      inputSchema: { projectId: z.string() },
+      inputSchema: { projectId: idStr },
     },
     async ({ projectId }) => {
       const p = await getProject(projectId);

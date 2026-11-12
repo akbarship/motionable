@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, readdir, rename, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { projectDir } from './paths.js';
+import { assertId, projectDir } from './paths.js';
 import { listProjects, readJson, writeJson } from './store.js';
 import { TaskSchema, type Task, type TaskType } from './types.js';
 
@@ -26,8 +26,8 @@ function newTaskId(): { id: string; ms: number } {
 }
 
 const tasksDir = (projectId: string) => join(projectDir(projectId), 'tasks');
-const taskFile = (projectId: string, taskId: string) => join(tasksDir(projectId), `${taskId}.json`);
-const lockFile = (projectId: string, taskId: string) => join(tasksDir(projectId), `${taskId}.lock`);
+const taskFile = (projectId: string, taskId: string) => join(tasksDir(projectId), `${assertId(taskId)}.json`);
+const lockFile = (projectId: string, taskId: string) => join(tasksDir(projectId), `${assertId(taskId)}.lock`);
 
 export async function addTask(
   projectId: string,
@@ -241,16 +241,34 @@ export async function claimNext(): Promise<{ projectId: string; task: Task; toke
   return null;
 }
 
-/** Poll claimNext until a task is claimed or timeoutS passes. pollMs is injectable for tests. */
+/**
+ * Poll claimNext until a task is claimed or timeoutS passes. pollMs is injectable for tests.
+ * When `signal` aborts, polling stops and null is returned; a claim that lands after the abort is put back to queued.
+ */
 export async function waitForTask(
   timeoutS: number,
   pollMs = 1000,
+  signal?: AbortSignal,
 ): Promise<{ projectId: string; task: Task; token: string } | null> {
   const deadline = Date.now() + timeoutS * 1000;
   for (;;) {
+    if (signal?.aborted) return null;
     const c = await claimNext();
-    if (c) return c;
+    if (c) {
+      if (!signal?.aborted) return c;
+      await update(c.projectId, c.task.id, (t) => ({ ...t, status: 'queued' }));
+      await release(c.projectId, c.task.id, c.token);
+      return null;
+    }
     if (Date.now() >= deadline) return null;
-    await new Promise((r) => setTimeout(r, Math.min(pollMs, Math.max(1, deadline - Date.now()))));
+    await new Promise<void>((r) => {
+      const t = setTimeout(done, Math.min(pollMs, Math.max(1, deadline - Date.now())));
+      function done() {
+        clearTimeout(t);
+        signal?.removeEventListener('abort', done);
+        r();
+      }
+      signal?.addEventListener('abort', done, { once: true });
+    });
   }
 }

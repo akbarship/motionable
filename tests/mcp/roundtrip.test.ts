@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -117,5 +117,26 @@ describe('mcp roundtrip', () => {
     const r = (await call('studio_open')).data;
     expect(r.url).toBe(studioUrl);
     expect(r.projectId).toBeNull();
+  });
+
+  test('rejects path-like ids and touches nothing outside tasks/', async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await writeFile(join(tmp, 'projects', 'x.json'), 'KEEP');
+    for (const tool of ['task_progress', 'task_done', 'task_failed']) {
+      const r = (await client.callTool({
+        name: tool,
+        arguments: { projectId: id, taskId: '../../x', line: 'l', summary: 's', error: 'e' },
+      })) as { isError?: boolean };
+      expect(r.isError).toBe(true);
+    }
+    expect(await readFile(join(tmp, 'projects', 'x.json'), 'utf8')).toBe('KEEP');
+    expect((await readdir(join(tmp, 'projects', id, 'tasks')).catch(() => [])).length).toBe(0);
+  });
+
+  test('NaN wait falls back to a positive number', async () => {
+    process.env.MOTIONABLE_WAIT_S = 'abc';
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await post(`/api/projects/${id}/tasks`, { type: 'study_ref', input: {} });
+    expect((await call('next_task')).data.type).toBe('study_ref');
   });
 });
