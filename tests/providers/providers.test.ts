@@ -6,8 +6,10 @@ import { ConfigSchema, WordsSchema, type Config } from '../../src/core/types.js'
 import { createBotProvider } from '../../src/providers/bot.js';
 import { downloadResult } from '../../src/providers/download.js';
 import { createElevenLabs } from '../../src/providers/elevenlabs.js';
-import { createKie } from '../../src/providers/kie.js';
+import { createKie, snapVeoSeconds } from '../../src/providers/kie.js';
 import { providerFor } from '../../src/providers/registry.js';
+import { errorText } from '../../studio/src/errors.js';
+import { execFileSync } from 'node:child_process';
 import { startMockBot, type MockBot } from './bot-mock.js';
 
 const off = { use: 'off' as const };
@@ -168,11 +170,60 @@ describe('elevenlabs', () => {
     expect(await readFile(r.file, 'utf8')).toBe('ID3');
   });
   test('http error hides key', async () => {
-    vi.stubGlobal('fetch', async () => new Response('bad', { status: 401 }));
+    vi.stubGlobal('fetch', async () => new Response('bad', { status: 500 }));
     const p = createElevenLabs({ tts: 'SECRETKEY', stt: undefined });
     const e = await p.run({ kind: 'tts', params: { text: 'hi', voiceId: 'v' }, outDir: tmp }).catch((x: Error) => x);
-    expect((e as Error).message).toContain('401');
+    expect((e as Error).message).toContain('500');
     expect((e as Error).message).not.toContain('SECRETKEY');
+  });
+});
+
+describe('elevenlabs errors and upload', () => {
+  test('payment_issue 401 maps to elevenlabs_payment_issue, other 401 to bad key', async () => {
+    const body = { detail: { type: 'payment_required', code: 'payment_issue', status: 'payment_issue', message: 'x' } };
+    vi.stubGlobal('fetch', async () => Response.json(body, { status: 401 }));
+    const p = createElevenLabs({ stt: 'SECRETKEY', tts: 'SECRETKEY' });
+    await writeFile(join(tmp, 'a.mp3'), 'audio');
+    await expect(p.transcribe(join(tmp, 'a.mp3'))).rejects.toThrow('elevenlabs_payment_issue');
+    await expect(p.run({ kind: 'tts', params: { text: 'hi', voiceId: 'v' }, outDir: tmp })).rejects.toThrow('elevenlabs_payment_issue');
+    vi.stubGlobal('fetch', async () => Response.json({ detail: { status: 'invalid_api_key' } }, { status: 401 }));
+    const e = await p.transcribe(join(tmp, 'a.mp3')).catch((x: Error) => x);
+    expect((e as Error).message).toBe('elevenlabs_bad_key');
+  });
+  test('stt uploads extracted mono 16k mp3, not the original', async () => {
+    const src = join(tmp, 'clip.wav');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-ac', '2', '-ar', '44100', src]);
+    let sent: File | null = null;
+    vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
+      sent = (init.body as FormData).get('file') as File;
+      return Response.json({ words: [] });
+    });
+    await createElevenLabs({ stt: 'k' }).transcribe(src);
+    expect(sent!.name).toBe('stt.mp3');
+    const out = join(tmp, 'got.mp3');
+    await writeFile(out, Buffer.from(await sent!.arrayBuffer()));
+    const probe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=channels,sample_rate', '-of', 'csv=p=0', out]).toString().trim();
+    expect(probe).toBe('16000,1');
+  });
+  test('stt falls back to the original file when ffmpeg fails on a small file', async () => {
+    let name = '';
+    vi.stubGlobal('fetch', async (_u: string, init: RequestInit) => {
+      name = ((init.body as FormData).get('file') as File).name;
+      return Response.json({ words: [] });
+    });
+    await writeFile(join(tmp, 'junk.mp3'), 'not audio');
+    await createElevenLabs({ stt: 'k' }).transcribe(join(tmp, 'junk.mp3'));
+    expect(name).toBe('junk.mp3');
+  });
+});
+
+describe('errorText', () => {
+  test('maps known codes, passes unknown through', () => {
+    expect(errorText('elevenlabs_payment_issue')).toContain("to'lanmagan");
+    expect(errorText('elevenlabs_bad_key')).toBe("ElevenLabs kaliti noto'g'ri.");
+    expect(errorText('insufficient_balance')).toBe('Balans yetarli emas.');
+    expect(errorText('something else')).toBe('something else');
+    expect(errorText('constructor')).toBe('constructor');
   });
 });
 
@@ -243,5 +294,62 @@ describe('kie', () => {
       u.endsWith('/createTask') ? Response.json({ code: 200, data: { taskId: 'x' } }) : Response.json({ code: 200, data: { state: 'fail', failMsg: 'nsfw' } }),
     );
     await expect(createKie('k', FAST).run({ kind: 'image', params: { prompt: 'p' }, outDir: tmp })).rejects.toThrow('nsfw');
+  });
+  async function createBody(params: Record<string, unknown>, kind: 'image' | 'video') {
+    let sent: { model: string; input: Record<string, unknown> } | undefined;
+    vi.stubGlobal('fetch', async (u: string, init?: RequestInit) => {
+      if (u.endsWith('/createTask')) {
+        sent = JSON.parse(init!.body as string);
+        return Response.json({ code: 200, data: { taskId: 'b1' } });
+      }
+      return Response.json({ code: 200, data: { state: 'fail', failMsg: 'stop' } });
+    });
+    await createKie('k', FAST).run({ kind, params: { prompt: 'p', ...params }, outDir: tmp }).catch(() => {});
+    return sent!;
+  }
+  test('veo body shape and duration snapping', async () => {
+    const b = await createBody({ model: 'veo3_lite', seconds: 5 }, 'video');
+    expect(b).toEqual({
+      model: 'veo-3-1',
+      input: { prompt: 'p', generation_type: 'TEXT_2_VIDEO', model: 'veo3_lite', aspect_ratio: '9:16', duration: 6, resolution: '720p' },
+    });
+    expect([3, 4.9, 5, 5.9, 7, 8, 12].map(snapVeoSeconds)).toEqual([4, 4, 6, 6, 8, 8, 8]);
+    expect(snapVeoSeconds(undefined)).toBe(8);
+    const r = await createBody({ imageUrls: ['https://x.test/a.png'] }, 'video');
+    expect(r.input.generation_type).toBeUndefined();
+    expect(r.input.image_urls).toEqual(['https://x.test/a.png']);
+    expect(r.input.model).toBe('veo3_fast');
+  });
+  test('kling body shape', async () => {
+    expect((await createBody({ model: 'kling' }, 'video')).input).toEqual({ prompt: 'p', duration: 5, resolution: '720P', aspect_ratio: '9:16' });
+    const b = await createBody({ model: 'kling', seconds: 99.4, aspectRatio: '16:9' }, 'video');
+    expect(b.model).toBe('kling-4.0/reference-to-video');
+    expect(b.input.duration).toBe(30);
+    expect(b.input.aspect_ratio).toBe('16:9');
+    expect((await createBody({ model: 'kling', seconds: 1 }, 'video')).input.duration).toBe(3);
+  });
+  test('image bodies: default 9:16, pro uses image_input and 1K', async () => {
+    expect((await createBody({}, 'image')).input).toEqual({ prompt: 'p', aspect_ratio: '9:16' });
+    expect((await createBody({ imageUrls: ['u'] }, 'image')).input).toEqual({ prompt: 'p', aspect_ratio: '9:16', image_urls: ['u'] });
+    expect((await createBody({ model: 'nano-banana-pro', imageUrls: ['u'] }, 'image')).input).toEqual({
+      prompt: 'p',
+      aspect_ratio: '9:16',
+      image_input: ['u'],
+      resolution: '1K',
+    });
+  });
+  test.each([
+    ['data.result_urls', { data: { result_urls: ['https://cdn.test/v.mp4'] } }],
+    ['data.origin_urls', { data: { origin_urls: ['https://cdn.test/v.mp4'] } }],
+    ['result_urls', { result_urls: ['https://cdn.test/v.mp4'] }],
+    ['origin_urls', { origin_urls: ['https://cdn.test/v.mp4'] }],
+  ])('resultJson fallback %s', async (_n, rj) => {
+    vi.stubGlobal('fetch', async (u: string) => {
+      if (u.endsWith('/createTask')) return Response.json({ code: 200, data: { taskId: 'v1' } });
+      if (u.includes('/recordInfo')) return Response.json({ code: 200, data: { state: 'success', resultJson: JSON.stringify(rj) } });
+      return new Response('MP4', { headers: { 'content-type': 'video/mp4' } });
+    });
+    const r = await createKie('k', FAST).run({ kind: 'video', params: { prompt: 'p' }, outDir: tmp, taskId: 'vv' });
+    expect(r.file).toBe(join(tmp, 'vv.mp4'));
   });
 });

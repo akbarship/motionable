@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { errorText } from '../errors';
 import { api, type Task } from '../api';
 import { fmtUsd } from '../pipeline';
 
@@ -37,7 +38,7 @@ export function ApproveCost({
       await (kind === 'approve' ? api.approveTask(projectId, t.id) : api.declineTask(projectId, t.id));
       onChanged();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText((e as Error).message));
     } finally {
       setBusy(null);
     }

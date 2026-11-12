@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { errorText } from '../errors';
 import { api, type Project, type Task } from '../api';
 import { awaitingGenerate, directStyleIds, hasDirect, hasUnknownState, lastProgress, readPlan, showPlanReview, stageState } from '../pipeline';
 import { ApproveCost } from '../ui/ApproveCost';
@@ -28,7 +29,7 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
       setError(null);
     } catch (e) {
       if (seq !== loadSeq.current) return;
-      setError((e as Error).message);
+      setError(errorText((e as Error).message));
     }
   }, [id]);
 
@@ -43,7 +44,7 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
       await api.addTask(id, 'direct', { styleIds: directStyleIds(tasks, project?.styleIds ?? []) });
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText((e as Error).message));
     } finally {
       setRedoBusy(false);
     }

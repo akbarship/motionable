@@ -1,3 +1,4 @@
+import { errorText } from '../errors';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Config, type ConfigPatch, type Kind, type ProviderUse } from '../api';
 
@@ -9,12 +10,6 @@ const KINDS: { kind: Kind; label: string; own: ProviderUse; ownName: string }[] 
   { kind: 'tts', label: 'Ovoz (TTS)', own: 'elevenlabs', ownName: 'ElevenLabs' },
   { kind: 'stt', label: 'Subtitr (STT)', own: 'elevenlabs', ownName: 'ElevenLabs' },
 ];
-
-const BOT_ERRORS: Record<string, string> = {
-  no_bot_key: "Bot kaliti kiritilmagan.",
-  bad_bot_url: "Bot manzili noto'g'ri.",
-  insufficient_balance: "Balans yetarli emas.",
-};
 
 const toChoice = (u: ProviderUse): Choice => (u === 'off' ? 'off' : u === 'bot' ? 'bot' : 'own');
 
@@ -61,7 +56,7 @@ export function Settings() {
       } else set(kind, { key: '' });
       setSaved("Kalit o'chirildi.");
     } catch (err) {
-      setSaveError((err as Error).message);
+      setSaveError(errorText((err as Error).message));
     }
   }
 
@@ -72,7 +67,7 @@ export function Settings() {
       setBalance({ usd: typeof b.usd === 'number' ? b.usd : undefined });
     } catch (e) {
       const m = (e as Error).message;
-      setBalance({ error: BOT_ERRORS[m] ?? m });
+      setBalance({ error: errorText(m) });
     }
   }
 
@@ -114,7 +109,7 @@ export function Settings() {
       setSaved('Saqlandi.');
       if (botKey) void checkBalance();
     } catch (err) {
-      setSaveError((err as Error).message);
+      setSaveError(errorText((err as Error).message));
     } finally {
       setSaving(false);
     }

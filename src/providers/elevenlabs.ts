@@ -1,4 +1,7 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 import { basename, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WordsSchema, type Words } from '../core/types.js';
@@ -10,11 +13,43 @@ import { httpError, num, prices, strParam, usd } from './util.js';
 //    (file, model_id, timestamps_granularity=word), header xi-api-key, words[{text,start,end,type}]
 //  - https://elevenlabs.io/docs/api-reference/text-to-speech/convert  POST /v1/text-to-speech/{voice_id}
 //    ?output_format=mp3_44100_128, JSON {text, model_id}, returns audio bytes
+const run = promisify(execFile);
+const MAX_RAW_UPLOAD = 200 * 1024 ** 2;
 const API = 'https://api.elevenlabs.io';
 const STT_URL = `${API}/v1/speech-to-text`;
 const TTS_URL = (voice: string) => `${API}/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`;
 const STT_MODEL = 'scribe_v2';
 const TTS_MODEL = 'eleven_multilingual_v2';
+
+/**
+ * Error for a non-2xx answer. A failed-payment account answers 401 (or 402) with
+ * {detail:{type:'payment_required', code|status:'payment_issue'}}; any other 401 means a bad key. Never includes the key.
+ */
+async function elError(res: Response): Promise<Error> {
+  if (res.status === 401 || res.status === 402) {
+    let d: { type?: unknown; code?: unknown; status?: unknown } = {};
+    try {
+      d = ((await res.json()) as { detail?: typeof d }).detail ?? {};
+    } catch {
+      // body was not JSON
+    }
+    if (d.code === 'payment_issue' || d.status === 'payment_issue' || d.type === 'payment_required') return new Error('elevenlabs_payment_issue');
+    if (res.status === 401) return new Error('elevenlabs_bad_key');
+  }
+  return httpError('elevenlabs', res.status);
+}
+
+/** Mono 16 kHz 48 kbps mp3 is enough for STT and keeps uploads small. Returns the bytes to upload. */
+async function audioForUpload(file: string, dir: string): Promise<{ bytes: Buffer; name: string }> {
+  const out = join(dir, 'stt.mp3');
+  try {
+    await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '48k', out]);
+    return { bytes: await readFile(out), name: 'stt.mp3' };
+  } catch {
+    if ((await stat(file)).size >= MAX_RAW_UPLOAD) throw new Error('audio extraction failed and the file is too large to upload');
+    return { bytes: await readFile(file), name: basename(file) };
+  }
+}
 
 type Keys = { tts?: string; stt?: string };
 export type ElevenLabs = GenerationProvider & { transcribe(file: string): Promise<Words> };
@@ -41,7 +76,7 @@ export function createElevenLabs(keys: Keys): ElevenLabs {
         headers: { 'xi-api-key': keys.tts, 'content-type': 'application/json' },
         body: JSON.stringify({ text, model_id: strParam(r.params.model, TTS_MODEL) }),
       });
-      if (!res.ok) throw httpError('elevenlabs', res.status);
+      if (!res.ok) throw await elError(res);
       await mkdir(r.outDir, { recursive: true });
       const file = join(r.outDir, `${r.taskId ?? randomBytes(6).toString('hex')}.mp3`);
       await writeFile(file, Buffer.from(await res.arrayBuffer()));
@@ -49,12 +84,19 @@ export function createElevenLabs(keys: Keys): ElevenLabs {
     },
     async transcribe(file) {
       if (!keys.stt) throw new Error('no elevenlabs stt key');
-      const form = new FormData();
-      form.append('model_id', STT_MODEL);
-      form.append('timestamps_granularity', 'word');
-      form.append('file', new Blob([await readFile(file)]), basename(file));
-      const res = await fetch(STT_URL, { method: 'POST', headers: { 'xi-api-key': keys.stt }, body: form });
-      if (!res.ok) throw httpError('elevenlabs', res.status);
+      const dir = await mkdtemp(join(tmpdir(), 'motionable-stt-'));
+      let res: Response;
+      try {
+        const audio = await audioForUpload(file, dir);
+        const form = new FormData();
+        form.append('model_id', STT_MODEL);
+        form.append('timestamps_granularity', 'word');
+        form.append('file', new Blob([new Uint8Array(audio.bytes)]), audio.name);
+        res = await fetch(STT_URL, { method: 'POST', headers: { 'xi-api-key': keys.stt }, body: form });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+      if (!res.ok) throw await elError(res);
       const j = (await res.json()) as { words?: { text: string; start: number | null; end: number | null; type: string }[] };
       const words = (j.words ?? [])
         .filter((w) => w.type === 'word' && typeof w.start === 'number' && typeof w.end === 'number')
