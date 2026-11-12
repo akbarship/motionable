@@ -43,9 +43,12 @@ export function maskedConfig(c: Config): Config {
   return out;
 }
 
-/** A value that starts with the mask is a round-tripped display value: keep the stored key. */
+/**
+ * undefined or a round-tripped masked value keeps the stored key; '' clears it.
+ */
 function pickKey(next: string | undefined, old: string | undefined): string | undefined {
-  return next?.startsWith(MASK) ? old : next;
+  if (next === undefined || next.startsWith(MASK)) return old;
+  return next === '' ? undefined : next;
 }
 
 export async function saveConfig(patch: ConfigPatch): Promise<Config> {

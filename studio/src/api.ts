@@ -68,9 +68,16 @@ export function getToken(): string {
   if (token !== null) return token;
   let t = '';
   try {
-    t = new URLSearchParams(location.search).get('t') ?? '';
+    const params = new URLSearchParams(location.search);
+    t = params.get('t') ?? '';
+    if (t) {
+      // Keep the token out of the address bar, history and screenshots.
+      params.delete('t');
+      const rest = params.toString();
+      history.replaceState(null, '', location.pathname + (rest ? `?${rest}` : '') + location.hash);
+    }
   } catch {
-    // no location (non-browser)
+    // no location/history (non-browser) or replaceState refused
   }
   try {
     if (t) sessionStorage.setItem(KEY, t);

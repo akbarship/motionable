@@ -26,7 +26,8 @@ beforeEach(() => {
   calls = [];
   store = new Map();
   resetTokenForTests();
-  vi.stubGlobal('location', { search: '?t=tok123', hash: '' });
+  vi.stubGlobal('location', { search: '?t=tok123', hash: '#/new', pathname: '/' });
+  vi.stubGlobal('history', { replaceState: vi.fn() });
   vi.stubGlobal('sessionStorage', memStorage());
   vi.stubGlobal('fetch', okFetch());
 });
@@ -112,5 +113,21 @@ describe('studio api client', () => {
     expect(sent.headers['x-motionable-token']).toBe('tok123');
     expect(sent.headers['x-filename']).toBe(encodeURIComponent('klip 1.mp4'));
     expect(seen).toContain(0.5);
+  });
+  test('removes ?t= from the address bar after reading it', () => {
+    expect(getToken()).toBe('tok123');
+    const rs = (history.replaceState as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(rs).toHaveLength(1);
+    expect(rs[0][2]).toBe('/#/new');
+    expect(String(rs[0][2])).not.toContain('t=');
+  });
+
+  test('works when history.replaceState throws', () => {
+    vi.stubGlobal('history', {
+      replaceState() {
+        throw new Error('denied');
+      },
+    });
+    expect(getToken()).toBe('tok123');
   });
 });

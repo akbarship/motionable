@@ -63,9 +63,16 @@ function App() {
     else location.replace('#/new');
   }, [route.name, projects]);
 
-  useEvents((id) => {
-    if (id === projectId) setTick((t) => t + 1);
-  });
+  useEvents(
+    (id) => {
+      if (id === projectId) setTick((t) => t + 1);
+    },
+    // (Re)connected: events may have been missed while down, so refetch.
+    () => {
+      setTick((t) => t + 1);
+      void loadProjects();
+    },
+  );
 
   const project = projects?.find((p) => p.id === projectId) ?? null;
 
@@ -97,7 +104,7 @@ function App() {
       body = <Onboarding onCreated={(p) => setProjects((cur) => [p, ...(cur ?? [])])} />;
       break;
     case 'refs':
-      body = <References id={route.id} tick={tick} />;
+      body = <References key={route.id} id={route.id} tick={tick} />;
       break;
     case 'pipeline':
       body = <Placeholder title="Reja tayyorlanmoqda" text="Bosqichlar ekrani keyingi versiyada qo'shiladi." />;
@@ -124,6 +131,8 @@ function App() {
     </div>
   );
 }
+
+getToken(); // read ?t= and strip it from the address bar before anything else runs
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

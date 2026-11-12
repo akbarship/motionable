@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, upload, type StyleSummary, type Task } from '../api';
 import { go } from '../router';
 import { Dropzone, FileList, toRows, type FileRow } from '../ui/Dropzone';
@@ -37,12 +37,17 @@ export function References({ id, tick }: { id: string; tick: number }) {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
+  // Only the newest request may write state; older replies that land late are dropped.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const v = await api.getProject(id);
+      if (seq !== loadSeq.current) return;
       setTasks(v.tasks);
       setError(null);
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       setError((e as Error).message);
     }
   }, [id]);

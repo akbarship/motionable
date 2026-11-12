@@ -28,6 +28,7 @@ export function Settings() {
   const [rows, setRows] = useState<Record<Kind, Row> | null>(null);
   const [botKey, setBotKey] = useState('');
   const [botUrl, setBotUrl] = useState('');
+  const [server, setServer] = useState<Config | null>(null); // last saved config (masked)
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -40,6 +41,27 @@ export function Settings() {
     setRows(next);
     setBotKey(c.botKey ?? '');
     setBotUrl(c.botUrl ?? '');
+    setServer(c);
+  }
+
+  /** Removes a stored key right away; '' tells the server to clear it. Other unsaved edits stay. */
+  async function clearKey(kind: Kind | 'bot') {
+    if (!server) return;
+    setSaved(null);
+    setSaveError(null);
+    try {
+      const patch: ConfigPatch =
+        kind === 'bot' ? { botKey: '' } : { providers: { [kind]: { use: server.providers[kind].use, key: '' } } };
+      const c = await api.putConfig(patch);
+      setServer(c);
+      if (kind === 'bot') {
+        setBotKey('');
+        setBalance({});
+      } else set(kind, { key: '' });
+      setSaved("Kalit o'chirildi.");
+    } catch (err) {
+      setSaveError((err as Error).message);
+    }
   }
 
   async function checkBalance() {
@@ -80,7 +102,10 @@ export function Settings() {
       const use: ProviderUse = r.choice === 'off' ? 'off' : r.choice === 'bot' ? 'bot' : own;
       providers[kind] = r.key ? { use, key: r.key } : { use };
     }
-    const patch: ConfigPatch = { providers, botUrl: botUrl.trim() };
+    const patch: ConfigPatch = { providers };
+    // Only send what changed: an untouched or emptied URL never overwrites the stored one.
+    const url = botUrl.trim();
+    if (url && url !== (server?.botUrl ?? '')) patch.botUrl = url;
     if (botKey) patch.botKey = botKey;
     try {
       fill(await api.putConfig(patch));
@@ -132,17 +157,25 @@ export function Settings() {
               {r.choice === 'own' && (
                 <div className="setting-sub">
                   <label htmlFor={kid}>{ownName} kaliti</label>
-                  <input
-                    id={kid}
-                    type="text"
-                    className="mono"
-                    value={r.key}
-                    onChange={(e) => set(kind, { key: e.target.value })}
-                    onFocus={(e) => e.target.select()}
-                    placeholder="Kalitni joylang"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
+                  <div className="inline">
+                    <input
+                      id={kid}
+                      type="password"
+                      className="mono"
+                      value={r.key}
+                      onChange={(e) => set(kind, { key: e.target.value })}
+                      onFocus={(e) => e.target.select()}
+                      placeholder="Kalitni joylang"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    {server?.providers[kind].key && (
+                      <button type="button" className="btn btn--ghost" onClick={() => void clearKey(kind)}
+                        aria-label={`${ownName} kalitini o'chirish (${label})`}>
+                        O'chirish
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               {kind === 'stt' && (
@@ -160,20 +193,28 @@ export function Settings() {
         {!usesBot && <p className="muted small">Bot hech bir tur uchun tanlanmagan.</p>}
         <div className="field">
           <label htmlFor="bot-key">Bot kaliti</label>
-          <input
-            id="bot-key"
-            type="text"
-            className="mono"
-            value={botKey}
-            onChange={(e) => {
-              setSaved(null);
-              setBotKey(e.target.value);
-            }}
-            onFocus={(e) => e.target.select()}
-            placeholder="Telegram botdan olingan kalit"
-            autoComplete="off"
-            spellCheck={false}
-          />
+          <div className="inline">
+            <input
+              id="bot-key"
+              type="password"
+              className="mono"
+              value={botKey}
+              onChange={(e) => {
+                setSaved(null);
+                setBotKey(e.target.value);
+              }}
+              onFocus={(e) => e.target.select()}
+              placeholder="Telegram botdan olingan kalit"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {server?.botKey && (
+              <button type="button" className="btn btn--ghost" onClick={() => void clearKey('bot')}
+                aria-label="Bot kalitini o'chirish">
+                O'chirish
+              </button>
+            )}
+          </div>
         </div>
         <div className="field">
           <label htmlFor="bot-url">Bot manzili</label>

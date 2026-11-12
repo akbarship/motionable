@@ -395,6 +395,7 @@ a {
 }
 
 input[type='text'],
+input[type='password'],
 input[type='url'],
 textarea,
 select {
@@ -473,6 +474,10 @@ textarea:disabled {
 }
 .inline .btn {
   height: 40px;
+}
+.inline > input {
+  flex: 1;
+  min-width: 0;
 }
 .input-icon {
   position: relative;

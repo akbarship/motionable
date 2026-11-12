@@ -68,4 +68,14 @@ describe('config', () => {
     expect(c.botKey).toBe('botsecret-wxyz');
     expect((await loadConfig()).providers.tts.key).toBe('sk-supersecret-abcd');
   });
+  it("clears a key when '' is saved and keeps it when key is omitted", async () => {
+    await saveConfig({ providers: { image: { use: 'kie', key: 'secret-1234' } }, botKey: 'bot-5678', botUrl: 'https://b.example' });
+    await saveConfig({ providers: { image: { use: 'kie' } } });
+    expect((await loadConfig()).providers.image.key).toBe('secret-1234');
+    await saveConfig({ providers: { image: { use: 'kie', key: '' } }, botKey: '' });
+    const c = await loadConfig();
+    expect(c.providers.image).toEqual({ use: 'kie' });
+    expect(c.botKey).toBeUndefined();
+    expect(c.botUrl).toBe('https://b.example');
+  });
 });
