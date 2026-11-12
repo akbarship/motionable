@@ -1,13 +1,15 @@
-import { execFile } from 'node:child_process';
-import { access, readFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { access, copyFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
-import { doctorReportOk, npxCommand } from './core/hf-cmd.js';
+import { doctorReportOk, npxCommand, validateHfArgs } from './core/hf-cmd.js';
 import { appendBinDir } from './core/path-env.js';
+import { assertId, assertInHome, home } from './core/paths.js';
 import { PlanSchema, StyleSchema, WordsSchema } from './core/types.js';
+import { probe } from './media/ingest.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
 import { startStudio } from './server/studio.js';
 
@@ -93,6 +95,53 @@ export async function runSheet(
   return JSON.stringify({ sheets: r.sheets, cuts: r.cuts.length, avgShot: r.avgShot });
 }
 
+/** `copy-sheets <sheetDir> <styleId>`: sheet-*.jpg into <home>/styles/<styleId>/sheets/. */
+export async function runCopySheets(sheetDir: string, styleId: string): Promise<{ copied: string[] }> {
+  const src = assertInHome(sheetDir);
+  const dest = assertInHome(join(home(), 'styles', assertId(styleId), 'sheets'));
+  const names = (await readdir(src)).filter((n) => /^sheet-.*\.jpg$/.test(n)).sort();
+  await mkdir(dest, { recursive: true });
+  for (const n of names) await copyFile(join(src, n), join(dest, n));
+  return { copied: names.map((n) => `sheets/${n}`) };
+}
+
+/** `copy-file <src> <dest>`: plain copy, both inside home. */
+export async function runCopyFile(src: string, dest: string): Promise<{ copied: string }> {
+  const s = assertInHome(src);
+  const d = assertInHome(dest);
+  await mkdir(join(d, '..'), { recursive: true });
+  await copyFile(s, d);
+  return { copied: d };
+}
+
+/** `hf <projectDir> <args...>`: HyperFrames CLI in <projectDir>/comp (init: in <projectDir> as `init comp`). Resolves to the exit code. */
+export async function runHf(
+  projectDir: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+  stdio: 'inherit' | 'ignore' = 'inherit',
+): Promise<number> {
+  const proj = assertInHome(projectDir);
+  validateHfArgs(platform, args);
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '--output' || args[i] === '-o') && args[i + 1]) assertInHome(args[i + 1]!);
+  }
+  const init = args[0] === 'init';
+  const finalArgs = init ? ['init', 'comp', ...args.slice(1).filter((a) => a !== 'comp')] : args;
+  const cwd = init ? proj : join(proj, 'comp');
+  await mkdir(cwd, { recursive: true });
+  if (args[0] === 'render') await mkdir(join(proj, 'renders'), { recursive: true });
+  const bin = process.env.MOTIONABLE_HF_BIN;
+  const c = bin
+    ? { cmd: bin, args: finalArgs, shell: false }
+    : npxCommand(platform, ['--no-install', 'hyperframes', ...finalArgs]);
+  return new Promise((res, rej) => {
+    const ch = spawn(c.cmd, c.args, { cwd, stdio, shell: c.shell, windowsHide: true });
+    ch.on('error', rej);
+    ch.on('close', (code) => res(code ?? 1));
+  });
+}
+
 async function main(cmd: string | undefined): Promise<void> {
   if (cmd === 'studio') {
     const s = await startStudio();
@@ -108,8 +157,28 @@ async function main(cmd: string | undefined): Promise<void> {
     process.exitCode = r.code;
   } else if (cmd === 'sheet' && process.argv[3] && process.argv[4]) {
     console.log(await runSheet(process.argv[3], process.argv[4]));
+  } else if (cmd === 'copy-sheets' || cmd === 'copy-file' || cmd === 'probe' || cmd === 'hf') {
+    const a = process.argv.slice(3);
+    try {
+      if (cmd === 'hf') {
+        if (!a[0]) throw new Error('usage: motionable hf <projectDir> <args...>');
+        process.exitCode = await runHf(a[0], a.slice(1));
+      } else if (cmd === 'probe') {
+        if (!a[0]) throw new Error('usage: motionable probe <file>');
+        console.log(JSON.stringify(await probe(assertInHome(a[0]))));
+      } else if (cmd === 'copy-sheets') {
+        if (!a[0] || !a[1]) throw new Error('usage: motionable copy-sheets <sheetDir> <styleId>');
+        console.log(JSON.stringify(await runCopySheets(a[0], a[1])));
+      } else {
+        if (!a[0] || !a[1]) throw new Error('usage: motionable copy-file <src> <dest>');
+        console.log(JSON.stringify(await runCopyFile(a[0], a[1])));
+      }
+    } catch (e) {
+      console.log(JSON.stringify({ error: (e as Error).message.split('\n')[0] }));
+      process.exitCode = 1;
+    }
   } else {
-    console.error('usage: motionable <studio|doctor|validate <style|plan|words> <file>|sheet <video> <outDir>>');
+    console.error('usage: motionable <studio|doctor|validate <style|plan|words> <file>|sheet <video> <outDir>|hf <projectDir> <args...>|copy-sheets <sheetDir> <styleId>|probe <file>|copy-file <src> <dest>>');
     process.exitCode = 1;
   }
 }

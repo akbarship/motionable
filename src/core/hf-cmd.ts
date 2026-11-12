@@ -25,3 +25,15 @@ export function doctorReportOk(stdout: string, exitedOk: boolean): boolean {
   }
   return exitedOk;
 }
+
+const WIN_ARG_RE = /^[A-Za-z0-9._:\/=,@%+-]+$/;
+
+/** win32 runs npx.cmd through a shell, so agent-supplied args must be plain tokens. Throws on others. */
+export function validateHfArgs(platform: NodeJS.Platform, args: string[]): string[] {
+  if (platform === 'win32') {
+    for (const a of args) {
+      if (!WIN_ARG_RE.test(a)) throw new Error(`argument not allowed on Windows: ${JSON.stringify(a)}`);
+    }
+  }
+  return args;
+}

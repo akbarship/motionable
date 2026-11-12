@@ -10,6 +10,8 @@ You get a task JSON: `{projectId, taskId, type: "study_ref", input: {video, shee
 
 Tools: the Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), Read, Write, Bash.
 `cliPath` is the Motionable CLI: run it as `node <cliPath> ...`.
+Shell rule: one plain command per Bash call, `node <cliPath> ...` only. No cd, &&, pipes or
+redirects; no raw npx, ffprobe, ffmpeg, mkdir or cp (data lives outside the session folder).
 
 ## Paths
 
@@ -28,7 +30,7 @@ Tools: the Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), R
      `node -e` line: word count, words per second, average gap between words.
    - On `{error: "no_stt_provider"}` or any error: go on without words.
 5. `task_progress`: `Uslub yozilmoqda`.
-6. Copy the sheets to `<home>/styles/<styleId>/sheets/` (Bash `mkdir -p` + `cp`).
+6. Copy the sheets: `node <cliPath> copy-sheets <projectDir>/<sheetDir> <styleId>`.
 7. Write `<home>/styles/<styleId>/style.json` (keep it under 2 KB):
 
    ```

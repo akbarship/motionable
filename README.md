@@ -62,20 +62,20 @@ Agentlar ko'p buyruq bajaradi, shuning uchun Claude Code har safar ruxsat so'ray
 {
   "permissions": {
     "allow": [
-      "Bash(npx hyperframes:*)",
       "Bash(node:*)",
-      "Bash(ffprobe:*)",
-      "Bash(ffmpeg:*)",
       "Read",
       "Write",
       "Edit",
+      "Glob",
+      "Grep",
       "mcp__plugin_motionable_motionable__*"
-    ]
+    ],
+    "additionalDirectories": ["~/Motionable"]
   }
 }
 ```
 
-Yoki Claude Code'ni auto / accept-edits rejimida ishga tushiring. `mcp__plugin_motionable_motionable__*` shabloni Claude Code hujjatlarida yozilgan (https://code.claude.com/docs/en/permissions, MCP bo'limi); versiyangiz uni qabul qilmasa, har bir vositani `mcp__plugin_motionable_motionable__<vosita>` ko'rinishida yozing.
+`additionalDirectories` kerak, chunki Motionable ma'lumotlari (`~/Motionable`) loyiha papkangizdan tashqarida turadi; agentlar barcha amalni `node .../cli.js` orqali bajaradi, shuning uchun faqat `Bash(node:*)` yetadi. Yoki Claude Code'ni auto / accept-edits rejimida ishga tushiring. `mcp__plugin_motionable_motionable__*` shabloni Claude Code hujjatlarida yozilgan (https://code.claude.com/docs/en/permissions, MCP bo'limi); versiyangiz uni qabul qilmasa, har bir vositani `mcp__plugin_motionable_motionable__<vosita>` ko'rinishida yozing.
 
 ### HyperFrames skill'lari
 
@@ -144,20 +144,20 @@ Agents run many commands, so Claude Code asks for permission often. To speed thi
 {
   "permissions": {
     "allow": [
-      "Bash(npx hyperframes:*)",
       "Bash(node:*)",
-      "Bash(ffprobe:*)",
-      "Bash(ffmpeg:*)",
       "Read",
       "Write",
       "Edit",
+      "Glob",
+      "Grep",
       "mcp__plugin_motionable_motionable__*"
-    ]
+    ],
+    "additionalDirectories": ["~/Motionable"]
   }
 }
 ```
 
-Or run Claude Code in auto / accept-edits mode. The `mcp__<server>__*` wildcard and the `Bash(cmd:*)` suffix are documented at https://code.claude.com/docs/en/permissions (MCP section). If your Claude Code version rejects the wildcard, list each tool as `mcp__plugin_motionable_motionable__<tool>`.
+`additionalDirectories` is needed because Motionable data (`~/Motionable`) lives outside your project folder; agents do all shell work through `node .../cli.js`, so `Bash(node:*)` is enough. Or run Claude Code in auto / accept-edits mode. The `mcp__<server>__*` wildcard and the `Bash(cmd:*)` suffix are documented at https://code.claude.com/docs/en/permissions (MCP section). If your Claude Code version rejects the wildcard, list each tool as `mcp__plugin_motionable_motionable__<tool>`.
 
 ### HyperFrames skills
 

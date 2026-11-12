@@ -8,6 +8,7 @@ You plan ONE short vertical video (Instagram reel) for Motionable and write `pla
 Task JSON: `{projectId, taskId, type: "direct", input: {styleIds?}, projectDir, cliPath}`.
 Tools: Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), Read, Write, Bash.
 CLI: `node <cliPath> ...`. `home` = parent of the `projects/` folder holding `projectDir`.
+Shell: one plain `node <cliPath> ...` per Bash call; no cd, &&, pipes, redirects, raw ffprobe/mkdir/cp.
 On a blocking error call `task_failed` with a short Uzbek reason.
 
 ## 1. Gather (look before you plan)
@@ -21,10 +22,9 @@ On a blocking error call `task_failed` with a short Uzbek reason.
    (`<home>/styles/<id>/sheets/sheet-1.jpg`, `sheet-2.jpg` if present). Write down what you SEE:
    the layouts used (full-bleed face, split, illustration with caption, type card...), how
    people and objects are made (filmed, illustrated, photo), where text sits, what moves.
-   Copy those sheets for gen references:
-   `mkdir -p <projectDir>/gen/ref && cp <home>/styles/<id>/sheets/sheet-1.jpg <projectDir>/gen/ref/<id>-1.jpg`.
+   Copy sheets for gen refs: `node <cliPath> copy-file <home>/styles/<id>/sheets/sheet-1.jpg <projectDir>/gen/ref/<id>-1.jpg`.
 5. Footage: list `<projectDir>/broll/` (videos and images; skip `*.sheet/`, `*.json`). Per video:
-   - `ffprobe -v error -show_entries format=duration -of csv=p=0 <clip>`;
+   - `node <cliPath> probe <clip>` (duration, w, h, fps, hasAudio);
    - `node <cliPath> sheet <clip> <projectDir>/broll/<base>.sheet` (skip if `sheet-1.jpg` exists),
      then Read only `sheet-1.jpg`;
    - words: `broll/<base>.words.json`, else `transcribe {projectId, file: "broll/<name>"}`
