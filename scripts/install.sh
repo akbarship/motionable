@@ -34,11 +34,15 @@ trap 'rm -rf "$TMP"' EXIT
 # Fallback only: tools already on PATH win, ~/.motionable/bin is searched last.
 export PATH="${PATH}:${BIN}"
 
+# --retry-all-errors needs curl >= 7.71 (macOS 11 ships 7.64), so probe for it.
+RETRY=(--retry 3)
+if curl --help all 2>/dev/null | grep -q -- --retry-all-errors; then RETRY+=(--retry-all-errors); fi
+
 download() { # url dest  (HTTPS only, TLS 1.2+)
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 5 --retry-all-errors -o "$2" "$1" || die "Download failed: $1"
+  curl --proto '=https' --tlsv1.2 -fsSL "${RETRY[@]}" -o "$2" "$1" || die "Download failed: $1"
 }
 fetch() { # url -> stdout
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 5 --retry-all-errors "$1" || die "Download failed: $1"
+  curl --proto '=https' --tlsv1.2 -fsSL "${RETRY[@]}" "$1" || die "Download failed: $1"
 }
 sha256_of() {
   if have sha256sum; then sha256sum "$1" | cut -d' ' -f1
@@ -111,7 +115,7 @@ else
   for tool in ffmpeg ffprobe; do
     REL=""
     for _ in 1 2 3 4 5 6; do # the redirect endpoint answers 404 now and then
-      REL="$(curl --proto '=https' --tlsv1.2 -sI "${MBASE}/redirect/latest/macos/${MA}/release/${tool}.zip" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')" || REL=""
+      REL="$(curl --proto '=https' --tlsv1.2 --max-time 30 -sI "${MBASE}/redirect/latest/macos/${MA}/release/${tool}.zip" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')" || REL=""
       [ -n "$REL" ] && break
       sleep 2
     done
@@ -152,7 +156,7 @@ say "Doctor"
 DOC_OK=1
 DOC_OUT="$(node "${APP}/dist/cli.js" doctor)" || DOC_OK=0
 printf '%s\n' "$DOC_OUT"
-printf '%s' "$DOC_OUT" | grep -q '"ok": true' || DOC_OK=0
+grep -q '"ok": true' <<<"$DOC_OUT" || DOC_OK=0
 if [ "$DOC_OK" -ne 1 ]; then
   cat <<MSG
 

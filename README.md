@@ -111,7 +111,7 @@ Windows (PowerShell):
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-The script downloads ffmpeg and yt-dlp into `~/.motionable/bin` if missing, copies the app to `~/.motionable/app`, builds it, and verifies every download against its published checksum, and prints the two Claude Code commands to run (`claude plugin marketplace add "$HOME/.motionable/app"` and `claude plugin install motionable@motionable`). No sudo or admin rights. Safe to re-run.
+The script downloads ffmpeg and yt-dlp into `~/.motionable/bin` if missing and checks each download against its published checksum. It then copies the app to `~/.motionable/app`, builds it, and prints the two Claude Code commands to run (`claude plugin marketplace add "$HOME/.motionable/app"` and `claude plugin install motionable@motionable`). No sudo or admin rights. Safe to re-run.
 
 ### Start
 
@@ -119,7 +119,7 @@ Restart Claude Code and run `/motionable:motionable`.
 
 ### What works with no keys
 
-The full pipeline works without keys: reference study, style, director plan, preview, chat edits and render. Only AI generation (image/video) is off. Captions need word timings: an STT provider, or a script you paste.
+Almost the whole pipeline works without keys. The exception comes first: captions need word timings, so you need an STT provider or a script you paste. Everything else works: reference study, style, director plan, preview, chat edits and render. Only AI generation (image/video) is off.
 
 ### Keys
 
