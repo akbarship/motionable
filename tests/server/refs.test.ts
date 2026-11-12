@@ -52,7 +52,7 @@ test('refs/file builds sheet and queues study_ref', async () => {
   expect(r.status).toBe(201);
   const { task } = (await r.json()) as { task: { type: string; input: unknown } };
   expect(task.type).toBe('study_ref');
-  expect(task.input).toEqual({ video: 'refs/a.mp4', sheetDir: 'refs/a.sheet' });
+  expect(task.input).toEqual({ video: 'refs/a.mp4', sheetDir: 'refs/a.sheet', styleId: expect.stringMatching(/^a-[a-z0-9]{6}$/) });
   expect((await post(`/api/projects/${id}/refs/file`, { name: 'nope.mp4' })).status).toBe(404);
   expect((await post(`/api/projects/${id}/refs/file`, { name: '../a.mp4' })).status).toBe(400);
 });
@@ -79,5 +79,5 @@ test('refs url: 400 bad, 502 on failed download, 201 on success', async () => {
   );
   const ok = await post(`/api/projects/${id}/refs`, { url: 'https://www.instagram.com/reel/A/?igsh=1' });
   expect(ok.status).toBe(201);
-  expect(((await ok.json()) as { task: { input: unknown } }).task.input).toEqual({ video: 'refs/vid.mp4', sheetDir: 'refs/vid.sheet' });
+  expect(((await ok.json()) as { task: { input: unknown } }).task.input).toEqual({ video: 'refs/vid.mp4', sheetDir: 'refs/vid.sheet', styleId: expect.stringMatching(/^vid-[a-z0-9]{6}$/) });
 });

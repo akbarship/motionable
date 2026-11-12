@@ -126,6 +126,12 @@ export const api = {
     request<{ task: Task }>(`${p(id)}/refs/file`, { method: 'POST', body: { name } }),
   addTask: (id: string, type: TaskType, input: Record<string, unknown> = {}) =>
     request<Task>(`${p(id)}/tasks`, { method: 'POST', body: { type, input } }),
+  quote: (id: string, items: { kind: Kind; params: Record<string, unknown> }[]) =>
+    request<{ usd: number; missing: Kind[] }>(`${p(id)}/quote`, { method: 'POST', body: { items } }),
+  approveTask: (id: string, tid: string) =>
+    request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/approve`, { method: 'POST' }),
+  declineTask: (id: string, tid: string) =>
+    request<Task>(`${p(id)}/tasks/${encodeURIComponent(tid)}/decline`, { method: 'POST' }),
   styles: () => request<StyleSummary[]>('/api/styles'),
   getConfig: () => request<Config>('/api/config'),
   putConfig: (patch: ConfigPatch) => request<Config>('/api/config', { method: 'PUT', body: patch }),

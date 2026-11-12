@@ -2,6 +2,7 @@ import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, getToken, type Project } from './api';
 import { Onboarding } from './screens/Onboarding';
+import { Pipeline } from './screens/Pipeline';
 import { References } from './screens/References';
 import { Settings } from './screens/Settings';
 import { ChatPanel, ProjectBar, TopBar } from './ui/TopBar';
@@ -107,7 +108,7 @@ function App() {
       body = <References key={route.id} id={route.id} tick={tick} />;
       break;
     case 'pipeline':
-      body = <Placeholder title="Reja tayyorlanmoqda" text="Bosqichlar ekrani keyingi versiyada qo'shiladi." />;
+      body = <Pipeline key={route.id} id={route.id} tick={tick} />;
       break;
     case 'edit':
       body = <Placeholder title="Tahrirlash" text="Tahrir ekrani keyingi versiyada qo'shiladi." />;

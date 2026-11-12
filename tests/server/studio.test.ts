@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { projectDir } from '../../src/core/paths.js';
+import { addTask } from '../../src/core/queue.js';
 import { startStudio } from '../../src/server/studio.js';
 
 let prev: string | undefined;
@@ -116,6 +117,22 @@ describe('studio', () => {
     expect((await api(`/api/projects/${id}/tasks/${t.id}/approve`, { method: 'POST' })).status).toBe(200);
     expect((await api(`/api/projects/${id}/tasks/..%2F..%2Fx/approve`, { method: 'POST' })).status).toBe(400);
     expect((await api(`/api/projects/${id}/tasks/abc/approve`, { method: 'POST' })).status).toBe(404);
+  });
+
+  test('decline: only awaiting_approval generate tasks', async () => {
+    const id = await mk();
+    const gen = await addTask(id, 'generate', { sceneId: 's1', kind: 'image' }, 'awaiting_approval');
+    const done = await addTask(id, 'generate', {}, 'queued');
+    const ex = (await (await api(`/api/projects/${id}/tasks`, json({ type: 'execute', input: {} }))).json()) as any;
+    expect((await api(`/api/projects/${id}/tasks/${done.id}/decline`, { method: 'POST' })).status).toBe(400);
+    expect((await api(`/api/projects/${id}/tasks/${ex.id}/decline`, { method: 'POST' })).status).toBe(400);
+    expect((await api(`/api/projects/${id}/tasks/nope/decline`, { method: 'POST' })).status).toBe(404);
+    const r = await api(`/api/projects/${id}/tasks/${gen.id}/decline`, { method: 'POST' });
+    expect(r.status).toBe(200);
+    const t = (await r.json()) as any;
+    expect(t.status).toBe('failed');
+    expect(t.error).toBe('declined');
+    expect((await api(`/api/projects/${id}/tasks/${gen.id}/decline`, { method: 'POST' })).status).toBe(400);
   });
 
   test('chat adds edit task', async () => {

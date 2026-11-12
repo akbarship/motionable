@@ -5,11 +5,11 @@ import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir, styleDir } from '../core/paths.js';
-import { addTask, approve, listTasks } from '../core/queue.js';
+import { addTask, approve, fail, listTasks } from '../core/queue.js';
 import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
-import { createProject, getProject, listProjects, readJson, setLast } from '../core/store.js';
+import { createProject, getProject, listProjects, readJson, setLast, slugId } from '../core/store.js';
 import { ChatMsgSchema, PlanSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
@@ -119,9 +119,10 @@ async function listStyles() {
 
 async function studyRef(id: string, file: string) {
   const name = basename(file);
-  const sheetDir = `refs/${name.slice(0, name.length - extname(name).length)}.sheet`;
+  const stem = name.slice(0, name.length - extname(name).length);
+  const sheetDir = `refs/${stem}.sheet`;
   await buildRefSheet(file, join(projectDir(id), sheetDir));
-  return addTask(id, 'study_ref', { video: `refs/${name}`, sheetDir });
+  return addTask(id, 'study_ref', { video: `refs/${name}`, sheetDir, styleId: slugId(stem) });
 }
 
 async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
@@ -208,6 +209,17 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         const task = (await listTasks(id)).find((t) => t.id === tid);
         if (!task) throw new HttpError(404, 'task not found');
         return send(res, 200, task);
+      }
+      if (seg[2] === 'tasks' && seg[4] === 'decline' && seg.length === 5 && method === 'POST') {
+        const tid = assertId(seg[3]);
+        await getProject(id);
+        const task = (await listTasks(id)).find((t) => t.id === tid);
+        if (!task) throw new HttpError(404, 'task not found');
+        if (task.type !== 'generate' || task.status !== 'awaiting_approval') throw new HttpError(400, 'task not awaiting approval');
+        await fail(id, tid, 'declined');
+        const after = (await listTasks(id)).find((t) => t.id === tid);
+        if (!after) throw new HttpError(404, 'task not found');
+        return send(res, 200, after);
       }
       if (seg[2] === 'chat' && seg.length === 3 && method === 'POST') {
         await getProject(id);

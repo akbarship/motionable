@@ -19,10 +19,10 @@ function refName(t: Task): string {
   return typeof v === 'string' ? v.split('/').pop() || v : t.id;
 }
 
-/** A study_ref task may report the style it saved; pick it up if so. */
-function outputStyleId(t: Task): string | null {
-  const o = t.output as { styleId?: unknown } | null;
-  return o && typeof o.styleId === 'string' ? o.styleId : null;
+/** The server assigns input.styleId to every study_ref task; the agent saves styles/<styleId>/style.json. */
+function inputStyleId(t: Task): string | null {
+  const s = t.input.styleId;
+  return typeof s === 'string' && s ? s : null;
 }
 
 /** Second screen: add reference reels (link or file) or pick saved styles, then hand off to the director. */
@@ -106,7 +106,7 @@ export function References({ id, tick }: { id: string; tick: number }) {
     if (!canGo) return;
     setStarting(true);
     setError(null);
-    const fromRefs = refs.filter((t) => t.status === 'done').map(outputStyleId).filter((s): s is string => !!s);
+    const fromRefs = refs.filter((t) => t.status === 'done').map(inputStyleId).filter((s): s is string => !!s);
     const styleIds = [...new Set([...picked, ...fromRefs])];
     try {
       await api.addTask(id, 'direct', { styleIds });

@@ -979,3 +979,160 @@ textarea:disabled {
     transition: none !important;
   }
 }
+
+/* ---------- pipeline ---------- */
+
+.pipe {
+  display: grid;
+  gap: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+.stagecards,
+.scenes,
+.scene-comps,
+.approve-list,
+.stagecard-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.stagecards {
+  display: grid;
+  gap: 10px;
+}
+.stagecard {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+}
+.stagecard.is-running {
+  border-color: var(--run);
+}
+.stagecard-head,
+.scene-head,
+.approve {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stagecard-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+.stagecard-title {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.stagecard-log {
+  margin-top: 10px;
+  display: grid;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.stagecard-log li {
+  overflow-wrap: anywhere;
+}
+.block {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.block-h {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.scenes {
+  display: grid;
+  gap: 8px;
+}
+.scene {
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.scene-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+}
+.scene-purpose {
+  flex: 1;
+  font-weight: 560;
+}
+.scene-comps {
+  margin-top: 6px;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.scene-comps b {
+  font-weight: 600;
+}
+.scene-fallback {
+  margin: 6px 0 0;
+}
+.chip--gen {
+  background: var(--run-bg);
+  color: var(--run);
+}
+.gen-toggle {
+  display: grid;
+  gap: 4px;
+}
+.gen-toggle p {
+  margin: 0;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 560;
+}
+.approve-list {
+  display: grid;
+  gap: 8px;
+}
+.approve {
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.approve-body {
+  flex: 1;
+  min-width: 180px;
+  display: grid;
+  gap: 2px;
+}
+.approve-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.approve-prompt {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.approve-usd {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.approve-btns {
+  display: flex;
+  gap: 6px;
+}

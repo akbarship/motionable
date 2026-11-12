@@ -1,0 +1,98 @@
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
+import { fmtUsd, genUnavailable, quoteItemsFor, type PlanView } from '../pipeline';
+
+const num = (n: number) => String(Math.round(n * 100) / 100);
+
+/** Director's plan: scenes, optional paid generation with a quote, and the Approve button. */
+export function PlanReview({ projectId, plan, onStarted }: { projectId: string; plan: PlanView; onStarted: () => void }) {
+  const items = useMemo(() => quoteItemsFor(plan), [plan]);
+  const [useGen, setUseGen] = useState(false);
+  const [quote, setQuote] = useState<{ usd: number; missing: string[] } | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    let live = true;
+    api.quote(projectId, items).then(
+      (q) => {
+        if (!live) return;
+        setQuote(q);
+        setQuoteError(null);
+        if (genUnavailable(q.missing)) setUseGen(false);
+      },
+      (e: Error) => live && setQuoteError(e.message),
+    );
+    return () => {
+      live = false;
+    };
+  }, [projectId, items]);
+
+  const unavailable = quote ? genUnavailable(quote.missing) : false;
+
+  async function approve() {
+    if (sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await api.addTask(projectId, 'execute', { useGen: useGen && !unavailable });
+      onStarted();
+    } catch (e) {
+      setError((e as Error).message);
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="block" aria-labelledby="plan-h">
+      <h2 id="plan-h" className="block-h">Reja</h2>
+      <p className="muted small">Davomiyligi: {num(plan.duration)} s · {plan.scenes.length} ta sahna</p>
+      <ol className="scenes">
+        {plan.scenes.map((s) => (
+          <li key={s.id} className="scene">
+            <div className="scene-head">
+              <span className="scene-time">{num(s.start)}–{num(s.end)} s</span>
+              <span className="scene-purpose">{s.purpose}</span>
+              {s.gen && <span className="chip chip--gen">gen · {s.gen.type}</span>}
+            </div>
+            {s.components.length > 0 && (
+              <ul className="scene-comps">
+                {s.components.map((c, i) => (
+                  <li key={i}>
+                    <b>{c.kind}</b> {c.description}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {s.fallback && <p className="scene-fallback muted small">Zaxira: {s.fallback}</p>}
+          </li>
+        ))}
+      </ol>
+
+      {items.length > 0 && (
+        <div className="gen-toggle">
+          <label className="switch">
+            <input type="checkbox" checked={useGen} disabled={unavailable || quote === null} onChange={(e) => setUseGen(e.target.checked)} />
+            <span>Generatsiyadan foydalanish</span>
+          </label>
+          {quote && !unavailable && <p className="small">Taxminiy narx: {fmtUsd(quote.usd)}</p>}
+          {unavailable && <p className="muted small">Rasm/video generatsiyasi uchun Sozlamalarda provayder tanlang</p>}
+          {quoteError && <p className="form-error" role="alert">{quoteError}</p>}
+        </div>
+      )}
+
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="actions">
+        <button type="button" className="btn btn--dark btn--lg" disabled={sending} onClick={() => void approve()}>
+          {sending ? 'Yuborilmoqda…' : 'Rejani tasdiqlash'}
+        </button>
+      </div>
+    </section>
+  );
+}
