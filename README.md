@@ -11,12 +11,16 @@ Avval Node.js 22 yoki yangisini o'rnating: https://nodejs.org. Keyin repozitoriy
 Linux / macOS:
 
 ```bash
+git clone https://github.com/akbarship/motionable.git
+cd motionable
 bash scripts/install.sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
+git clone https://github.com/akbarship/motionable.git
+cd motionable
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
@@ -102,12 +106,16 @@ Install Node.js 22 or newer first: https://nodejs.org. Then clone this repo and 
 Linux / macOS:
 
 ```bash
+git clone https://github.com/akbarship/motionable.git
+cd motionable
 bash scripts/install.sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
+git clone https://github.com/akbarship/motionable.git
+cd motionable
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
