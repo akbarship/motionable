@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { projectDir } from '../core/paths.js';
 
 export const MAX_UPLOAD = 2 * 1024 ** 3;
-const EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mp3', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.webp']);
+export const ALLOWED_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mp3', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.webp']);
 
 export class HttpError extends Error {
   constructor(
@@ -35,7 +35,7 @@ export function checkFilename(raw: string | undefined, encoded = true): string {
   if (/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(name)) throw new HttpError(400, 'bad filename');
   if (basename(name) !== name || name.includes('..')) throw new HttpError(400, 'bad filename');
   const ext = extname(name);
-  if (!EXTS.has(ext.toLowerCase())) throw new HttpError(400, 'file type not allowed');
+  if (!ALLOWED_EXTS.has(ext.toLowerCase())) throw new HttpError(400, 'file type not allowed');
   if (RESERVED.test(name.slice(0, name.length - ext.length).split('.')[0])) throw new HttpError(400, 'reserved filename');
   return name;
 }

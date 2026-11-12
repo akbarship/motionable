@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -60,5 +60,36 @@ echo "$F"
     process.env.PATH = join(tmp, 'nothing');
     delete process.env.MOTIONABLE_YTDLP;
     await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+  });
+  test('rejects url starting with dash', async () => {
+    await fake(ok);
+    await expect(downloadRef('proj', '--exec=evil')).rejects.toThrow('Faylni yuklang');
+  });
+  test('passes -- before url', async () => {
+    await fake(`#!/bin/sh\nfor a in "$@"; do echo "$a" >> "${tmp}/args"; done\nexit 1\n`);
+    await downloadRef('proj', 'https://example.com/v').catch(() => {});
+    const args = (await readFile(join(tmp, 'args'), 'utf8')).trim().split('\n');
+    expect(args.slice(-2)).toEqual(['--', 'https://example.com/v']);
+    expect(args).toContain('--merge-output-format');
+  });
+  test('printed path outside refs is rejected', async () => {
+    await fake('#!/bin/sh\necho /etc/passwd\n');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+  });
+  test('disallowed extension rejected', async () => {
+    await fake(ok.replace('mp4', 'exe'));
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+  });
+  test('fallback ignores old files', async () => {
+    const refs = join(tmp, 'projects', 'proj', 'refs');
+    await mkdir(refs, { recursive: true });
+    await writeFile(join(refs, 'old.mp4'), 'x');
+    await utimes(join(refs, 'old.mp4'), 1, 1);
+    await fake('#!/bin/sh\necho /etc/passwd\n');
+    await expect(downloadRef('proj', 'https://example.com/v')).rejects.toThrow('Faylni yuklang');
+  });
+  test('fallback picks new file', async () => {
+    await fake(ok.replace('echo "$F"', 'echo /etc/passwd'));
+    expect(await downloadRef('proj', 'https://example.com/v')).toBe(join(tmp, 'projects', 'proj', 'refs', 'abc.mp4'));
   });
 });

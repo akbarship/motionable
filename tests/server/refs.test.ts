@@ -70,6 +70,9 @@ test('refs url: 400 bad, 502 on failed download, 201 on success', async () => {
   const bad = await post(`/api/projects/${id}/refs`, { url: 'https://example.com/v' });
   expect(bad.status).toBe(502);
   expect(await bad.json()).toEqual({ error: 'Faylni yuklang' });
+  await writeFile(join(bin, 'yt-dlp'), '#!/bin/sh\necho /etc/passwd\n');
+  expect((await post(`/api/projects/${id}/refs`, { url: 'https://example.com/v' })).status).toBe(502);
+  expect((await (await fetch(`${base}/api/projects/${id}`, { headers: { 'x-motionable-token': token } })).json() as { tasks: unknown[] }).tasks).toHaveLength(0);
   await writeFile(
     join(bin, 'yt-dlp'),
     `#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then T="$2"; fi; shift; done\nF=$(echo "$T" | sed 's/%(id)s/vid/; s/%(ext)s/mp4/')\ncp ${src} "$F"\necho "$F"\n`,

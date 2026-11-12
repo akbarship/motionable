@@ -36,6 +36,7 @@ async function detectCuts(video: string): Promise<number[]> {
 export async function buildRefSheet(video: string, outDir: string): Promise<RefSheet> {
   await mkdir(outDir, { recursive: true });
   const { duration } = await probe(video);
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error('video has no valid duration');
   const cuts = (await detectCuts(video)).filter((t) => t > 0 && t < duration);
   const bounds = [0, ...cuts, duration];
   let mids = bounds.slice(0, -1).map((b, i) => (b + bounds[i + 1]) / 2);
@@ -47,7 +48,7 @@ export async function buildRefSheet(video: string, outDir: string): Promise<RefS
     for (let i = 0; i < mids.length; i++) {
       await run(
         'ffmpeg',
-        ['-v', 'error', '-y', '-ss', mids[i].toFixed(3), '-i', video, '-frames:v', '1', '-vf', `scale=${TILE_W}:-2`, join(work, `f${String(i + 1).padStart(3, '0')}.jpg`)],
+        ['-v', 'error', '-y', '-ss', Math.min(mids[i], Math.max(0, duration - 0.05)).toFixed(3), '-i', video, '-frames:v', '1', '-vf', `scale=${TILE_W}:-2`, join(work, `f${String(i + 1).padStart(3, '0')}.jpg`)],
         { maxBuffer: BUF },
       );
     }
