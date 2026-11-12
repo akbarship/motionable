@@ -155,3 +155,36 @@ test('two queued exclusive tasks claimed in parallel: only one runs', async () =
   const r = await Promise.all([claimNext(), claimNext()]);
   expect(r.filter(Boolean)).toHaveLength(1);
 });
+
+test('progress refreshes the lock so a long task is not reclaimed', async () => {
+  const t = await addTask(p, 'render', {});
+  const c = await claimNext();
+  const old = new Date(Date.now() - 31 * 60_000);
+  await utimes(lockPath(t.id), old, old);
+  await progress(p, t.id, 'still alive', c!.token);
+  expect(await claimNext()).toBeNull();
+  expect((await listTasks(p))[0]!.status).toBe('running');
+});
+
+test('two concurrent stale reclaims return the task at most once', async () => {
+  const t = await addTask(p, 'study_ref', {});
+  await claimNext();
+  const old = new Date(Date.now() - 31 * 60_000);
+  await utimes(lockPath(t.id), old, old);
+  const r = await Promise.all(Array.from({ length: 6 }, () => claimNext()));
+  expect(r.filter(Boolean)).toHaveLength(1);
+});
+
+test('old worker cannot finish or unlock after its task was reclaimed', async () => {
+  const t = await addTask(p, 'study_ref', {});
+  const a = await claimNext();
+  const old = new Date(Date.now() - 31 * 60_000);
+  await utimes(lockPath(t.id), old, old);
+  const b = await claimNext();
+  expect(b!.token).not.toBe(a!.token);
+  await expect(finish(p, t.id, {}, a!.token)).rejects.toThrow();
+  await stat(lockPath(t.id));
+  expect((await listTasks(p))[0]!.status).toBe('running');
+  await finish(p, t.id, { ok: 1 }, b!.token);
+  expect((await listTasks(p))[0]!.status).toBe('done');
+});

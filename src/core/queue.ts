@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { open, readdir, rename, stat, unlink } from 'node:fs/promises';
+import { readFile, readdir, rename, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { projectDir } from './paths.js';
 import { listProjects, readJson, writeJson } from './store.js';
@@ -77,22 +77,51 @@ async function update(projectId: string, taskId: string, fn: (t: Task) => Task):
   return next;
 }
 
-export async function progress(projectId: string, taskId: string, line: string): Promise<void> {
-  await update(projectId, taskId, (t) => ({ ...t, progress: [...t.progress, line] }));
+/** Throws when a token is given and the lock no longer carries it (task was reclaimed). */
+async function assertOwner(projectId: string, taskId: string, token?: string): Promise<void> {
+  if (token === undefined) return;
+  let held: string | null = null;
+  try {
+    held = await readFile(lockFile(projectId, taskId), 'utf8');
+  } catch {
+    // missing lock counts as lost
+  }
+  if (held !== token) throw new Error(`lock for task ${taskId} is no longer owned by this worker`);
 }
 
-async function release(projectId: string, taskId: string): Promise<void> {
+/** Unlink the lock only when it is ours (or when no token is supplied). */
+async function release(projectId: string, taskId: string, token?: string): Promise<void> {
+  try {
+    await assertOwner(projectId, taskId, token);
+  } catch {
+    return;
+  }
   await unlink(lockFile(projectId, taskId)).catch(() => {});
 }
 
-export async function finish(projectId: string, taskId: string, output: Record<string, unknown>): Promise<void> {
-  await update(projectId, taskId, (t) => ({ ...t, status: 'done', output, error: null }));
-  await release(projectId, taskId);
+/** Appends a line and refreshes the lock mtime (heartbeat). `token` is the optional claim token. */
+export async function progress(projectId: string, taskId: string, line: string, token?: string): Promise<void> {
+  await assertOwner(projectId, taskId, token);
+  await update(projectId, taskId, (t) => ({ ...t, progress: [...t.progress, line] }));
+  const now = new Date();
+  await utimes(lockFile(projectId, taskId), now, now).catch(() => {});
 }
 
-export async function fail(projectId: string, taskId: string, error: string): Promise<void> {
+export async function finish(
+  projectId: string,
+  taskId: string,
+  output: Record<string, unknown>,
+  token?: string,
+): Promise<void> {
+  await assertOwner(projectId, taskId, token);
+  await update(projectId, taskId, (t) => ({ ...t, status: 'done', output, error: null }));
+  await release(projectId, taskId, token);
+}
+
+export async function fail(projectId: string, taskId: string, error: string, token?: string): Promise<void> {
+  await assertOwner(projectId, taskId, token);
   await update(projectId, taskId, (t) => ({ ...t, status: 'failed', error }));
-  await release(projectId, taskId);
+  await release(projectId, taskId, token);
 }
 
 export async function approve(projectId: string, taskId: string): Promise<void> {
@@ -107,10 +136,10 @@ async function lockAgeMs(projectId: string, taskId: string): Promise<number | nu
   }
 }
 
-/** Create the lock exclusively. Returns false when someone else holds it. */
-async function tryLock(file: string): Promise<boolean> {
+/** Create the file exclusively, writing the owner token. Returns false when it already exists. */
+async function tryLock(file: string, token = ''): Promise<boolean> {
   try {
-    await (await open(file, 'wx')).close();
+    await writeFile(file, token, { flag: 'wx' });
     return true;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
@@ -145,7 +174,7 @@ async function claimable(projectId: string, t: Task, runningExclusive: boolean):
   return null;
 }
 
-export async function claimNext(): Promise<{ projectId: string; task: Task } | null> {
+export async function claimNext(): Promise<{ projectId: string; task: Task; token: string } | null> {
   const candidates: { projectId: string; task: Task; running: boolean }[] = [];
   for (const project of await listProjects()) {
     const tasks = await listTasks(project.id);
@@ -158,29 +187,32 @@ export async function claimNext(): Promise<{ projectId: string; task: Task } | n
     const kind = await claimable(projectId, task, running);
     if (!kind) continue;
     const lock = lockFile(projectId, task.id);
+    const token = `${process.pid}-${randomBytes(8).toString('hex')}`;
     if (kind === 'stale') {
-      // Move the dead lock aside first so only one reclaimer can win the rename.
-      const aside = `${lock}.stale-${process.pid}-${randomBytes(4).toString('hex')}`;
+      // Reclaim under the project mutex and re-check the age there, so only one reclaimer wins.
+      const m = join(tasksDir(projectId), '_exclusive.mutex');
+      if (!(await takeMutex(m))) continue;
       try {
-        await rename(lock, aside);
-      } catch {
-        continue;
+        const age = await lockAgeMs(projectId, task.id);
+        if (age === null || age <= STALE_LOCK_MS) continue;
+        await unlink(lock).catch(() => {});
+        if (!(await tryLock(lock, token))) continue;
+      } finally {
+        await unlink(m).catch(() => {});
       }
-      await unlink(aside).catch(() => {});
-    }
-    if (!(await tryLock(lock))) continue;
+    } else if (!(await tryLock(lock, token))) continue;
 
     // Lock held: re-read, another process may have changed the task meanwhile.
     let fresh: Task;
     try {
       fresh = await readJson(taskFile(projectId, task.id), TaskSchema);
     } catch {
-      await release(projectId, task.id);
+      await release(projectId, task.id, token);
       continue;
     }
     const ok = kind === 'stale' ? fresh.status === 'running' : fresh.status === 'queued';
     if (!ok) {
-      await release(projectId, task.id);
+      await release(projectId, task.id, token);
       continue;
     }
     let mutex: string | null = null;
@@ -188,13 +220,13 @@ export async function claimNext(): Promise<{ projectId: string; task: Task } | n
       // Short project mutex so two exclusive tasks cannot both pass the check at once.
       mutex = join(tasksDir(projectId), '_exclusive.mutex');
       if (!(await takeMutex(mutex))) {
-        await release(projectId, task.id);
+        await release(projectId, task.id, token);
         continue;
       }
       const now = await listTasks(projectId);
       if (now.some((t) => t.id !== fresh.id && t.status === 'running' && EXCLUSIVE.has(t.type))) {
         await unlink(mutex).catch(() => {});
-        await release(projectId, task.id);
+        await release(projectId, task.id, token);
         continue;
       }
     }
@@ -204,7 +236,7 @@ export async function claimNext(): Promise<{ projectId: string; task: Task } | n
     } finally {
       if (mutex) await unlink(mutex).catch(() => {});
     }
-    return { projectId, task: running_ };
+    return { projectId, task: running_, token };
   }
   return null;
 }
@@ -213,7 +245,7 @@ export async function claimNext(): Promise<{ projectId: string; task: Task } | n
 export async function waitForTask(
   timeoutS: number,
   pollMs = 1000,
-): Promise<{ projectId: string; task: Task } | null> {
+): Promise<{ projectId: string; task: Task; token: string } | null> {
   const deadline = Date.now() + timeoutS * 1000;
   for (;;) {
     const c = await claimNext();
