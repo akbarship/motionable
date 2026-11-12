@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { vi } from 'vitest';
+vi.setConfig({ testTimeout: 60_000 }); // ffmpeg-heavy: real encodes take several seconds under parallel load
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
