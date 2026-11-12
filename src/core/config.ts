@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { home } from './paths.js';
-import { readJson, writeJson } from './store.js';
+import { readFile } from 'node:fs/promises';
+import { writeJson } from './store.js';
 import { ConfigSchema, type Config } from './types.js';
 
 const MASK = '••••';
@@ -18,13 +19,30 @@ function defaults(): Config {
   });
 }
 
+/**
+ * Missing file -> defaults. A file written by hand or by an older version may lack fields:
+ * each missing provider kind falls back to {use:'off'} instead of crashing the Studio.
+ */
 export async function loadConfig(): Promise<Config> {
+  let raw: string;
   try {
-    return await readJson(file(), ConfigSchema);
+    raw = await readFile(file(), 'utf8');
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return defaults();
     throw e;
   }
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(`${file()} is not valid JSON; fix or delete it`);
+  }
+  const base = defaults();
+  const given = (data.providers ?? {}) as Partial<Config['providers']>;
+  const merged = { ...data, providers: { ...base.providers, ...given } };
+  const r = ConfigSchema.safeParse(merged);
+  if (!r.success) throw new Error(`${file()} has invalid values: ${r.error.issues.map((i) => i.path.join('.')).join(', ')}`);
+  return r.data;
 }
 
 function mask(key: string | undefined): string | undefined {

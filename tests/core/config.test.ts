@@ -79,3 +79,29 @@ describe('config', () => {
     expect(c.botUrl).toBe('https://b.example');
   });
 });
+
+describe('config file with missing fields', () => {
+  it('fills missing providers with defaults instead of crashing', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(tmp, 'config.json'), JSON.stringify({ port: 4401, providers: { image: { use: 'kie', key: 'k-1234' } } }));
+    const c = await loadConfig();
+    expect(c.port).toBe(4401);
+    expect(c.providers.image).toEqual({ use: 'kie', key: 'k-1234' });
+    expect(c.providers.video).toEqual({ use: 'off' });
+    expect(c.providers.stt).toEqual({ use: 'off' });
+  });
+
+  it('a config.json with only a port loads with all providers off', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(tmp, 'config.json'), '{"port":4401}');
+    const c = await loadConfig();
+    expect(c.port).toBe(4401);
+    expect(c.providers.tts.use).toBe('off');
+  });
+
+  it('broken JSON gives a clear error naming the file', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(tmp, 'config.json'), '{oops');
+    await expect(loadConfig()).rejects.toThrow(/config\.json/);
+  });
+});
