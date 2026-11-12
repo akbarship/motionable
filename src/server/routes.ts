@@ -161,7 +161,7 @@ async function serveRender(req: IncomingMessage, res: ServerResponse, id: string
   if (extname(name).toLowerCase() !== '.mp4') throw new HttpError(400, 'file type not allowed');
   const file = join(projectDir(id), 'renders', name);
   const size = (await stat(file)).size; // ENOENT -> 404
-  const headers: Record<string, string | number> = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes' };
+  const headers: Record<string, string | number> = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'referrer-policy': 'no-referrer' };
   const range = req.headers.range;
   let start = 0;
   let end = size - 1;

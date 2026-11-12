@@ -89,6 +89,19 @@ describe('ensurePreview', () => {
   });
 });
 
+test('SIGTERM-ignoring child is dead after stopAllPreviews', async () => {
+  const f = join(tmp, 'stubborn.sh');
+  await writeFile(f, `#!/bin/sh\ntrap '' TERM\necho "$$" > "${tmp}/stubborn.pid"\necho "http://127.0.0.1:4598/"\nwhile true; do sleep 1; done\n`);
+  await chmod(f, 0o755);
+  process.env.MOTIONABLE_HF_BIN = f;
+  await makeComp('p5');
+  await ensurePreview('p5');
+  const pid = Number((await readFile(join(tmp, 'stubborn.pid'), 'utf8')).trim());
+  expect(alive(pid)).toBe(true);
+  await stopAllPreviews();
+  expect(alive(pid)).toBe(false);
+}, 15_000);
+
 describe('renders routes', () => {
   let s: Awaited<ReturnType<typeof startStudio>>;
   let base: string;
@@ -127,6 +140,7 @@ describe('renders routes', () => {
     const r = await fetch(`${base}/api/projects/r1/renders/new.mp4`, { headers: { ...H, range: 'bytes=2-4' } });
     expect(r.status).toBe(206);
     expect(r.headers.get('content-range')).toBe('bytes 2-4/10');
+    expect(r.headers.get('referrer-policy')).toBe('no-referrer');
     expect(await r.text()).toBe('cde');
     const tail = await fetch(`${base}/api/projects/r1/renders/new.mp4`, { headers: { ...H, range: 'bytes=7-' } });
     expect(await tail.text()).toBe('hij');
