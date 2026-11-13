@@ -35,6 +35,10 @@ Blocking error: `task_failed` with a short Uzbek reason.
 
 ## 2. Measure (the part that makes it exact)
 
+Size first: `node <cliPath> probe <projectDir>/<V>` gives the reference's `w`x`h`. Every `--roi`
+is in THOSE pixels. Every px value you write (`r`, `blur`, sizes, offsets) is converted to our
+1080x1920: multiply by `1080 / w` (720 px wide = x1.5).
+
 Write down every distinct visual idea you see on the sheets, then measure each one:
 
 - Events: `measure events <V> --map --out <projectDir>/<sheetDir>/measure`. Note when things
@@ -48,7 +52,8 @@ Write down every distinct visual idea you see on the sheets, then measure each o
 - Background: `measure look <V> --at <t> --grid 4x8` at 2-3 moments: gradient stops and blob
   colours/positions. Compare two moments a few seconds apart for drift. Name blur radius from
   how soft the edges are on the frames.
-- Text: `measure ink <V> --at <t> --roi <x,y,w,h>` on a headline and on a caption: pixel size.
+- Text: `measure ink <V> --at <t> --roi <x,y,w,h>` on a headline and on a caption. Ink height of a
+  capital letter is about 0.72 of the font size: font px = cap ink px / 0.72 (then x `1080 / w`).
 - Materials: glass cards, shadows, borders, radius. Read them off a single frame from
   `frames/` (Read 2-4 frames that show the recurring elements best).
 - Content: real logos, real product UI, illustrations, photos, presenter. Each one goes in
@@ -64,9 +69,15 @@ Write down every distinct visual idea you see on the sheets, then measure each o
   whether the camera moves. Write `sceneRules` for anything specific a builder would miss, e.g.
   `laptop scene: 5 stacked illustration cards fanning in from the right`,
   `every stat sits on a glass card, never on the bare background`.
-- Sound: `node <cliPath> audio-hits <projectDir>/<V>` lists level jumps `{t, dur, kind}`
-  (`click`, `impact`, `whoosh`, `hit`). Speech onsets show up too: keep only hits within 0.15 s
-  of an event from `measure events` (a cut, a card or text appearing). Name each kept pattern
+  A reel that switches between two background worlds: `background` = the main one, and one
+  `sceneRules` line names the other with its colours and when it appears.
+- Sound: `node <cliPath> audio-hits <projectDir>/<V>` lists level jumps `{t, dur, centroid, kind}`
+  (`click`, `impact`, `whoosh`, `hit`). Speech onsets show up too: keep only hits within 0.25 s
+  of an event from `measure events` (any `windows[].start` or onset frame time). An `impact` or
+  `hit` with `centroid` 250-700 Hz and `dur` < 0.3 s is most likely a spoken syllable: drop it
+  unless the same hit repeats on most events of one kind.
+- Moves over the whole frame (whips, carousels): `measure curve` fits one element only; read
+  their values off the `measure frames` strip instead. Name each kept pattern
   as a cue: `{on: "cut|card-in|text-in|ui-click|...", sound: "<concrete sound, e.g. soft whoosh,
   ui click, pop, bass impact>", volume: 0.25-0.4}`. No matching hits: `sfx: []`.
 
