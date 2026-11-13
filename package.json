@@ -11,7 +11,7 @@
     "dev:studio": "vite --config studio/vite.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p studio",
-    "plugin:refresh": "npm run build && claude plugin uninstall motionable@motionable && claude plugin install motionable@motionable --scope user"
+    "plugin:refresh": "npm run build && node scripts/refresh-plugin-cache.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

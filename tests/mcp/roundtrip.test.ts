@@ -226,4 +226,31 @@ describe('mcp roundtrip', () => {
     expect(JSON.parse(m.content[0].text)).toEqual({ error: 'no_stt_provider', hint: 'sudo apt-get install -y git cmake build-essential' });
     await missing.close();
   });
+
+  test('a task this chat took but never finished is handed out again, once finished it is not', async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await post(`/api/projects/${id}/tasks`, { type: 'direct', input: {} });
+    const first = (await call('next_task')).data;
+    expect(first.type).toBe('direct');
+    expect(first.resumed).toBeUndefined();
+    const again = (await call('next_task')).data;
+    expect(again).toMatchObject({ taskId: first.taskId, type: 'direct', resumed: true });
+    await call('task_done', { projectId: id, taskId: first.taskId, summary: 'ok' });
+    process.env.MOTIONABLE_WAIT_S = '1';
+    expect((await call('next_task')).data).toEqual({ idle: true });
+  });
+
+  test("another chat's running task is never handed out", async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await post(`/api/projects/${id}/tasks`, { type: 'direct', input: {} });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await createMcpServer({ session: SID }).connect(a);
+    const other = new Client({ name: 'other', version: '0' });
+    await other.connect(b);
+    const r = (await other.callTool({ name: 'next_task', arguments: {} })) as { content: { text: string }[] };
+    expect(JSON.parse(r.content[0].text).type).toBe('direct');
+    process.env.MOTIONABLE_WAIT_S = '1';
+    expect((await call('next_task')).data).toEqual({ idle: true });
+    await other.close();
+  });
 });

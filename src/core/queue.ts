@@ -77,6 +77,16 @@ async function update(projectId: string, taskId: string, fn: (t: Task) => Task):
   return next;
 }
 
+/** True when the task's lock still carries `token` (no other worker reclaimed it). */
+export async function ownsLock(projectId: string, taskId: string, token: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  try {
+    return (await readFile(lockFile(projectId, taskId), 'utf8')) === token;
+  } catch {
+    return false;
+  }
+}
+
 /** Throws when a token is given and the lock no longer carries it (task was reclaimed). */
 async function assertOwner(projectId: string, taskId: string, token?: string): Promise<void> {
   if (token === undefined) return;

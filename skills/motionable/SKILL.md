@@ -40,6 +40,8 @@ Repeat until the user interrupts:
      Do this task. Finish with task_done or task_failed for this taskId.
      ```
 
+   - `resumed: true` means the last run of this task was cut off (sign-in, network, stop):
+     print `Qayta boshlandi: <type>` and dispatch it the same way.
    - Wait for the subagent to return. Then print one short Uzbek line, for example
      `Tayyor: <type> — <its one-line summary>` or `Xato: <type> — <short reason>`.
    - Go back to step 1.

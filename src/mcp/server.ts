@@ -10,7 +10,7 @@ import { BUILD_ID } from '../core/build.js';
 import { loadConfig } from '../core/config.js';
 import { appendBinDir } from '../core/path-env.js';
 import { home, projectDir } from '../core/paths.js';
-import { addTask, claimNext, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
+import { addTask, claimNext, fail, finish, listTasks, ownsLock, progress, waitForTask } from '../core/queue.js';
 import { getProject, readJson, writeJson } from '../core/store.js';
 import { KindSchema, WordsSchema, type TaskType, type Words } from '../core/types.js';
 import { LocalSttUnavailable, transcribeLocal } from '../providers/local-stt.js';
@@ -155,6 +155,8 @@ export function createMcpServer(
   const server = new McpServer({ name: 'motionable', version: '0.1.0' });
   /** taskId -> claim token from waitForTask. */
   const tokens = new Map<string, string>();
+  /** Tasks this chat claimed and has not finished: handed out again if the agent never got to finish. */
+  const claimed = new Map<string, string>(); // taskId -> projectId
   /** This chat. Projects opened from the Studio tab this chat opened are bound to it. */
   const session = opts.session ?? randomBytes(8).toString('hex');
 
@@ -175,15 +177,35 @@ export function createMcpServer(
     'next_task',
     {
       description:
-        'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent, cliPath} or {idle:true}.',
+        'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent, cliPath, resumed?} or {idle:true}. resumed: a task this chat took earlier but never finished (agent interrupted): run it again.',
     },
     async (extra) => {
       await touchHeartbeat(session);
       const timer = setInterval(() => void touchHeartbeat(session).catch(() => {}), HEARTBEAT_EVERY_MS);
       try {
+        // An agent cut off before task_done/task_failed (sign-in expired, network, user stop)
+        // leaves its task running under our lock: hand it out again instead of waiting 30 min.
+        for (const [taskId, projectId] of claimed) {
+          const t = (await listTasks(projectId).catch(() => [])).find((x) => x.id === taskId);
+          if (!t || t.status !== 'running' || !(await ownsLock(projectId, taskId, tokens.get(taskId)))) {
+            claimed.delete(taskId);
+            continue;
+          }
+          return text({
+            projectId,
+            taskId,
+            type: t.type,
+            input: t.input,
+            projectDir: projectDir(projectId),
+            agent: AGENTS[t.type],
+            cliPath: cliPath(),
+            resumed: true,
+          });
+        }
         const c = await waitForTask(waitSeconds(), 1000, extra.signal, () => claimNext({ session }));
         if (!c) return text({ idle: true });
         tokens.set(c.task.id, c.token);
+        claimed.set(c.task.id, c.projectId);
         return text({
           projectId: c.projectId,
           taskId: c.task.id,
@@ -222,6 +244,7 @@ export function createMcpServer(
       await touchHeartbeat(session);
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
       tokens.delete(taskId);
+      claimed.delete(taskId);
       return text({ ok: true });
     },
   );
@@ -236,6 +259,7 @@ export function createMcpServer(
       await touchHeartbeat(session);
       await fail(projectId, taskId, error, tokens.get(taskId));
       tokens.delete(taskId);
+      claimed.delete(taskId);
       return text({ ok: true });
     },
   );
