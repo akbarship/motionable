@@ -25,6 +25,7 @@ describe('palette helpers', () => {
       expect.arrayContaining(['#ffffff', '#1e5bff', '#7c3aed', '#aabbcc']),
     );
     expect(extractColours('#12345')).toEqual([]);
+    expect(extractColours('.dot{background:#ff5f57} /* palette-ok: macOS window dot */\n.x{color:#1e5bff}')).toEqual(['#1e5bff']);
   });
   test('neutrals and distance', () => {
     expect(isNeutral('#f4f1ea')).toBe(true);

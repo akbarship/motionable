@@ -52,7 +52,7 @@ describe('ensurePreview', () => {
   test('returns parsed URL and reuses the child', async () => {
     await makeComp('p1');
     const [a, b] = await Promise.all([ensurePreview('p1'), ensurePreview('p1')]);
-    expect(a.url).toBe('http://127.0.0.1:4599/#project/x');
+    expect(a.url).toBe('http://127.0.0.1:4599/composition/.motionable/player.html');
     expect(b.url).toBe(a.url);
     expect((await ensurePreview('p1')).url).toBe(a.url);
     const log = await spawns();

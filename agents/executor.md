@@ -30,7 +30,8 @@ shapes). Use footage, b-roll, a registry block or an approved gen asset; else ty
 2. `node <cliPath> palette-check <projectDir>`. Exit 1 lists `offenders` (colour, files,
    `nearest` allowed colour): replace each with its `nearest` (or a neutral) and run it again.
    A colour the reference does not use never ships: no purple, teal or orange "accent" of
-   your own.
+   your own. Only a real product's own colours in a `ui` rebuild (macOS window dots, a brand's
+   mark colour) may stay: put them on their own line with the comment `/* palette-ok: <why> */`.
 3. `hf snapshot --at <midpoint of each touched scene, comma-separated>` and look at
    the PNGs under `comp/.hyperframes/artifacts/snapshots/`. Fix what looks wrong (missing hero,
    tiny unstyled content), then do the Reference check.

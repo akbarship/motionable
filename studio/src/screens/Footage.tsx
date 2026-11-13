@@ -101,7 +101,7 @@ export function Footage({ id, tick }: { id: string; tick: number }) {
       )}
 
       <div className="footage-grid">
-        <section className="panel">
+        <section className="footage-card">
           <Dropzone label="Video yoki ovozni tashlang" hint="MP4, MOV, MP3, WAV, M4A. Bir nechta fayl bo'lishi mumkin." accept={ACCEPT} disabled={cutting} onFiles={(f) => void addFiles(f)} />
           <FileList rows={rows} onRemove={(key) => setRows((cur) => cur.filter((r) => r.key !== key))} />
           <h2 className="h-sub">Yuklangan fayllar ({files.length})</h2>
@@ -138,7 +138,7 @@ export function Footage({ id, tick }: { id: string; tick: number }) {
           {rc?.status === 'failed' && <p className="form-error">Kesish xatosi: {rc.error}</p>}
         </section>
 
-        <section className="panel footage-body">
+        <section className="footage-card footage-body">
           <h2 className="h-sub">Body {cut?.duration ? `· ${fmt(cut.duration)}` : ''}</h2>
           {cut?.body ? (
             <>

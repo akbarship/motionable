@@ -246,9 +246,16 @@ a {
   .menu-btn {
     display: inline-flex;
   }
+  .topbar-left {
+    flex: 1;
+  }
   .topbar .seg {
+    min-width: 0;
     overflow-x: auto;
-    max-width: calc(100vw - 120px);
+    scrollbar-width: none;
+  }
+  .topbar .seg a {
+    white-space: nowrap;
   }
   .topbar-title {
     display: none;
@@ -1046,12 +1053,6 @@ textarea:disabled {
 
 @media (max-width: 760px) {
   .topbar {
-    padding: 0 12px;
-  }
-  .seg {
-    display: none;
-  }
-  .topbar {
     flex-wrap: wrap;
     height: auto;
     padding: 8px 12px;
@@ -1714,8 +1715,8 @@ textarea:disabled {
 .stage--footage .lead {
   margin: 0;
 }
-.stage--footage .panel {
-  max-width: none;
+.footage-card {
+  min-width: 0;
   display: grid;
   gap: 12px;
   padding: 16px;

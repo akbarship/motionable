@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { stat } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { npxCommand } from '../core/hf-cmd.js';
@@ -133,6 +133,17 @@ async function start(id: string): Promise<Entry> {
 }
 
 /** Starts (or reuses) the lightweight HyperFrames player server for a project's comp/ and returns its URL. */
+/**
+ * The stock `play` page frames the player for 16:9 with a caption. Our page fills the frame with
+ * just the player, served by the same server (comp/ is served under /composition/).
+ */
+const EMBED = `<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Motionable player</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}hyperframes-player{display:block;width:100%;height:100%}</style>
+</head><body><hyperframes-player src="/composition/index.html" controls></hyperframes-player><script src="/player.js"></script></body></html>
+`;
+
 export async function ensurePreview(projectId: string): Promise<{ url: string }> {
   if (!(await hasComp(projectId))) throw new HttpError(409, 'no_comp');
   let e = entries.get(projectId);
@@ -140,7 +151,11 @@ export async function ensurePreview(projectId: string): Promise<{ url: string }>
     e = await start(projectId);
     entries.set(projectId, e);
   }
-  return e.ready;
+  const { url } = await e.ready;
+  const dir = join(projectDir(projectId), 'comp', '.motionable');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'player.html'), EMBED);
+  return { url: `${new URL(url).origin}/composition/.motionable/player.html` };
 }
 
 export async function stopAllPreviews(): Promise<void> {

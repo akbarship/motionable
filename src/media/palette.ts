@@ -4,9 +4,16 @@ import { extname, join, relative } from 'node:path';
 type Rgb = [number, number, number];
 type Lab = [number, number, number];
 
-/** Colours written in CSS/HTML: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb()/rgba() with 0-255 channels. */
+/**
+ * Colours written in CSS/HTML: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb()/rgba() with 0-255 channels.
+ * Lines marked `palette-ok` (a real product's own colours: window dots, a brand mark) are skipped.
+ */
 export function extractColours(text: string): string[] {
   const out = new Set<string>();
+  text = text
+    .split('\n')
+    .filter((l) => !l.includes('palette-ok'))
+    .join('\n');
   for (const m of text.matchAll(/#([0-9a-fA-F]{3,8})\b/g)) {
     const h = m[1];
     if (![3, 4, 6, 8].includes(h.length)) continue;
