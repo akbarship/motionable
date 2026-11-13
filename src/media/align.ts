@@ -100,7 +100,18 @@ function alignAt(line: string[], w: string[], i: number, win: number): { score: 
  */
 export function alignScript(script: string, sources: Source[]): LineMatch[] {
   const lines = scriptLines(script);
-  const prepared = sources.map((s) => ({ ...s, toks: s.words.map((x) => norm(x.w).replace(/\s+/g, '')) }));
+  // One token per normalised piece ("CLAUDE.md" -> claude, md), each pointing back to its STT word.
+  const prepared = sources.map((s) => {
+    const toks: string[] = [];
+    const wordOf: number[] = [];
+    s.words.forEach((x, i) => {
+      for (const t of norm(x.w).split(/\s+/).filter(Boolean)) {
+        toks.push(t);
+        wordOf.push(i);
+      }
+    });
+    return { ...s, toks, wordOf };
+  });
   return lines.map((line) => {
     const lt = tokens(line);
     const takes: Take[] = [];
@@ -122,7 +133,9 @@ export function alignScript(script: string, sources: Source[]): LineMatch[] {
         if (r.first < 0 || r.end < r.first) continue;
         const coverage = r.matched / lt.length;
         if (coverage < 0.5) continue;
-        cands.push({ src: s.src, start: s.words[r.first].start, end: s.words[r.end].end, coverage: Math.round(coverage * 100) / 100, from: r.first, to: r.end });
+        const from = s.wordOf[r.first];
+        const to = s.wordOf[r.end];
+        cands.push({ src: s.src, start: s.words[from].start, end: s.words[to].end, coverage: Math.round(coverage * 100) / 100, from, to });
       }
       // Overlapping candidates are one take: keep the best covered (then the longest).
       cands.sort((a, b) => b.coverage - a.coverage || b.to - b.from - (a.to - a.from));

@@ -47,6 +47,12 @@ describe('align', () => {
     expect(r[1].pick!.start).toBeCloseTo(0.4, 5);
   });
 
+  test('a word the STT wrote with a dot counts fully ("CLAUDE.md")', () => {
+    const r = alignScript('Birinchisi, CLAUDE.md.', [{ src: 'a.wav', words: speak('Birinchisi CLAUDE.md') }]);
+    expect(r[0].pick!.coverage).toBe(1);
+    expect(r[0].pick!.to).toBe(1);
+  });
+
   test('a line never said has no pick', () => {
     const r = alignScript('Bu gap aytilmagan edi.', [{ src: 'a.wav', words: speak('boshqa narsa haqida gapirdim') }]);
     expect(r[0].pick).toBeNull();

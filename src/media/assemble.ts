@@ -10,6 +10,22 @@ const run = promisify(execFile);
 /** Breath kept before the first and after the last word of a segment. */
 export const PAD_S = 0.08;
 const FADE_S = 0.02;
+/** A pause longer than this inside a kept take is cut down to 2 x KEEP_S. */
+export const MAX_PAUSE_S = 0.6;
+const KEEP_S = 0.12;
+
+/** Splits a segment around every long pause inside it, keeping a short natural breath. */
+export function splitPauses<T extends { in: number; out: number }>(seg: T, silences: Silence[]): T[] {
+  const out: T[] = [];
+  let start = seg.in;
+  for (const s of silences) {
+    if (s.start <= start || s.end >= seg.out || s.end - s.start <= MAX_PAUSE_S) continue;
+    out.push({ ...seg, in: start, out: Math.round((s.start + KEEP_S) * 1000) / 1000 });
+    start = Math.round((s.end - KEEP_S) * 1000) / 1000;
+  }
+  out.push({ ...seg, in: start, out: seg.out });
+  return out;
+}
 
 interface MediaInfo {
   duration: number;
@@ -86,7 +102,7 @@ export async function assemble(
   cut: Cut,
   resolveSrc: (src: string) => string,
   outDir: string,
-): Promise<{ body: string; duration: number; segments: { src: string; in: number; out: number }[]; words: Words }> {
+): Promise<{ body: string; duration: number; segments: { src: string; in: number; out: number; line?: string }[]; words: Words }> {
   if (cut.segments.length === 0) throw new Error('cut has no segments');
   const files = [...new Set(cut.segments.map((s) => s.src))];
   const meta = new Map<string, { info: MediaInfo; silences: Silence[]; words: Words }>();
@@ -101,9 +117,10 @@ export async function assemble(
   const video = kinds.has('video');
   const first = meta.get(cut.segments[0].src)!.info.video;
 
-  const segs = cut.segments.map((s) => {
+  const segs = cut.segments.flatMap((s) => {
     const m = meta.get(s.src)!;
-    return { src: s.src, ...snapToSpeech(s, m.silences, m.info.duration) };
+    const snapped = { src: s.src, ...(s.line ? { line: s.line } : {}), ...snapToSpeech(s, m.silences, m.info.duration) };
+    return splitPauses(snapped, m.silences);
   });
 
   const args: string[] = ['-v', 'error', '-y'];

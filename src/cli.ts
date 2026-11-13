@@ -174,7 +174,8 @@ export async function runAssemble(projectDir: string) {
   const r = await assemble(cut, (src) => inProject(dir, src), outDir);
   const bodyRel = relative(dir, r.body).split('\\').join('/');
   await writeFile(join(outDir, 'body.words.json'), JSON.stringify(r.words));
-  const next = { ...cut, segments: cut.segments.map((s, i) => ({ ...s, in: r.segments[i].in, out: r.segments[i].out })), body: bodyRel, duration: r.duration, approved: false };
+  // The written cut is what the body holds: snapped edges, long pauses split out.
+  const next = { ...cut, segments: r.segments, body: bodyRel, duration: r.duration, approved: false };
   await writeFile(cutFile, JSON.stringify(next, null, 2));
   return { body: bodyRel, duration: r.duration, segments: r.segments.length, words: r.words.length };
 }

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { runAlign, runAssemble } from '../../src/cli.js';
 import { createProject } from '../../src/core/store.js';
 import { projectDir } from '../../src/core/paths.js';
-import { remapWords, snapToSpeech } from '../../src/media/assemble.js';
+import { remapWords, snapToSpeech, splitPauses } from '../../src/media/assemble.js';
 
 let tmp: string;
 const prev = process.env.MOTIONABLE_HOME;
@@ -36,6 +36,14 @@ describe('assemble', () => {
     const sil = [{ start: 0, end: 1 }, { start: 2, end: 3 }];
     expect(snapToSpeech({ in: 0.2, out: 2.6 }, sil, 3)).toEqual({ in: 0.92, out: 2.08 });
     expect(snapToSpeech({ in: 1.5, out: 1.9 }, sil, 3)).toEqual({ in: 1.5, out: 1.9 });
+  });
+
+  test('a long pause inside a take is cut down; short ones stay', () => {
+    const sil = [{ start: 2, end: 3 }, { start: 4, end: 4.3 }];
+    expect(splitPauses({ in: 1, out: 5, line: 'x' }, sil)).toEqual([
+      { in: 1, out: 2.12, line: 'x' },
+      { in: 2.88, out: 5, line: 'x' },
+    ]);
   });
 
   test('remaps words onto the body timeline', () => {
