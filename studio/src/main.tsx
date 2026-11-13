@@ -2,6 +2,7 @@ import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, getToken, type Project } from './api';
 import { Editor } from './screens/Editor';
+import { Footage } from './screens/Footage';
 import { Onboarding } from './screens/Onboarding';
 import { Pipeline } from './screens/Pipeline';
 import { References } from './screens/References';
@@ -93,6 +94,10 @@ function App() {
       break;
     case 'refs':
       body = <References key={route.id} id={route.id} tick={tick} />;
+      break;
+    case 'footage':
+      body = <Footage key={route.id} id={route.id} tick={tick} />;
+      withChat = false;
       break;
     case 'pipeline':
       body = <Pipeline key={route.id} id={route.id} tick={tick} />;

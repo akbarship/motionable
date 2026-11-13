@@ -9,6 +9,7 @@ import { projectDir } from '../../src/core/paths.js';
 import { approve, claimNext, listTasks } from '../../src/core/queue.js';
 import { createProject } from '../../src/core/store.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { LocalSttUnavailable } from '../../src/providers/local-stt.js';
 import type { GenerationProvider } from '../../src/providers/types.js';
 import { startStudio } from '../../src/server/studio.js';
 import { startMockBot, type MockBot } from './bot-mock.js';
@@ -50,7 +51,12 @@ beforeEach(async () => {
   seenResume.length = 0;
   withProvider = true;
   const [a, b] = InMemoryTransport.createLinkedPair();
-  await createMcpServer({ providerFor: () => (withProvider ? fake : null) }).connect(a);
+  await createMcpServer({
+    providerFor: () => (withProvider ? fake : null),
+    localStt: async () => {
+      throw new LocalSttUnavailable('install whisper');
+    },
+  }).connect(a);
   client = new Client({ name: 't', version: '0' });
   await client.connect(b);
 });
@@ -103,7 +109,7 @@ describe('generation tools', () => {
     const dir = projectDir(p.id);
     await writeFile(join(dir, 'broll', 'clip.mp3'), 'a');
     const r = await call('transcribe', { projectId: p.id, file: 'broll/clip.mp3' });
-    expect(r.data).toEqual({ wordsPath: 'broll/clip.words.json' });
+    expect(r.data).toEqual({ wordsPath: 'broll/clip.words.json', engine: 'provider' });
     expect(JSON.parse(await readFile(join(dir, r.data.wordsPath), 'utf8'))).toEqual([{ w: 'hi', start: 0, end: 1 }]);
 
     expect((await call('transcribe', { projectId: p.id, file: '../../x.mp3' })).isError).toBe(true);
@@ -113,7 +119,7 @@ describe('generation tools', () => {
     expect((await call('transcribe', { projectId: p.id, file: 'broll/link.mp3' })).isError).toBe(true);
 
     withProvider = false;
-    expect((await call('transcribe', { projectId: p.id, file: 'broll/clip.mp3' })).data).toEqual({ error: 'no_stt_provider' });
+    expect((await call('transcribe', { projectId: p.id, file: 'broll/clip.mp3' })).data).toEqual({ error: 'no_stt_provider', hint: 'install whisper' });
   });
 });
 

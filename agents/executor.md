@@ -27,7 +27,11 @@ shapes). Use footage, b-roll, a registry block or an approved gen asset; else ty
 
 1. `hf lint`, then `hf check --json`. Fix every error and run again,
    at most 3 rounds. Still failing: `task_failed` with the remaining findings (short).
-2. `hf snapshot --at <midpoint of each touched scene, comma-separated>` and look at
+2. `node <cliPath> palette-check <projectDir>`. Exit 1 lists `offenders` (colour, files,
+   `nearest` allowed colour): replace each with its `nearest` (or a neutral) and run it again.
+   A colour the reference does not use never ships: no purple, teal or orange "accent" of
+   your own.
+3. `hf snapshot --at <midpoint of each touched scene, comma-separated>` and look at
    the PNGs under `comp/.hyperframes/artifacts/snapshots/`. Fix what looks wrong (missing hero,
    tiny unstyled content), then do the Reference check.
 
@@ -69,9 +73,27 @@ spacing, logo/UI fidelity) in a `task_progress` line, fix it once, re-snapshot. 
   use the returned `path`. Never redraw a logo by hand.
 - `ui` assets: rebuild the real product screen in HTML/CSS (real fonts, real colours, real
   copy from `what`); not a generic mock window.
-- `gen` assets: their `fallback` until the approved file arrives.
+- `gen` assets: their `fallback` until the approved file arrives. A scene may hold several
+  (the reference's `composition.genPerScene`): place each as `layout` says (stacked cards,
+  a fan, a grid), never just the first one.
+- Density: build every asset and component the scene lists. A scene that ends up as
+  "background + one element" while the reference sheet shows more is a bug: add the missing
+  layers from the plan (cards, logos, UI rows, captions) before the Gate.
 - No placeholder text anywhere. If `what` or `script` lacks the real content, write the real
   content a user would see (real CLAUDE.md lines, the real command and reply).
+
+## Sound (execute only)
+
+- Voice: `plan.audio.voice` `footage` = the clips' own audio; `vo` = the voiceover file the plan
+  names (`broll/body.wav` after a rough cut), placed from 0 s on its own audio track.
+- SFX, free only: for each `style.sfx` cue (`on`, `sound`, `volume`), resolve the sound once with
+  `hf media-use resolve --type sfx --intent "<sound>" --json` (Openverse CC0/CC BY, else the
+  bundled library). Copy the returned file into `comp/assets/sfx/` and place it on every matching
+  screen event (`cut` = scene starts, `card-in` / `text-in` = that entrance's start,
+  `ui-click` = a click in a UI rebuild) at the cue's `volume` (default 0.35, always under the
+  voice). No `style.sfx`: one soft `whoosh` per scene change at 0.25 and nothing else.
+  At most one SFX per 0.5 s. A sound that does not resolve is skipped, never a failure.
+- Keep the returned credits: append each CC BY credit to `comp/assets/sfx/CREDITS.md`.
 
 ## storyboard (`input: {useGen?}`)
 
@@ -86,6 +108,8 @@ where it ends up after its entrance), no animation yet.
 4. `hf snapshot --at <midpoint of each scene, comma-separated> --no-end --keep --output <projectDir>/storyboard`.
    Stills are named `at-<seconds>s.png` with no trailing zeros (`at-1.5s.png`, `at-12s.png`).
 5. Reference check on each still (above), fix, re-snapshot changed scenes with the same `--at`.
+   Then rank the stills against the reference sheet by colour, density and composition; the
+   two furthest from the reference get one more fix and re-snapshot. Say which in `task_progress`.
 6. Write `<projectDir>/storyboard/board.json`:
    `{"scenes": [{"sceneId": "s1", "file": "at-1.2s.png", "script": "<scene script>", "at": 1.2}, ...], "updatedAt": "<ISO now>"}`
    and run `node <cliPath> validate storyboard <projectDir>/storyboard/board.json`.
@@ -123,7 +147,8 @@ the storyboard stage; skip step 9.
 7. On-screen text and captions use `scene.script` verbatim (no rewording). When
    `<footage base>.words.json` exists in `broll/` (or `plan.captions.source` is `stt`), time the
    caption words from it; else spread the script over the scene. `source: none`: no captions.
-8. `task_progress`: `Kompozitsiya tekshirilmoqda`. Run the Gate and Reference check on all scenes.
+8. Add the sound (see Sound). `task_progress`: `Kompozitsiya tekshirilmoqda`. Run the Gate and
+   Reference check on all scenes.
 9. If `input.useGen` is true: for each asset with `source: "gen"` call
    `request_generation {projectId, sceneId, kind: asset.kind ?? "image", params: {prompt, refFrames, seconds?, aspectRatio: "9:16", assetId}}`.
    Never call `generate` during execute. `{error: "no_provider"}`: keep the fallback.

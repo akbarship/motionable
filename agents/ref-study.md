@@ -56,9 +56,21 @@ Write down every distinct visual idea you see on the sheets, then measure each o
   `gen` (illustration/photo to generate), `footage`, `type`.
 - Grammars: the kinds of scene the reel uses, e.g. `icon carousel (vertical, motion blur)`,
   `glass stat card left-aligned`, `logo row`, `laptop illustration with flowing digits`,
-  `big blur-in headline`, `chat bubbles`, `connector chain`. 4-10 items.
+  `big blur-in headline`, `chat bubbles`, `connector chain`. As many as the reel really uses
+  (1-10); never pad the list.
+- Composition (density): on the sheets count, per scene, the separate visuals (cards, logos,
+  pictures, UI panels, people) and how many of them are illustrations/photos (gen). Give the
+  min-max over the reel, how much text is on screen (low = a few words, high = paragraphs) and
+  whether the camera moves. Write `sceneRules` for anything specific a builder would miss, e.g.
+  `laptop scene: 5 stacked illustration cards fanning in from the right`,
+  `every stat sits on a glass card, never on the bare background`.
+- Sound: `node <cliPath> audio-hits <projectDir>/<V>` lists level jumps `{t, dur, kind}`
+  (`click`, `impact`, `whoosh`, `hit`). Speech onsets show up too: keep only hits within 0.15 s
+  of an event from `measure events` (a cut, a card or text appearing). Name each kept pattern
+  as a cue: `{on: "cut|card-in|text-in|ui-click|...", sound: "<concrete sound, e.g. soft whoosh,
+  ui click, pop, bass impact>", volume: 0.25-0.4}`. No matching hits: `sfx: []`.
 
-`task_progress`: `O'lchandi: <k> ta animatsiya, fon, <m> ta grammatika`.
+`task_progress`: `O'lchandi: <k> ta animatsiya, fon, <m> ta grammatika, <s> ta ovoz effekti`.
 
 ## 3. Write `<home>/styles/<styleId>/style.json` (under 12 KB)
 
@@ -90,6 +102,10 @@ Write down every distinct visual idea you see on the sheets, then measure each o
                  "opacity": 0.12, "radius": 28, "css": "<exact CSS>"}],
   "type": {"families": ["Inter"], "sizes": [{"role": "headline", "px": 96}, {"role": "caption", "px": 54}]},
   "grammars": ["icon carousel (vertical, motion blur)", "..."],
+  "composition": {"visualsPerScene": {"min": 1, "max": 5}, "genPerScene": {"min": 0, "max": 5},
+                  "textDensity": "low|mid|high", "cameraMoves": true,
+                  "sceneRules": ["laptop scene: 5 stacked illustration cards fanning in"]},
+  "sfx": [{"on": "card-in", "sound": "soft pop", "volume": 0.3}],
   "assetsNeeded": [{"what": "GitHub logo", "how": "logo"}, {"what": "laptop with flowing digits", "how": "gen"}] }
 ```
 

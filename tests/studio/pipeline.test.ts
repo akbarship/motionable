@@ -1,3 +1,4 @@
+import { parseRoute } from '../../studio/src/router.js';
 import { describe, expect, test } from 'vitest';
 import type { Task } from '../../studio/src/api.js';
 import {
@@ -190,10 +191,17 @@ test('canContinue: one failed ref does not block', () => {
 test('stageLinks', () => {
   expect(stageLinks('p1')).toEqual([
     { key: 'refs', label: 'Namunalar', href: '#/p/p1/refs' },
+    { key: 'footage', label: 'Footaj', href: '#/p/p1/footage' },
     { key: 'pipeline', label: 'Jarayon', href: '#/p/p1' },
     { key: 'board', label: 'Storyboard', href: '#/p/p1/board' },
     { key: 'edit', label: 'Muharrir', href: '#/p/p1/edit' },
   ]);
+});
+
+test('parseRoute: footage stage, empty hash is home', () => {
+  expect(parseRoute('#/p/p1/footage')).toEqual({ name: 'footage', id: 'p1' });
+  expect(parseRoute('')).toEqual({ name: 'home' });
+  expect(parseRoute('#/new')).toEqual({ name: 'new' });
 });
 
 test('chatWithReplies adds assistant replies from finished edit tasks', () => {

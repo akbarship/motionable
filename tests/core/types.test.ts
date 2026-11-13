@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { PlanSchema, StyleSchema } from '../../src/core/types.js';
+import { PlanSchema, StyleSchema, minGrammars, planStyleIssues, type Plan } from '../../src/core/types.js';
 
 type Json = Record<string, any>;
 const fixture = (): Json => JSON.parse(readFileSync(new URL('../fixtures/plan-v2.json', import.meta.url), 'utf8'));
@@ -131,8 +131,25 @@ describe('PlanSchema v2', () => {
     q.scenes[1].grammar = 'Stat  Card';
     expectIssue(q, 'scenes.1.grammar', 'same grammar as scene s1');
     const r = fixture();
-    r.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'big type', 'stat card'][i]));
-    expectIssue(r, 'scenes', '2 distinct grammars; use at least 3');
+    r.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'stat card x', 'stat card'][i]));
+    expect(issues(r)).toEqual([]); // the schema floor is 2; the style decides the rest
+    expect(planStyleIssues(r as Plan, [])).toEqual(['scenes: 2 distinct grammars; use at least 3']);
+  });
+
+  test('grammar count follows the reference', () => {
+    expect(minGrammars(10)).toBe(4);
+    expect(minGrammars(10, [{ grammars: ['a', 'b'] }])).toBe(2);
+    expect(minGrammars(10, [{ grammars: ['a', 'b', 'c', 'd', 'e', 'f'] }])).toBe(4);
+    expect(minGrammars(3, [{}])).toBe(3);
+    const p = fixture();
+    p.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'big type', 'stat card'][i]));
+    expect(planStyleIssues(p as Plan, [{ grammars: ['stat card', 'big type'] }])).toEqual([]);
+  });
+
+  test('audio voice may be a separate voiceover', () => {
+    const p = fixture();
+    p.audio.voice = 'vo';
+    expect(issues(p)).toEqual([]);
   });
 
   test('logo and ui are asset sources', () => {
@@ -193,5 +210,12 @@ describe('StyleSchema exact-style fields', () => {
     });
     expect(r.success, JSON.stringify(r.error?.issues)).toBe(true);
     expect(StyleSchema.safeParse({ ...base, recipes: [{ name: 'x' }] }).success).toBe(false);
+  });
+  test('composition and sfx', () => {
+    const composition = { visualsPerScene: { min: 1, max: 5 }, genPerScene: { min: 0, max: 5 }, textDensity: 'low', cameraMoves: true, sceneRules: ['laptop scene: 5 stacked gen cards'] };
+    const sfx = [{ on: 'card-in', sound: 'pop', volume: 0.35 }];
+    expect(StyleSchema.safeParse({ ...base, composition, sfx }).success).toBe(true);
+    expect(StyleSchema.safeParse({ ...base, composition: { ...composition, genPerScene: { min: 3, max: 1 } } }).success).toBe(false);
+    expect(StyleSchema.safeParse({ ...base, sfx: [{ on: 'cut', sound: 'whoosh', volume: 2 }] }).success).toBe(false);
   });
 });

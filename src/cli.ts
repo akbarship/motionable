@@ -1,15 +1,19 @@
 import { execFile, spawn } from 'node:child_process';
-import { access, copyFile, mkdir, readFile, readdir } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, extname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
 import { doctorReportOk, npxCommand, validateHfArgs } from './core/hf-cmd.js';
 import { appendBinDir } from './core/path-env.js';
 import { assertId, assertInHome, home } from './core/paths.js';
-import { PlanSchema, StoryboardSchema, StyleSchema, WordsSchema } from './core/types.js';
+import { CutSchema, PlanSchema, ProjectSchema, WordsSchema as WordsList, StoryboardSchema, StyleSchema, WordsSchema, planStyleIssues, type Plan, type Style } from './core/types.js';
+import { alignScript } from './media/align.js';
+import { assemble } from './media/assemble.js';
+import { decodePcm, findHits, findSilences } from './media/audio.js';
 import { probe } from './media/ingest.js';
+import { coloursInDir, extractColours, paletteOffenders, type Offender } from './media/palette.js';
 import { buildRefSheet, type RefSheet } from './media/refsheet.js';
 import { startStudio } from './server/studio.js';
 
@@ -65,13 +69,27 @@ export async function doctor() {
   return { ok: node && ffmpeg && hyperframes, node, ffmpeg, ytdlp, hyperframes, skillsMissing };
 }
 
-const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema, storyboard: StoryboardSchema };
+const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema, storyboard: StoryboardSchema, cut: CutSchema };
 const MAX_ISSUES = 8;
 
 /** `motionable validate <style|plan|words|storyboard> <file>`: code 0 + "ok", or 1 + a short issue list. */
+/** The plan's styles from <home>/styles/<id>/style.json; unreadable ones are skipped. */
+async function readStyles(ids: string[]): Promise<Style[]> {
+  const out: Style[] = [];
+  for (const id of ids) {
+    try {
+      const r = StyleSchema.safeParse(JSON.parse(await readFile(join(home(), 'styles', assertId(id), 'style.json'), 'utf8')));
+      if (r.success) out.push(r.data);
+    } catch {
+      // missing or bad style: the default rules apply
+    }
+  }
+  return out;
+}
+
 export async function runValidate(kind: string | undefined, file: string | undefined): Promise<{ code: number; out: string }> {
   const schema = kind ? SCHEMAS[kind] : undefined;
-  if (!schema || !file) return { code: 1, out: 'usage: motionable validate <style|plan|words|storyboard> <file>' };
+  if (!schema || !file) return { code: 1, out: 'usage: motionable validate <style|plan|words|storyboard|cut> <file>' };
   let data: unknown;
   try {
     data = JSON.parse(await readFile(file, 'utf8'));
@@ -79,10 +97,86 @@ export async function runValidate(kind: string | undefined, file: string | undef
     return { code: 1, out: `cannot read JSON: ${(e as Error).message.split('\n')[0]}` };
   }
   const r = schema.safeParse(data);
+  if (r.success && kind === 'plan') {
+    const issues = planStyleIssues(r.data as Plan, await readStyles((r.data as Plan).styleIds));
+    if (issues.length > 0) return { code: 1, out: issues.map((i) => `- ${i}`).join('\n') };
+  }
   if (r.success) return { code: 0, out: 'ok' };
   const lines = r.error.issues.slice(0, MAX_ISSUES).map((i) => `- ${i.path.join('.') || '(root)'}: ${i.message}`);
   const more = r.error.issues.length - lines.length;
   return { code: 1, out: [...lines, ...(more > 0 ? [`- ... ${more} more`] : [])].join('\n') };
+}
+
+/**
+ * `palette-check <projectDir>`: every non-neutral colour in comp/ must sit near the allowed palette:
+ * the user's own palette + accent (styleAnswers), else the reference's palette, background and recipe colours.
+ */
+export async function runPaletteCheck(projectDir: string): Promise<{ code: number; allowed: string[]; offenders: Offender[] }> {
+  const dir = assertInHome(projectDir);
+  const project = ProjectSchema.parse(JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')));
+  let planStyles: string[] = [];
+  try {
+    planStyles = (JSON.parse(await readFile(join(dir, 'plan.json'), 'utf8')) as Plan).styleIds ?? [];
+  } catch {
+    // no plan yet
+  }
+  const styles = await readStyles([...new Set([...project.styleIds, ...planStyles])]);
+  const a = project.styleAnswers;
+  const refColours = styles.flatMap((st) => [
+    ...st.colour.palette,
+    ...extractColours(JSON.stringify([st.background ?? null, st.materials ?? null, st.recipes ?? null])),
+  ]);
+  const allowed = new Set<string>();
+  if (a && Array.isArray(a.palette)) {
+    a.palette.forEach((c) => allowed.add(c.toLowerCase()));
+    // An exact reference background keeps its own colours even with the user's palette.
+    if (a.background === 'exact') styles.flatMap((st) => extractColours(JSON.stringify(st.background ?? null))).forEach((c) => allowed.add(c));
+  } else refColours.forEach((c) => allowed.add(c.toLowerCase()));
+  if (a?.accent) allowed.add(a.accent.toLowerCase());
+  const offenders = paletteOffenders(await coloursInDir(join(dir, 'comp')), [...allowed]);
+  return { code: offenders.length > 0 ? 1 : 0, allowed: [...allowed], offenders };
+}
+
+/** A project-relative media path, resolved and kept inside the project. */
+function inProject(dir: string, rel: string): string {
+  const abs = assertInHome(join(dir, rel));
+  if (!abs.startsWith(dir + sep)) throw new Error(`${rel} is outside the project`);
+  return abs;
+}
+
+/**
+ * `align <projectDir> <src>...`: every take of every script line (project brief) in the sources'
+ * words (<base>.words.json beside each file), and the take to keep.
+ */
+export async function runAlign(projectDir: string, srcs: string[]) {
+  const dir = assertInHome(projectDir);
+  const project = ProjectSchema.parse(JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')));
+  const sources = [];
+  for (const src of srcs) {
+    const abs = inProject(dir, src);
+    const wordsFile = join(dirname(abs), `${basename(abs, extname(abs))}.words.json`);
+    sources.push({ src, words: WordsList.parse(JSON.parse(await readFile(wordsFile, 'utf8'))) });
+  }
+  return alignScript(project.brief, sources).map((m) => ({
+    line: m.line,
+    pick: m.pick && { src: m.pick.src, start: m.pick.start, end: m.pick.end, coverage: m.pick.coverage },
+    takes: m.takes.map((t) => ({ src: t.src, start: t.start, end: t.end, coverage: t.coverage })),
+  }));
+}
+
+/** `assemble <projectDir>`: cut.json -> broll/body.(mp4|wav) + body.words.json; cut.json gets body and duration. */
+export async function runAssemble(projectDir: string) {
+  const dir = assertInHome(projectDir);
+  const cutFile = join(dir, 'cut.json');
+  const cut = CutSchema.parse(JSON.parse(await readFile(cutFile, 'utf8')));
+  const outDir = join(dir, 'broll');
+  await mkdir(outDir, { recursive: true });
+  const r = await assemble(cut, (src) => inProject(dir, src), outDir);
+  const bodyRel = relative(dir, r.body).split('\\').join('/');
+  await writeFile(join(outDir, 'body.words.json'), JSON.stringify(r.words));
+  const next = { ...cut, segments: cut.segments.map((s, i) => ({ ...s, in: r.segments[i].in, out: r.segments[i].out })), body: bodyRel, duration: r.duration, approved: false };
+  await writeFile(cutFile, JSON.stringify(next, null, 2));
+  return { body: bodyRel, duration: r.duration, segments: r.segments.length, words: r.words.length };
 }
 
 /** `motionable sheet <video> <outDir>`: contact sheets + cuts.json; prints a small JSON summary. */
@@ -174,6 +268,18 @@ async function main(cmd: string | undefined): Promise<void> {
   } else if (cmd === 'validate') {
     const r = await runValidate(process.argv[3], process.argv[4]);
     console.log(r.out);
+    process.exitCode = r.code;
+  } else if ((cmd === 'audio-hits' || cmd === 'silences') && process.argv[3]) {
+    const f = assertInHome(process.argv[3]);
+    if (cmd === 'audio-hits') console.log(JSON.stringify({ hits: findHits(await decodePcm(f)) }));
+    else console.log(JSON.stringify(await findSilences(f)));
+  } else if (cmd === 'align' && process.argv[3] && process.argv[4]) {
+    console.log(JSON.stringify(await runAlign(process.argv[3], process.argv.slice(4))));
+  } else if (cmd === 'assemble' && process.argv[3]) {
+    console.log(JSON.stringify(await runAssemble(process.argv[3])));
+  } else if (cmd === 'palette-check' && process.argv[3]) {
+    const r = await runPaletteCheck(process.argv[3]);
+    console.log(JSON.stringify({ ok: r.code === 0, offenders: r.offenders.slice(0, 20), allowed: r.allowed }));
     process.exitCode = r.code;
   } else if (cmd === 'sheet' && process.argv[3] && process.argv[4]) {
     console.log(await runSheet(process.argv[3], process.argv[4]));

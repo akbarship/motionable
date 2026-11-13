@@ -6,7 +6,7 @@ import { listProjects, readJson, writeJson } from './store.js';
 import { TaskSchema, type Task, type TaskType } from './types.js';
 
 /** Types that cannot run at the same time inside one project. */
-const EXCLUSIVE: ReadonlySet<TaskType> = new Set<TaskType>(['storyboard', 'storyboard_edit', 'execute', 'edit', 'render', 'generate']);
+const EXCLUSIVE: ReadonlySet<TaskType> = new Set<TaskType>(['roughcut', 'storyboard', 'storyboard_edit', 'execute', 'edit', 'render', 'generate']);
 const STALE_LOCK_MS = 30 * 60_000;
 
 let lastMs = 0;

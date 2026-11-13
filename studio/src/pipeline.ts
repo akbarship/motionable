@@ -215,9 +215,10 @@ export function canContinue(tasks: Task[], pickedStyles: number): boolean {
   return refs.some((t) => t.status === 'done') || pickedStyles > 0;
 }
 
-export function stageLinks(id: string): { key: 'refs' | 'pipeline' | 'board' | 'edit'; label: string; href: string }[] {
+export function stageLinks(id: string): { key: 'refs' | 'footage' | 'pipeline' | 'board' | 'edit'; label: string; href: string }[] {
   return [
     { key: 'refs', label: 'Namunalar', href: `#/p/${id}/refs` },
+    { key: 'footage', label: 'Footaj', href: `#/p/${id}/footage` },
     { key: 'pipeline', label: 'Jarayon', href: `#/p/${id}` },
     { key: 'board', label: 'Storyboard', href: `#/p/${id}/board` },
     { key: 'edit', label: 'Muharrir', href: `#/p/${id}/edit` },
@@ -283,4 +284,24 @@ export function pickAccent(palette: string[]): string {
 /** Parses "#aabbcc, #ddeeff" into valid hex colours (max 6). */
 export function parsePalette(text: string): string[] {
   return (text.match(/#[0-9a-fA-F]{6}\b/g) ?? []).map((c) => c.toLowerCase()).slice(0, 6);
+}
+
+/** Style ids chosen on the References screen, handed to the Footage screen until `direct` is created. */
+const STYLE_KEY = (id: string) => `motionable.styles.${id}`;
+export function rememberStyles(id: string, styleIds: string[]): void {
+  try {
+    sessionStorage.setItem(STYLE_KEY(id), JSON.stringify(styleIds));
+  } catch {
+    // storage blocked: the Footage screen falls back to the studied style
+  }
+}
+export function recalledStyles(id: string, tasks: Task[]): string[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(STYLE_KEY(id)) ?? 'null');
+    if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return v;
+  } catch {
+    // fall through
+  }
+  const s = studiedStyleId(tasks);
+  return s ? [s] : [];
 }

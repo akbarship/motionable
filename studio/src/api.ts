@@ -6,7 +6,7 @@ const SESSION_KEY = 'motionable.session';
 let session: string | null = null;
 
 export type TaskStatus = 'queued' | 'awaiting_approval' | 'running' | 'done' | 'failed';
-export type TaskType = 'study_ref' | 'direct' | 'storyboard' | 'storyboard_edit' | 'execute' | 'edit' | 'render' | 'generate';
+export type TaskType = 'study_ref' | 'roughcut' | 'direct' | 'storyboard' | 'storyboard_edit' | 'execute' | 'edit' | 'render' | 'generate';
 export type Kind = 'image' | 'video' | 'tts' | 'stt';
 export type ProviderUse = 'off' | 'kie' | 'elevenlabs' | 'bot';
 
@@ -170,6 +170,9 @@ export const api = {
   deleteRef: (id: string, name: string) => request<{ ok: true }>(`${p(id)}/refs/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   startStudy: (id: string) => request<{ task: Task }>(`${p(id)}/refs/study`, { method: 'POST', body: {} }),
   putStyleAnswers: (id: string, a: StyleAnswers) => request<Project>(`${p(id)}/style-answers`, { method: 'PUT', body: a }),
+  footage: (id: string) => request<FootageFile[]>(`${p(id)}/footage`),
+  cut: (id: string) => request<Cut | null>(`${p(id)}/cut`),
+  approveCut: (id: string) => request<Cut>(`${p(id)}/cut/approve`, { method: 'POST' }),
   player: (id: string) => request<{ url: string }>(`${p(id)}/player`),
   storyboard: (id: string) => request<Storyboard | null>(`${p(id)}/storyboard`),
   addTask: (id: string, type: TaskType, input: Record<string, unknown> = {}) =>
@@ -192,6 +195,24 @@ export const api = {
 };
 
 /** URL for a finished render usable in <video src> / <a href> (token in the query, since those cannot send headers). */
+export interface FootageFile {
+  name: string;
+  size: number;
+  kind: 'video' | 'audio';
+}
+export interface Cut {
+  segments: { src: string; in: number; out: number; line?: string }[];
+  dropped: { src: string; why: string }[];
+  body?: string;
+  duration?: number;
+  approved: boolean;
+}
+
+/** The assembled rough-cut body (video or audio), cache-busted by `v`. */
+export function bodyUrl(projectId: string, v: string | number): string {
+  return `${p(projectId)}/body?t=${encodeURIComponent(getToken())}&v=${encodeURIComponent(String(v))}`;
+}
+
 export function renderUrl(projectId: string, name: string): string {
   return `${p(projectId)}/renders/${encodeURIComponent(name)}?t=${encodeURIComponent(getToken())}`;
 }

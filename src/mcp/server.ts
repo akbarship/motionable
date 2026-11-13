@@ -12,11 +12,13 @@ import { appendBinDir } from '../core/path-env.js';
 import { home, projectDir } from '../core/paths.js';
 import { addTask, claimNext, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
 import { getProject, readJson, writeJson } from '../core/store.js';
-import { KindSchema, WordsSchema, type TaskType } from '../core/types.js';
+import { KindSchema, WordsSchema, type TaskType, type Words } from '../core/types.js';
+import { LocalSttUnavailable, transcribeLocal } from '../providers/local-stt.js';
 import { providerFor as defaultProviderFor } from '../providers/registry.js';
 
 const AGENTS: Record<TaskType, string> = {
   study_ref: 'ref-study',
+  roughcut: 'cutter',
   direct: 'director',
   storyboard: 'executor',
   storyboard_edit: 'executor',
@@ -142,7 +144,12 @@ export async function ensureStudio(spawnFn: () => void = spawnStudio, build: str
 }
 
 export function createMcpServer(
-  opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor; session?: string } = {},
+  opts: {
+    spawnStudio?: () => void;
+    providerFor?: typeof defaultProviderFor;
+    session?: string;
+    localStt?: typeof transcribeLocal;
+  } = {},
 ): McpServer {
   const providerFor = opts.providerFor ?? defaultProviderFor;
   const server = new McpServer({ name: 'motionable', version: '0.1.0' });
@@ -385,7 +392,7 @@ export function createMcpServer(
     'transcribe',
     {
       description:
-        'Speech to text for a project media file (project-relative path). Writes <base>.words.json next to it. Returns {wordsPath} or {error:"no_stt_provider"}.',
+        'Speech to text for a project media file (project-relative path). Writes <base>.words.json next to it. Uses the STT provider, else free local whisper. Returns {wordsPath, engine} or {error:"no_stt_provider", hint}.',
       inputSchema: { projectId: idStr, file: z.string().min(1) },
     },
     async ({ projectId, file }) => {
@@ -400,11 +407,27 @@ export function createMcpServer(
       const real = await realpath(abs);
       if (!inside(await realpath(dir), real)) throw new Error('file must be inside the project');
       const p = providerFor('stt', await loadConfig());
-      if (!p?.transcribe) return text({ error: 'no_stt_provider' });
-      const words = await p.transcribe(real);
+      let words: Words | null = null;
+      let engine = 'provider';
+      if (p?.transcribe) {
+        try {
+          words = await p.transcribe(real);
+        } catch {
+          // provider down (unpaid, offline): the free local engine below
+        }
+      }
+      if (!words) {
+        engine = 'local';
+        try {
+          words = await (opts.localStt ?? transcribeLocal)(real, { model: 'medium', language: 'uz' });
+        } catch (e) {
+          if (e instanceof LocalSttUnavailable) return text({ error: 'no_stt_provider', hint: e.hint });
+          return text({ error: 'stt_failed', reason: (e as Error).message });
+        }
+      }
       const wordsPath = join(dirname(abs), `${basename(abs, extname(abs))}.words.json`);
       await writeJson(wordsPath, WordsSchema, words);
-      return text({ wordsPath: relative(dir, wordsPath).split('\\').join('/') });
+      return text({ wordsPath: relative(dir, wordsPath).split('\\').join('/'), engine });
     },
   );
 

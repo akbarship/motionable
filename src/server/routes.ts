@@ -13,12 +13,12 @@ import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
 import { ensurePreview } from './preview.js';
 import { bindSession, createProject, getProject, listProjects, readJson, setLast, slugId, writeJson } from '../core/store.js';
-import { ChatMsgSchema, PlanSchema, ProjectSchema, SessionIdSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
+import { ChatMsgSchema, CutSchema, PlanSchema, ProjectSchema, SessionIdSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type Cut, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
 import { HttpError, VIDEO_EXTS, checkFilename, handleUpload } from './upload.js';
 
-const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'render']);
+const USER_TASK_TYPES: ReadonlySet<string> = new Set<TaskType>(['study_ref', 'roughcut', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'render']);
 const HEARTBEAT_MAX_MS = 300_000;
 const BODY_MAX = 1024 * 1024;
 
@@ -240,9 +240,13 @@ async function serveRender(req: IncomingMessage, res: ServerResponse, id: string
   }
   const name = checkFilename(decoded, false);
   if (extname(name).toLowerCase() !== '.mp4') throw new HttpError(400, 'file type not allowed');
-  const file = join(projectDir(id), 'renders', name);
+  return serveFile(req, res, join(projectDir(id), 'renders', name), 'video/mp4');
+}
+
+/** Streams a media file with single-range support (video players seek with ranges). */
+async function serveFile(req: IncomingMessage, res: ServerResponse, file: string, type: string): Promise<void> {
   const size = (await stat(file)).size; // ENOENT -> 404
-  const headers: Record<string, string | number> = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'referrer-policy': 'no-referrer' };
+  const headers: Record<string, string | number> = { 'content-type': type, 'accept-ranges': 'bytes', 'referrer-policy': 'no-referrer' };
   const range = req.headers.range;
   let start = 0;
   let end = size - 1;
@@ -273,6 +277,40 @@ async function serveRender(req: IncomingMessage, res: ServerResponse, id: string
   stream.on('error', () => res.destroy());
   res.on('close', () => stream.destroy());
   stream.pipe(res);
+}
+
+/** cut.json (rough cut), or null before the first cut. */
+async function readCut(id: string): Promise<Cut | null> {
+  try {
+    return await readJson(join(projectDir(id), 'cut.json'), CutSchema);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT' || e instanceof SyntaxError || e instanceof ZodError) return null;
+    throw e;
+  }
+}
+
+const FOOTAGE_EXTS: Record<string, 'video' | 'audio'> = { '.mp4': 'video', '.mov': 'video', '.m4v': 'video', '.webm': 'video', '.mp3': 'audio', '.wav': 'audio', '.m4a': 'audio' };
+
+/** The user's footage and voiceovers in broll/ (the assembled body is not one of them). */
+async function listFootage(id: string): Promise<{ name: string; size: number; kind: 'video' | 'audio' }[]> {
+  const dir = join(projectDir(id), 'broll');
+  let names: string[] = [];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const out: { name: string; size: number; kind: 'video' | 'audio' }[] = [];
+  for (const name of names.sort()) {
+    const kind = FOOTAGE_EXTS[extname(name).toLowerCase()];
+    if (!kind || /^body\./.test(name)) continue;
+    try {
+      out.push({ name, size: (await stat(join(dir, name))).size, kind });
+    } catch {
+      // vanished
+    }
+  }
+  return out;
 }
 
 /** The chat id the Studio tab got from studio_open (x-motionable-session), or undefined. */
@@ -307,6 +345,24 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         const [tasks, planRead, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
         if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
         return send(res, 200, { project, tasks, plan: planRead, chat });
+      }
+      if (seg[2] === 'footage' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await listFootage(id));
+      }
+      if (seg[2] === 'cut' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await readCut(id));
+      }
+      if (seg[2] === 'cut' && seg[3] === 'approve' && seg.length === 4 && method === 'POST') {
+        const cut = await readCut(id);
+        if (!cut?.body) throw new HttpError(409, 'no_cut');
+        const next = { ...cut, approved: true };
+        await writeJson(join(projectDir(id), 'cut.json'), CutSchema, next);
+        return send(res, 200, next);
+      }
+      if (seg[2] === 'body' && seg.length === 3 && (method === 'GET' || method === 'HEAD')) {
+        const cut = await readCut(id);
+        if (!cut?.body || !/^broll\/body\.(mp4|wav)$/.test(cut.body)) throw new HttpError(404, 'no_body');
+        return serveFile(req, res, join(projectDir(id), cut.body), cut.body.endsWith('.wav') ? 'audio/wav' : 'video/mp4');
       }
       if (seg[2] === 'player' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await ensurePreview(id));

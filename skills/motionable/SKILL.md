@@ -32,7 +32,7 @@ Repeat until the user interrupts:
    three times in a row, call `studio_open` once, then go on with the loop.
 4. If the result is a task `{projectId, taskId, type, input, projectDir, agent, cliPath}`:
    - Dispatch the subagent `motionable:<agent>` (the `agent` field is `ref-study`,
-     `director` or `executor`) with the Agent tool, in the foreground.
+     `cutter`, `director` or `executor`) with the Agent tool, in the foreground.
    - Its prompt is ONLY this, with the values filled in as JSON:
 
      ```

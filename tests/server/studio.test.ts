@@ -365,6 +365,28 @@ describe('studio', () => {
     expect(p.styleAnswers).toEqual({ palette: ['#0b1a3a', '#1e5bff'], font: 'Inter', background: 'simple', accent: '#1e5bff' });
   });
 
+  test('footage list, cut, body and approve', async () => {
+    const id = await mk();
+    const dir = projectDir(id);
+    await mkdir(join(dir, 'broll'), { recursive: true });
+    for (const f of ['a.mp4', 'vo.wav', 'body.wav', 'a.words.json', 'pic.png']) await writeFile(join(dir, 'broll', f), 'x');
+    const list = (await (await api(`/api/projects/${id}/footage`)).json()) as { name: string; kind: string }[];
+    expect(list.map((f) => `${f.name}:${f.kind}`)).toEqual(['a.mp4:video', 'vo.wav:audio']);
+    expect(await (await api(`/api/projects/${id}/cut`)).json()).toBeNull();
+    expect((await api(`/api/projects/${id}/cut/approve`, { method: 'POST' })).status).toBe(409);
+    expect((await api(`/api/projects/${id}/body`)).status).toBe(404);
+    const cut = { segments: [{ src: 'broll/vo.wav', in: 0, out: 1 }], dropped: [{ src: 'broll/a.mp4', why: 'takror dubl' }], body: 'broll/body.wav', approved: false };
+    await writeFile(join(dir, 'cut.json'), JSON.stringify(cut));
+    const body = await fetch(`${base}/api/projects/${id}/body?t=${token}`);
+    expect(body.status).toBe(200);
+    expect(body.headers.get('content-type')).toBe('audio/wav');
+    const ok = (await (await api(`/api/projects/${id}/cut/approve`, { method: 'POST' })).json()) as { approved: boolean };
+    expect(ok.approved).toBe(true);
+    await writeFile(join(dir, 'cut.json'), JSON.stringify({ ...cut, body: '../../secret.txt' }));
+    expect((await api(`/api/projects/${id}/body`)).status).toBe(404);
+    expect((await api(`/api/projects/${id}/tasks`, json({ type: 'roughcut', input: {} }))).status).toBe(200);
+  });
+
   test('storyboard: null before build, board + stills after', async () => {
     const id = await mk();
     expect(await (await api(`/api/projects/${id}/storyboard`)).json()).toBeNull();

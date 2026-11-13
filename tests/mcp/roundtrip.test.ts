@@ -6,6 +6,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { listTasks } from '../../src/core/queue.js';
 import { createMcpServer, ensureStudio } from '../../src/mcp/server.js';
+import { LocalSttUnavailable } from '../../src/providers/local-stt.js';
 import { startStudio } from '../../src/server/studio.js';
 
 const saved: Record<string, string | undefined> = {};
@@ -202,5 +203,27 @@ describe('mcp roundtrip', () => {
     const t = (await call('next_task')).data;
     await call('task_done', { projectId: id, taskId: t.taskId, summary: 'built' });
     expect((await listTasks(id)).filter((x) => x.type === 'render')).toHaveLength(0);
+  });
+
+  test('transcribe falls back to free local whisper, and says how to install it when missing', async () => {
+    const { id } = (await (await post('/api/projects', { name: 'Demo', brief: 'b' })).json()) as { id: string };
+    await writeFile(join(tmp, 'projects', id, 'broll', 'vo.wav'), 'x');
+    const mkClient = async (localStt: Parameters<typeof createMcpServer>[0] extends infer O ? O extends { localStt?: infer L } ? L : never : never) => {
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await createMcpServer({ session: SID, localStt }).connect(a);
+      const c = new Client({ name: 't', version: '0' });
+      await c.connect(b);
+      return c;
+    };
+    const ok = await mkClient(async () => [{ w: 'salom', start: 0, end: 0.4 }]);
+    const r = (await ok.callTool({ name: 'transcribe', arguments: { projectId: id, file: 'broll/vo.wav' } })) as { content: { text: string }[] };
+    expect(JSON.parse(r.content[0].text)).toEqual({ wordsPath: 'broll/vo.words.json', engine: 'local' });
+    await ok.close();
+    const missing = await mkClient(async () => {
+      throw new LocalSttUnavailable('sudo apt-get install -y git cmake build-essential');
+    });
+    const m = (await missing.callTool({ name: 'transcribe', arguments: { projectId: id, file: 'broll/vo.wav' } })) as { content: { text: string }[] };
+    expect(JSON.parse(m.content[0].text)).toEqual({ error: 'no_stt_provider', hint: 'sudo apt-get install -y git cmake build-essential' });
+    await missing.close();
   });
 });

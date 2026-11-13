@@ -24,12 +24,19 @@ Blocking error: `task_failed` with a short Uzbek reason.
 3. Style ids = `input.styleIds`, else `project.styleIds`. Both empty: `task_failed`
    `Uslub tanlanmagan: avval referens qo'shing yoki uslub tanlang`. Never invent a style.
 4. Read each `<home>/styles/<id>/style.json` (note `recipes`, `background`, `materials`,
-   `grammars`, `assetsNeeded`). Then Read 1-2 sheets per style
+   `grammars`, `assetsNeeded`, `composition`, `sfx`). Then Read 1-2 sheets per style
    (the first two entries of `style.sheets`, under `<home>/styles/<id>/`). Write down what you SEE:
    the layouts used (full-bleed face, split, illustration with caption, type card...), how
    people and objects are made (filmed, illustrated, photo), where text sits, what moves.
    Gen refs are single frames: `style.keyFrames[].file` (under `<home>`) or `<home>/styles/<id>/frames/`.
-5. Footage: list `<projectDir>/broll/` (videos and images; skip `*.sheet/`, `*.json`). Per video:
+5. Rough cut: if `<projectDir>/cut.json` exists with `approved: true`, its `body`
+   (`broll/body.mp4` or `broll/body.wav`) IS the main clip: the user already chose the takes and
+   cut the pauses. Use its words (`broll/body.words.json`) for timing and `script`; never use a
+   file listed in `cut.dropped`, and never plan footage from the raw clips the body was cut from.
+   A `.wav` body = `audio.voice: "vo"` (the visuals are all yours: ui, logo, gen, type); a `.mp4`
+   body = `audio.voice: "footage"`.
+   Footage: list `<projectDir>/broll/` (videos and images; skip `*.sheet/`, `*.json`, and with a
+   rough cut every source of `cut.segments`). Per video:
    - `node <cliPath> probe <clip>` (duration, w, h, fps, hasAudio);
    - `node <cliPath> sheet <clip> <projectDir>/broll/<base>.sheet` (skip if `sheet-1.jpg` exists),
      then Read only `sheet-1.jpg`;
@@ -66,7 +73,13 @@ Blocking error: `task_failed` with a short Uzbek reason.
   `full-bleed illustration`, `big blur-in type`, `connector chain`. At least 4 different
   grammars per video (fewer scenes: all different); neighbours never share one. The validator
   enforces this.
-- One HERO visual per scene, real and specific, in this order of preference:
+- Density comes from the reference. `style.composition` (when present) OVERRIDES the defaults
+  below: `visualsPerScene` and `genPerScene` are how many visuals / gen images a scene holds
+  (e.g. 5 stacked gen cards in one scene is right when the reference does that), `textDensity`
+  how much copy is on screen, `cameraMoves` whether the camera moves at all, and every
+  `sceneRules` line is a hard rule for the scene kind it names. Without `composition` the
+  defaults apply.
+- Default: one HERO visual per scene, real and specific, in this order of preference:
   1. a faithful rebuild of the real product UI the script talks about (`source: "ui"`, `what`
      names the screen and its exact visible content, e.g. `Claude Code terminal: "> /compact"
      typed, reply "Compacted. Summary: 3 files changed"`);
@@ -109,6 +122,13 @@ Blocking error: `task_failed` with a short Uzbek reason.
 ## 5. Self-critique (tick every box before writing; fix and recheck any "no")
 
 Slop check first. If ANY of these is true, rewrite the scenes before going on:
+- a colour, accent or glow that is not in the allowed palette (`styleAnswers` or
+  `style.colour.palette`, background stops and blob colours). Never add a purple/violet, teal or
+  orange "tech" accent of your own; name colours in `layout`/`motion` only by palette hex;
+- a scene that is only "background + one element" when the reference frames show more
+  (cards, logos, UI rows, layered depth); match `composition.visualsPerScene`;
+- fewer gen images than `composition.genPerScene.min` in a scene kind the reference fills with
+  pictures (when image gen is on);
 - two neighbouring scenes share a grammar, or fewer than 4 grammars in the video;
 - every scene is "one card + one centred headline";
 - the same background blob/glow in every scene with nothing else changing;
@@ -124,6 +144,9 @@ Then:
 - [ ] Claims on screen are in that scene's `script`; plain speech, <= 3 words/s?
 - [ ] Assets fit the providers on; gen prompts end with the no-text line; no objects drawn in code?
 - [ ] Nothing breaks `style.doNot`; palette, font, accent and background follow `styleAnswers`?
+- [ ] Every `composition.sceneRules` line is met by the scenes it names?
+- [ ] Taste: would this frame pass as the reference's next post? Same colour world, same
+      density, same kind of pictures. If a scene looks like a generic template, redo it.
 - [ ] Every `assetsNeeded` item of the style that fits this script is used somewhere?
 
 ## 6. Write and validate
@@ -141,12 +164,15 @@ Then:
                 "kind": "image", "prompt": "...", "refFrames": ["gen/ref/<id>-1.jpg"], "fallback": "..."}],
     "footage": {"src": "broll/a.mp4", "in": 1.2, "out": 3.6} | null,
     "components": [{"kind": "caption", "description": "...", "props": {}}] }],
-  "audio": {"voice": "footage|none", "music": null},
+  "audio": {"voice": "footage|vo|none", "music": null},
   "genEstimate": {"items": <gen asset count>, "usd": 0} }
 ```
 
-- `audio.voice`: `footage` (clips have speech) or `none`. Captions `source`: `stt` when words
-  exist, `script` when the brief holds the text, else `none`.
+- `audio.voice`: `footage` (clips have speech), `vo` (a voiceover audio file: the rough-cut
+  `broll/body.wav`, or a single `.mp3/.wav/.m4a` in `broll/`) or `none`. Captions `source`: `stt`
+  when words exist, `script` when the brief holds the text, else `none`.
+- Grammar count: the validator asks for 4 distinct grammars, or fewer when the reference itself
+  uses fewer (`style.grammars`).
 - Leave `usd` at 0 (the Studio quotes it). No paid media outside `gen`.
 
 Run `node <cliPath> validate plan <projectDir>/plan.json`. On exit 1 fix the listed fields and

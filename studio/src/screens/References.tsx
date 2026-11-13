@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, upload, type RefFile, type StyleAnswers, type StyleSummary, type Task } from '../api';
-import { canContinue, canStudy, parsePalette, pickAccent, studiedStyleId } from '../pipeline';
+import { canContinue, canStudy, parsePalette, pickAccent, rememberStyles, studiedStyleId } from '../pipeline';
 import { go } from '../router';
 import { Dropzone, FileList, formatSize, toRows, type FileRow } from '../ui/Dropzone';
 import { Icon, ICON } from '../ui/TopBar';
@@ -143,6 +143,13 @@ export function References({ id, tick }: { id: string; tick: number }) {
     const styleIds = [...new Set([...picked, ...(studied ? [studied] : [])])];
     try {
       if (answers) await api.putStyleAnswers(id, answers);
+      // Footage or voiceovers to clean first: the rough cut comes before the plan.
+      const [footage, cut] = await Promise.all([api.footage(id), api.cut(id)]);
+      if (footage.length > 0 && !cut?.approved) {
+        rememberStyles(id, styleIds);
+        go(`#/p/${id}/footage`);
+        return;
+      }
       await api.addTask(id, 'direct', { styleIds });
       go(`#/p/${id}`);
     } catch (err) {

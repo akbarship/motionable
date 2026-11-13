@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const KindSchema = z.enum(['image', 'video', 'tts', 'stt']);
 export type Kind = z.infer<typeof KindSchema>;
 
-export const TaskTypeSchema = z.enum(['study_ref', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'edit', 'render', 'generate']);
+export const TaskTypeSchema = z.enum(['study_ref', 'roughcut', 'direct', 'storyboard', 'storyboard_edit', 'execute', 'edit', 'render', 'generate']);
 export type TaskType = z.infer<typeof TaskTypeSchema>;
 
 export const TaskStatusSchema = z.enum(['queued', 'awaiting_approval', 'running', 'done', 'failed']);
@@ -82,6 +82,28 @@ export const MaterialSchema = z.object({
   css: z.string().optional(),
 });
 
+const RangeSchema = z
+  .object({ min: z.number().int().min(0), max: z.number().int().min(0) })
+  .refine((r) => r.min <= r.max, { message: 'min must be <= max' });
+
+/** Scene density measured on the reference frames. */
+export const CompositionSchema = z.object({
+  visualsPerScene: RangeSchema,
+  genPerScene: RangeSchema,
+  textDensity: z.enum(['low', 'mid', 'high']),
+  cameraMoves: z.boolean(),
+  /** Reference-specific rules, e.g. "laptop scene: 5 stacked gen cards fanning in". */
+  sceneRules: z.array(z.string().min(1)).max(10),
+});
+export type Composition = z.infer<typeof CompositionSchema>;
+
+/** One sound effect: on which screen event, which sound (a media-use sfx query), how loud under the voice. */
+export const SfxCueSchema = z.object({
+  on: z.string().min(1),
+  sound: z.string().min(1),
+  volume: z.number().min(0).max(1),
+});
+
 export const StyleSchema = z.object({
   id: z.string().optional(),
   pace: z.object({ avgShotSeconds: z.number(), cutsPerMin: z.number() }),
@@ -118,6 +140,10 @@ export const StyleSchema = z.object({
     .array(z.object({ what: z.string().min(1), how: z.enum(['logo', 'gen', 'ui', 'footage', 'type']), note: z.string().optional() }))
     .max(16)
     .optional(),
+  /** How full the reference's scenes are; overrides the director's defaults (one hero per scene...). */
+  composition: CompositionSchema.optional(),
+  /** Sound effects heard in the reference, tied to what happens on screen. */
+  sfx: z.array(SfxCueSchema).max(12).optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
 
@@ -176,8 +202,24 @@ const SceneSchema = z.object({
 });
 
 export const MIN_SCENE_S = 0.8;
-/** Distinct grammars a video needs (fewer scenes: one per scene). */
+/** Distinct grammars a video needs by default (fewer scenes: one per scene). The style can lower it. */
 export const MIN_GRAMMARS = 4;
+
+/** Grammars the plan must use: the default, lowered when the reference itself uses fewer kinds of scene. */
+export function minGrammars(scenes: number, styles: Pick<Style, 'grammars'>[] = []): number {
+  const known = styles.map((s) => s.grammars?.length ?? 0).filter((n) => n > 0);
+  const fromRef = known.length > 0 ? Math.max(...known) : MIN_GRAMMARS;
+  return Math.max(1, Math.min(MIN_GRAMMARS, fromRef, scenes));
+}
+
+/** Checks a plan needs its styles for: the grammar count follows what the reference uses. */
+export function planStyleIssues(plan: Plan, styles: Pick<Style, 'grammars'>[]): string[] {
+  const withGrammar = plan.scenes.filter((s) => s.grammar);
+  if (withGrammar.length === 0) return [];
+  const distinct = new Set(withGrammar.map((s) => s.grammar!.trim().toLowerCase())).size;
+  const need = minGrammars(plan.scenes.length, styles);
+  return distinct < need ? [`scenes: ${distinct} distinct grammars; use at least ${need}`] : [];
+}
 export const MAX_WORDS_PER_S = 3;
 const EPS = 0.01;
 
@@ -198,7 +240,7 @@ export const PlanSchema = z
     beats: z.number().int().min(0),
     captions: z.object({ on: z.boolean(), style: z.string(), source: z.enum(['stt', 'script', 'none']) }),
     scenes: z.array(SceneSchema).min(1),
-    audio: z.object({ voice: z.enum(['footage', 'none']), music: z.string().nullable() }),
+    audio: z.object({ voice: z.enum(['footage', 'vo', 'none']), music: z.string().nullable() }),
     genEstimate: z.object({ items: z.number(), usd: z.number() }),
   })
   .superRefine((p, ctx) => {
@@ -231,8 +273,9 @@ export const PlanSchema = z
           issue(['scenes', i, 'grammar'], `same grammar as scene ${p.scenes[i - 1].id}; neighbours never share a grammar`);
         }
       });
+      // The minimum count depends on the reference: see planStyleIssues (run by `validate plan`).
       const distinct = new Set(withGrammar.map((s) => s.grammar!.trim().toLowerCase())).size;
-      const need = Math.min(MIN_GRAMMARS, p.scenes.length);
+      const need = Math.min(2, p.scenes.length);
       if (distinct < need) issue(['scenes'], `${distinct} distinct grammars; use at least ${need}`);
     }
     const last = p.scenes[p.scenes.length - 1];
@@ -291,6 +334,23 @@ export type Storyboard = z.infer<typeof StoryboardSchema>;
 
 export const WordsSchema = z.array(z.object({ w: z.string(), start: z.number(), end: z.number() }));
 export type Words = z.infer<typeof WordsSchema>;
+
+/** Rough cut: which pieces of the user's footage / voiceovers make the body, in order, and what was dropped. */
+export const CutSchema = z.object({
+  segments: z
+    .array(
+      z
+        .object({ src: z.string().min(1), in: z.number().min(0), out: z.number().positive(), line: z.string().optional() })
+        .refine((s) => s.out > s.in, { message: 'out must be after in' }),
+    )
+    .min(1),
+  dropped: z.array(z.object({ src: z.string().min(1), why: z.string().min(1) })),
+  /** Project-relative body file written by `assemble` (broll/body.mp4 or broll/body.wav). */
+  body: z.string().optional(),
+  duration: z.number().optional(),
+  approved: z.boolean().default(false),
+});
+export type Cut = z.infer<typeof CutSchema>;
 
 export const ChatMsgSchema = z.object({
   id: z.string(),
