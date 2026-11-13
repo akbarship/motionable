@@ -24,7 +24,12 @@ export function splitPauses<T extends { in: number; out: number }>(seg: T, silen
     start = Math.round((s.end - KEEP_S) * 1000) / 1000;
   }
   out.push({ ...seg, in: start, out: seg.out });
-  return out;
+  // The line text stays on the first piece only, so the written cut does not repeat it.
+  return out.map((p, i) => {
+    if (i === 0 || !('line' in p)) return p;
+    const { line: _line, ...rest } = p as T & { line?: string };
+    return rest as T;
+  });
 }
 
 interface MediaInfo {
@@ -58,9 +63,11 @@ async function info(file: string): Promise<MediaInfo> {
 export function snapToSpeech(seg: { in: number; out: number }, silences: Silence[], duration: number): { in: number; out: number } {
   let a = seg.in;
   let b = seg.out;
-  const sIn = silences.find((s) => a >= s.start && a <= s.end);
+  // A word edge from STT sits at (or just after / before) the silence next to it: reach into that
+  // silence for PAD_S of breath. A point inside a silence moves next to the speech.
+  const sIn = silences.find((s) => a >= s.start - 0.01 && a <= s.end + 0.15);
   if (sIn) a = Math.max(sIn.start, sIn.end - PAD_S);
-  const sOut = silences.find((s) => b >= s.start && b <= s.end);
+  const sOut = silences.find((s) => b >= s.start - 0.15 && b <= s.end + 0.01);
   if (sOut) b = Math.min(sOut.end, sOut.start + PAD_S);
   a = Math.max(0, a);
   b = Math.min(duration || b, b);

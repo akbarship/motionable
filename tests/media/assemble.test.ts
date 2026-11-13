@@ -35,14 +35,16 @@ describe('assemble', () => {
   test('snaps cut points next to speech, keeps points inside speech', () => {
     const sil = [{ start: 0, end: 1 }, { start: 2, end: 3 }];
     expect(snapToSpeech({ in: 0.2, out: 2.6 }, sil, 3)).toEqual({ in: 0.92, out: 2.08 });
-    expect(snapToSpeech({ in: 1.5, out: 1.9 }, sil, 3)).toEqual({ in: 1.5, out: 1.9 });
+    expect(snapToSpeech({ in: 1.5, out: 1.7 }, sil, 3)).toEqual({ in: 1.5, out: 1.7 });
+    // STT word edges right at the speech get the breath too.
+    expect(snapToSpeech({ in: 1.05, out: 1.98 }, sil, 3)).toEqual({ in: 0.92, out: 2.08 });
   });
 
   test('a long pause inside a take is cut down; short ones stay', () => {
     const sil = [{ start: 2, end: 3 }, { start: 4, end: 4.3 }];
     expect(splitPauses({ in: 1, out: 5, line: 'x' }, sil)).toEqual([
       { in: 1, out: 2.12, line: 'x' },
-      { in: 2.88, out: 5, line: 'x' },
+      { in: 2.88, out: 5 },
     ]);
   });
 

@@ -32,7 +32,7 @@ Blocking error: `task_failed` with a short Uzbek reason.
 ## 2. Judge every file
 
 Drop a file (with a short Uzbek `why`) when it is:
-- no speech or only noise/music (`ovoz yo'q`);
+- no speech or only noise/music: an empty words file (`ovoz yo'q`);
 - off-script: almost none of its words are in the script (`skriptda yo'q`);
 - a worse duplicate of a take another file has (`takror dubl`);
 - unusable picture: out of focus, person cut off, wrong orientation (`tasvir yaroqsiz`).
@@ -47,7 +47,9 @@ line, all its takes (`src`, `start`, `end`, `coverage`) and a `pick`: the last n
 take (people re-say a line after a slip). Check each pick:
 - a line with no take: say it in `task_progress` (`<k>-gap aytilmagan`) and go on;
 - prefer a take that covers the whole line (coverage 1) over a later partial one;
-- follow `input.note` when it names a line or a take.
+- follow `input.note` when it names a line or a take;
+- STT may split or misspell a word ("To'p birchisi" for "Birinchisi"): when the word just before
+  a pick's start is such a fragment of the line's first word, start the segment at that fragment.
 Join neighbouring lines that come from the same take into one segment. Pauses do not need
 their own segments: assemble cuts every pause over 0.6 s inside a segment down to ~0.25 s.
 A pick under coverage 0.8 is a weak match: compare its words with the line (Read the words
