@@ -297,6 +297,10 @@ export const TaskSchema = z.object({
   output: z.unknown().nullable(),
   error: z.string().nullable(),
   createdAt: z.string(),
+  /** When a worker last took it (claim or reclaim): the Studio's timer. */
+  startedAt: z.string().optional(),
+  /** Last change (progress line, status): the Studio's "last activity". */
+  updatedAt: z.string().optional(),
 });
 export type Task = z.infer<typeof TaskSchema>;
 
@@ -325,6 +329,8 @@ export const StoryboardSchema = z.object({
         file: z.string().regex(/^[A-Za-z0-9._-]+\.(png|jpg|jpeg)$/, 'a plain .png/.jpg name inside storyboard/'),
         script: z.string(),
         at: z.number().min(0),
+        /** The user deleted this still in the Studio; a storyboard_edit rebuilds it. */
+        deleted: z.boolean().optional(),
       }),
     )
     .min(1),

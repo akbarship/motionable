@@ -69,6 +69,17 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
   const updating = tasks.some((t) => (t.type === 'edit' || t.type === 'generate' || t.type === 'execute') && active(t));
   const latest = renders[0] ?? null;
 
+  const removeRender = async (name: string) => {
+    if (!confirm(`"${name}" o'chirilsinmi? Buni qaytarib bo'lmaydi.`)) return;
+    setError(null);
+    try {
+      await api.deleteRender(id, name);
+      setRenders((cur) => cur.filter((r) => r.name !== name));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const render = async () => {
     setRendering(true);
     setError(null);
@@ -132,9 +143,14 @@ export function Editor({ id, tick }: { id: string; tick: number }) {
                 <div className="render-meta">
                   <span className="file-name" title={r.name}>{r.name}</span>
                   <span className="muted small">{formatSize(r.size)}</span>
-                  <a className="btn btn--ghost btn--sm" href={renderUrl(id, r.name)} download={r.name}>
-                    Yuklab olish
-                  </a>
+                  <div className="render-actions">
+                    <a className="btn btn--ghost btn--sm" href={renderUrl(id, r.name)} download={r.name}>
+                      Yuklab olish
+                    </a>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => void removeRender(r.name)}>
+                      O'chirish
+                    </button>
+                  </div>
                 </div>
               </li>
             ))}

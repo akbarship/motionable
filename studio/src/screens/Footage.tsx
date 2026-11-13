@@ -134,8 +134,20 @@ export function Footage({ id, tick }: { id: string; tick: number }) {
               </button>
             )}
           </div>
-          {cutting && rc && <p className="muted small" aria-busy="true">{rc.progress[rc.progress.length - 1] ?? 'Navbatda…'}</p>}
-          {rc?.status === 'failed' && <p className="form-error">Kesish xatosi: {rc.error}</p>}
+          {cutting && rc && (
+            <div className="board-cell-actions">
+              <p className="muted small" aria-busy="true">{rc.progress[rc.progress.length - 1] ?? 'Navbatda…'}</p>
+              <button type="button" className="btn btn--ghost btn--sm" disabled={busy !== null} onClick={() => void act('stop', () => api.stopTask(id, rc.id))}>
+                To'xtatish
+              </button>
+            </div>
+          )}
+          {rc?.status === 'failed' && rc.error === "to'xtatildi" && (
+            <button type="button" className="btn btn--ghost btn--sm" disabled={busy !== null} onClick={() => void act('retry', () => api.retryTask(id, rc.id))}>
+              Kesishni davom ettirish
+            </button>
+          )}
+          {rc?.status === 'failed' && rc.error !== "to'xtatildi" && <p className="form-error">Kesish xatosi: {rc.error}</p>}
         </section>
 
         <section className="footage-card footage-body">

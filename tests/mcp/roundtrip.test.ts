@@ -133,6 +133,7 @@ describe('mcp roundtrip', () => {
   test('studio_open reuses running studio and binds the tab to this chat', async () => {
     const r = (await call('studio_open')).data;
     expect(r.url).toBe(`${studioUrl}&s=${SID}#/new`);
+    expect(r.say).toBe(`Studio: [${r.url}](${r.url})`);
   });
 
   test('a Studio from another build is shut down and replaced', async () => {

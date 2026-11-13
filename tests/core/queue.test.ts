@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { projectDir } from '../../src/core/paths.js';
 import { bindSession, createProject, getProject } from '../../src/core/store.js';
-import { addTask, approve, claimNext, fail, finish, listTasks, progress, waitForTask } from '../../src/core/queue.js';
+import { addTask, approve, claimNext, fail, finish, listTasks, progress, retry, stop, STOPPED, waitForTask } from '../../src/core/queue.js';
 
 let prev: string | undefined;
 let tmp: string;
@@ -265,3 +265,33 @@ describe('chat sessions', () => {
     expect(await claimNext()).toBeNull();
   });
 });
+
+describe('takeover, stop and retry', () => {
+  test("a project opened in a new chat takes over the old chat's running task", async () => {
+    await bindSession(p, 'aaaaaaaaaaaaaaaa');
+    const t = await addTask(p, 'direct', {});
+    const old = await claimNext({ session: 'aaaaaaaaaaaaaaaa' });
+    expect(old!.task.id).toBe(t.id);
+    expect(await readFile(lockPath(t.id), 'utf8')).toMatch(/^\d+-aaaaaaaaaaaaaaaa-/);
+    await bindSession(p, 'bbbbbbbbbbbbbbbb'); // the user opened the project in the new chat
+    const now = await claimNext({ session: 'bbbbbbbbbbbbbbbb' });
+    expect(now!.task.id).toBe(t.id);
+    expect(now!.task.startedAt).toBeDefined();
+    // The old chat can no longer write to it.
+    await expect(finish(p, t.id, {}, old!.token)).rejects.toThrow(/^stopped: .*taken over/);
+    await finish(p, t.id, {}, now!.token);
+    expect((await listTasks(p))[0].status).toBe('done');
+  });
+
+  test('stop ends a running task and tells its worker; retry queues it again', async () => {
+    const t = await addTask(p, 'direct', {});
+    const c = await claimNext();
+    const stopped = await stop(p, t.id);
+    expect(stopped).toMatchObject({ status: 'failed', error: STOPPED });
+    await expect(progress(p, t.id, 'x', c!.token)).rejects.toThrow(/^stopped: the user stopped/);
+    const again = await retry(p, t.id);
+    expect(again).toMatchObject({ status: 'queued', error: null, progress: [] });
+    expect((await claimNext())!.task.id).toBe(t.id);
+  });
+});
+

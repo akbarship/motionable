@@ -11,6 +11,13 @@ CLI: `node <cliPath> ...`. `home` = parent of the `projects/` folder holding `pr
 Shell: one plain `node <cliPath> ...` per Bash call; no cd, &&, pipes, redirects, raw ffprobe/mkdir/cp.
 Blocking error: `task_failed` with a short Uzbek reason.
 
+Progress: the user watches the Studio. Send `task_progress` with one short Uzbek line after
+every step you finish (at least every 2-3 minutes of work), saying what is done, e.g.
+`Footaj ko'rildi: 3 klip`, `Hook yozildi`, `Sahnalar: 4/10`, `Tekshirilmoqda (validate)`.
+Stopped: if `task_progress`, `task_done` or `task_failed` returns an error starting with
+`stopped:` (the user pressed To'xtatish, or another chat took the task over), stop at once:
+no more tool calls, no task_failed; reply `To'xtatildi` in one line.
+
 ## 1. Gather (look before you plan)
 
 1. `task_progress`: `Reja tuzilmoqda`.
@@ -44,6 +51,8 @@ Blocking error: `task_failed` with a short Uzbek reason.
      (`no_stt_provider`: go on without). Never Read a words file whole: get the text and
      pauses > 0.3 s with one Bash `node -e` line.
    `task_progress`: `Footaj ko'rildi: <n> ta klip`.
+   Then one line per later milestone: `Uslub o'qildi: <id>`, `Hook: ...` (step 2),
+   `Sahnalar: <k>/<n>` while writing scenes, `Slop tekshiruvi`, `Tekshirilmoqda (validate)`.
 ## 2. Story first (write it before any scene)
 
 - `hook`: what is on screen and said in the first 1.5 s. Concrete: a visual plus a real number

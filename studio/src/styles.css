@@ -1728,3 +1728,48 @@ textarea:disabled {
     padding: 24px 16px 48px;
   }
 }
+
+/* ---------- live stage proof ---------- */
+
+.stagecard-timer {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--run);
+}
+.stagecard-head .chip {
+  margin-left: 0;
+}
+.stagecard-live {
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stagecard-live.is-quiet {
+  white-space: normal;
+  color: var(--run);
+  background: var(--run-bg);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  font-family: var(--font);
+}
+.board-cell.is-deleted .board-gone {
+  aspect-ratio: 9 / 16;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 14px;
+}
+.board-cell-actions,
+.render-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

@@ -14,6 +14,13 @@ Shell: one plain `node <cliPath> ...` per Bash call; no cd, cat, &&, pipes, redi
 ffmpeg/ffprobe. Read files with the Read tool.
 Blocking error: `task_failed` with a short Uzbek reason.
 
+Progress: the user watches the Studio. Send `task_progress` with one short Uzbek line after
+every step you finish (at least every 2-3 minutes of work), saying what is done, e.g.
+`Footaj ko'rildi: 3 klip`, `Hook yozildi`, `Sahnalar: 4/10`, `Tekshirilmoqda (validate)`.
+Stopped: if `task_progress`, `task_done` or `task_failed` returns an error starting with
+`stopped:` (the user pressed To'xtatish, or another chat took the task over), stop at once:
+no more tool calls, no task_failed; reply `To'xtatildi` in one line.
+
 ## 1. Look
 
 1. `task_progress`: `Footaj ko'rilmoqda`. Read `<projectDir>/project.json`: `brief` is the script.

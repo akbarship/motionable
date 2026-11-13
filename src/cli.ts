@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { access, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, appendFile, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -310,8 +310,29 @@ async function main(cmd: string | undefined): Promise<void> {
   }
 }
 
+/**
+ * Agents drive work through this CLI: log each call that names a project (path under
+ * <home>/projects/<id>/) to that project's activity.jsonl, so the Studio shows live proof of work.
+ */
+export async function logActivity(argv: string[]): Promise<void> {
+  if (!argv[0] || argv[0] === 'studio' || argv[0] === 'doctor') return;
+  const root = join(home(), 'projects') + sep;
+  const hit = argv.find((a) => a.startsWith(root));
+  if (!hit) return;
+  const id = hit.slice(root.length).split(sep)[0];
+  if (!/^[a-z0-9-]+$/.test(id)) return;
+  const proj = root + id;
+  const cmd = argv
+    .map((a) => (a.startsWith(proj) ? a.slice(proj.length + 1) || '.' : a))
+    .filter((a) => a !== '.' && a !== '')
+    .join(' ')
+    .slice(0, 140);
+  await appendFile(join(proj, 'activity.jsonl'), JSON.stringify({ t: new Date().toISOString(), cmd }) + '\n').catch(() => {});
+}
+
 const entry = process.argv[1];
 if (entry && import.meta.url === pathToFileURL(entry).href) {
   appendBinDir();
+  await logActivity(process.argv.slice(2));
   await main(process.argv[2]);
 }

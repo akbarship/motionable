@@ -17,6 +17,13 @@ Tools: the Motionable MCP tools (`mcp__plugin_motionable_motionable__<tool>`), R
 Edit, Bash, Skill. Send `task_progress` with short Uzbek lines at milestones.
 On a blocking error call `task_failed {projectId, taskId, error}` with a short reason.
 
+Progress: the user watches the Studio. Send `task_progress` with one short Uzbek line after
+every step you finish (at least every 2-3 minutes of work), saying what is done, e.g.
+`Footaj ko'rildi: 3 klip`, `Hook yozildi`, `Sahnalar: 4/10`, `Tekshirilmoqda (validate)`.
+Stopped: if `task_progress`, `task_done` or `task_failed` returns an error starting with
+`stopped:` (the user pressed To'xtatish, or another chat took the task over), stop at once:
+no more tool calls, no task_failed; reply `To'xtatildi` in one line.
+
 No paid API or cloud render outside `request_generation`/`generate`. Music, voice and images
 come only from the project, the HyperFrames registry or approved generation.
 
@@ -120,6 +127,10 @@ where it ends up after its entrance), no animation yet.
 ## storyboard_edit (`input: {sceneId, text}`)
 
 1. Read the comment (`input.text`, Uzbek) and that scene's file. Change only that scene.
+   If that scene has `"deleted": true` in board.json, the user deleted the still because it
+   missed: build it again with a clearly different design (another grammar from the style, a
+   different hero or layout, still within the plan's script and the style), then remove
+   `deleted` from that scene in board.json after the new snapshot.
 2. Gate on that scene, then re-snapshot only it with the same `--at` as in board.json
    (`--no-end --keep --output <projectDir>/storyboard`). Set `updatedAt` in board.json to now.
 3. `task_done`: one Uzbek line on what changed. Unclear comment: `task_failed` with a one-line question.

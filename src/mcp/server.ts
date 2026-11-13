@@ -159,17 +159,20 @@ export function createMcpServer(
   const claimed = new Map<string, string>(); // taskId -> projectId
   /** This chat. Projects opened from the Studio tab this chat opened are bound to it. */
   const session = opts.session ?? randomBytes(8).toString('hex');
+  /** Last Studio link this chat opened, repeated with every task so the user always has it. */
+  let studioUrl: string | null = null;
 
   server.registerTool(
     'studio_open',
     {
       description:
-        'Start Motionable Studio if needed and open it in the browser on the project list, bound to this chat. Returns {url}.',
+        'Start Motionable Studio if needed and open it in the browser on a new video, bound to this chat. Returns {url, say}: print `say` to the user as is.',
     },
     async () => {
       const url = `${await ensureStudio(opts.spawnStudio)}&s=${session}#/new`;
+      studioUrl = url;
       openBrowser(url);
-      return text({ url });
+      return text({ url, say: `Studio: [${url}](${url})` });
     },
   );
 
@@ -200,6 +203,7 @@ export function createMcpServer(
             agent: AGENTS[t.type],
             cliPath: cliPath(),
             resumed: true,
+            ...(studioUrl ? { studioUrl } : {}),
           });
         }
         const c = await waitForTask(waitSeconds(), 1000, extra.signal, () => claimNext({ session }));
@@ -214,6 +218,7 @@ export function createMcpServer(
           projectDir: projectDir(c.projectId),
           agent: AGENTS[c.task.type],
           cliPath: cliPath(),
+          ...(studioUrl ? { studioUrl } : {}),
         });
       } finally {
         clearInterval(timer);

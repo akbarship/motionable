@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { runCopySheets, runHf } from '../../src/cli.js';
+import { logActivity, runCopySheets, runHf } from '../../src/cli.js';
 import { validateHfArgs } from '../../src/core/hf-cmd.js';
 import { assertInHome } from '../../src/core/paths.js';
 import { probe } from '../../src/media/ingest.js';
@@ -133,3 +133,17 @@ describe('hf', () => {
     await expect(runHf(join(root, 'projects', 'r'), ['render', '--output', join(outside, 'a.mp4')], 'linux', 'ignore')).rejects.toThrow();
   });
 });
+
+describe('activity log', () => {
+  test('a CLI call naming a project is logged there, short and project-relative', async () => {
+    const proj = join(root, 'projects', 'act-1');
+    mkdirSync(proj, { recursive: true });
+    await logActivity(['hf', proj, 'snapshot', '--at', '1.5', '--output', join(proj, 'storyboard')]);
+    await logActivity(['validate', 'plan', join(proj, 'plan.json')]);
+    await logActivity(['probe', join(outside, 'x.mp4')]);
+    await logActivity(['studio']);
+    const lines = readFileSync(join(proj, 'activity.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).cmd);
+    expect(lines).toEqual(['hf snapshot --at 1.5 --output storyboard', 'validate plan plan.json']);
+  });
+});
+

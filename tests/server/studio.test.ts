@@ -365,6 +365,38 @@ describe('studio', () => {
     expect(p.styleAnswers).toEqual({ palette: ['#0b1a3a', '#1e5bff'], font: 'Inter', background: 'simple', accent: '#1e5bff' });
   });
 
+  test('stop / retry a task, delete a still and a render, activity in the project view', async () => {
+    const id = await mk();
+    const t = (await (await api(`/api/projects/${id}/tasks`, json({ type: 'direct', input: {} }))).json()) as { id: string };
+    expect((await api(`/api/projects/${id}/tasks/${t.id}/retry`, { method: 'POST' })).status).toBe(409);
+    const st = (await (await api(`/api/projects/${id}/tasks/${t.id}/stop`, { method: 'POST' })).json()) as { status: string; error: string };
+    expect(st).toMatchObject({ status: 'failed', error: "to'xtatildi" });
+    expect((await api(`/api/projects/${id}/tasks/${t.id}/stop`, { method: 'POST' })).status).toBe(409);
+    const rt = (await (await api(`/api/projects/${id}/tasks/${t.id}/retry`, { method: 'POST' })).json()) as { status: string };
+    expect(rt.status).toBe('queued');
+
+    const dir = projectDir(id);
+    await mkdir(join(dir, 'storyboard'), { recursive: true });
+    await writeFile(join(dir, 'storyboard', 'at-1s.png'), 'x');
+    const board = { scenes: [{ sceneId: 's1', file: 'at-1s.png', script: 'a', at: 1 }], updatedAt: 'x' };
+    await writeFile(join(dir, 'storyboard', 'board.json'), JSON.stringify(board));
+    const del = (await (await api(`/api/projects/${id}/storyboard/at-1s.png`, { method: 'DELETE' })).json()) as { scenes: { deleted?: boolean }[] };
+    expect(del.scenes[0].deleted).toBe(true);
+    expect((await readdir(join(dir, 'storyboard'))).sort()).toEqual(['board.json']);
+    expect((await api(`/api/projects/${id}/storyboard/board.json`, { method: 'DELETE' })).status).toBe(400);
+    expect((await api(`/api/projects/${id}/storyboard/..%2Fproject.json`, { method: 'DELETE' })).status).toBe(400);
+
+    await mkdir(join(dir, 'renders'), { recursive: true });
+    await writeFile(join(dir, 'renders', 'a.mp4'), 'x');
+    expect((await api(`/api/projects/${id}/renders/a.mp4`, { method: 'DELETE' })).status).toBe(200);
+    expect((await api(`/api/projects/${id}/renders/a.mp4`, { method: 'DELETE' })).status).toBe(404);
+    expect((await api(`/api/projects/${id}/renders/..%2Fproject.json`, { method: 'DELETE' })).status).toBe(400);
+
+    await writeFile(join(dir, 'activity.jsonl'), '{"t":"2026-11-13T10:00:00.000Z","cmd":"validate plan plan.json"}\nbad\n');
+    const view = (await (await api(`/api/projects/${id}`)).json()) as { activity: { cmd: string }[] };
+    expect(view.activity).toEqual([{ t: '2026-11-13T10:00:00.000Z', cmd: 'validate plan plan.json' }]);
+  });
+
   test('footage list, cut, body and approve', async () => {
     const id = await mk();
     const dir = projectDir(id);

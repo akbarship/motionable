@@ -15,11 +15,11 @@ MCP tools come from the plugin server `motionable`. Their full names are
 
 ## Start
 
-1. Call `studio_open`. It returns `{url}` and opens the project list in a tab bound to this
-   chat. Only projects created or opened in that tab are worked by this loop; other chats'
-   and old unopened projects never reach `next_task` here.
-2. Print exactly two lines in Uzbek, nothing else:
-   `Studio ochildi: <url>`
+1. Call `studio_open`. It returns `{url, say}` and opens a new-video tab bound to this chat.
+   Projects created or opened in that tab are worked by this loop, including work another chat
+   left half done (it is taken over and continued here).
+2. Print exactly two lines, nothing else. The FIRST line is the `say` value exactly as returned
+   (a clickable link; never drop or shorten it). The second line:
    `Ruxsat so'rovlari shu terminalda chiqadi. Tezroq ishlash uchun auto yoki accept-edits rejimini yoqing (yoki README'dagi allowlist: `Bash(node:*)`, Read, Write, Edit, Glob, Grep, `mcp__plugin_motionable_motionable__*` va `additionalDirectories: ["~/Motionable"]`).`
 
 ## Loop
@@ -40,10 +40,13 @@ Repeat until the user interrupts:
      Do this task. Finish with task_done or task_failed for this taskId.
      ```
 
-   - `resumed: true` means the last run of this task was cut off (sign-in, network, stop):
-     print `Qayta boshlandi: <type>` and dispatch it the same way.
+   - Before dispatching print one line: `Boshlandi: <type> — Studio: <studioUrl>` (the link
+     from the result). `resumed: true` means the last run was cut off (sign-in, network,
+     another chat): print `Qayta boshlandi: <type> — Studio: <studioUrl>` instead.
    - Wait for the subagent to return. Then print one short Uzbek line, for example
      `Tayyor: <type> — <its one-line summary>` or `Xato: <type> — <short reason>`.
+     If it reports the task was stopped (the user pressed To'xtatish in the Studio, or another
+     chat took it over), print `To'xtatildi: <type>` and go on; never call task_failed for it.
    - Go back to step 1.
 
 ## Rules

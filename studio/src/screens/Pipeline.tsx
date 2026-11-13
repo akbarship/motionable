@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '../errors';
-import { api, type Project, type Task } from '../api';
-import { awaitingGenerate, directStyleIds, hasDirect, hasUnknownState, lastProgress, readPlan, showPlanReview, stageState } from '../pipeline';
+import { api, type Project, type ProjectView, type Task } from '../api';
+import { awaitingGenerate, directStyleIds, hasDirect, hasUnknownState, lastProgress, readPlan, showPlanReview, stageState, stageTask } from '../pipeline';
 import { ApproveCost } from '../ui/ApproveCost';
 import { PlanReview } from '../ui/PlanReview';
 import { StageCard } from '../ui/StageCard';
@@ -14,6 +14,7 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
   const [planError, setPlanError] = useState(false);
   const [redoBusy, setRedoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<NonNullable<ProjectView['activity']>>([]);
 
   // Only the newest request may write state; older replies that land late are dropped.
   const loadSeq = useRef(0);
@@ -23,6 +24,7 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
       const v = await api.getProject(id);
       if (seq !== loadSeq.current) return;
       setTasks(v.tasks);
+      setActivity(v.activity ?? []);
       setPlan(v.plan);
       setProject(v.project);
       setPlanError(v.planError === 'invalid');
@@ -50,8 +52,21 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
     }
   }
 
+  async function act(fn: () => Promise<unknown>) {
+    setError(null);
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      setError(errorText((e as Error).message));
+    }
+  }
+  const stop = (t: Task) => void act(() => api.stopTask(id, t.id));
+  const retry = (t: Task) => void act(() => api.retryTask(id, t.id));
+
   const stages = [
     { id: 'study', title: "Namunani o'rganish" },
+    ...(tasks.some((t) => t.type === 'roughcut') ? [{ id: 'cut', title: 'Footajni kesish' } as const] : []),
     { id: 'direct', title: 'Rejalashtirish' },
     { id: 'storyboard', title: 'Storyboard' },
     { id: 'execute', title: 'Yaratish' },
@@ -73,7 +88,17 @@ export function Pipeline({ id, tick }: { id: string; tick: number }) {
       )}
       <ol className="stagecards">
         {stages.map((s, i) => (
-          <StageCard key={s.id} index={i + 1} title={s.title} state={stageState(tasks, s.id)} lines={lastProgress(tasks, s.id)} />
+          <StageCard
+            key={s.id}
+            index={i + 1}
+            title={s.title}
+            state={stageState(tasks, s.id)}
+            lines={lastProgress(tasks, s.id)}
+            task={stageTask(tasks, s.id)}
+            activity={activity}
+            onStop={stop}
+            onRetry={retry}
+          />
         ))}
       </ol>
 

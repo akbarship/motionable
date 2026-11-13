@@ -57,6 +57,40 @@ export function Storyboard({ id, tick }: { id: string; tick: number }) {
     }
   }
 
+  async function removeStill(sceneId: string, file: string) {
+    if (!confirm("Bu kadr o'chirilsinmi? Keyin uni qayta yaratish mumkin.")) return;
+    setBusy(sceneId);
+    setError(null);
+    try {
+      await api.deleteStill(id, file);
+      await load();
+    } catch (e) {
+      setError(errorText((e as Error).message));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function regenerate(sceneId: string) {
+    const note = notes[sceneId]?.trim();
+    setBusy(sceneId);
+    setError(null);
+    try {
+      await api.addTask(id, 'storyboard_edit', {
+        sceneId,
+        text: `Foydalanuvchi bu kadrni o'chirdi: boshqacha qilib qayta yarating.${note ? ` Izoh: ${note}` : ''}`,
+      });
+      setNotes((n) => ({ ...n, [sceneId]: '' }));
+      await load();
+    } catch (e) {
+      setError(errorText((e as Error).message));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const deletedCount = board?.scenes.filter((x) => x.deleted).length ?? 0;
+
   async function approve() {
     setBusy('approve');
     setError(null);
@@ -74,7 +108,7 @@ export function Storyboard({ id, tick }: { id: string; tick: number }) {
       <div className="board-bar">
         <h1 className="h-screen">Storyboard</h1>
         {board && !executed && (
-          <button type="button" className="btn btn--dark btn--lg" disabled={building || pending.length > 0 || busy !== null} onClick={() => void approve()}>
+          <button type="button" className="btn btn--dark btn--lg" disabled={building || pending.length > 0 || busy !== null || deletedCount > 0} onClick={() => void approve()}>
             {busy === 'approve' ? 'Yuborilmoqda…' : 'Tasdiqlash va animatsiya qilish'}
           </button>
         )}
@@ -101,14 +135,19 @@ export function Storyboard({ id, tick }: { id: string; tick: number }) {
         </p>
       )}
       {building && board && <p className="muted small">Yangilanmoqda…</p>}
+      {deletedCount > 0 && !executed && <p className="muted small">{deletedCount} ta kadr o'chirilgan: tasdiqlashdan oldin ularni qayta yarating.</p>}
       {pending.length > 0 && <p className="muted small">AI rasmlarni tasdiqlang yoki rad eting: ular storyboardga qo'yiladi.</p>}
       <ApproveCost projectId={id} pending={pending} unknown={unknown} onChanged={() => void load()} />
 
       {board && (
         <ol className="board-grid">
           {board.scenes.map((s, i) => (
-            <li key={s.sceneId} className="board-cell">
-              <img src={stillUrl(id, s.file, board.updatedAt)} alt={`${i + 1}-sahna: ${s.script}`} loading="lazy" />
+            <li key={s.sceneId} className={s.deleted ? 'board-cell is-deleted' : 'board-cell'}>
+              {s.deleted ? (
+                <div className="board-gone">{editing.has(s.sceneId) ? 'Qayta yaratilmoqda…' : "O'chirildi"}</div>
+              ) : (
+                <img src={stillUrl(id, s.file, board.updatedAt)} alt={`${i + 1}-sahna: ${s.script}`} loading="lazy" />
+              )}
               <p className="scene-script">
                 <b>{i + 1}.</b> {s.script}
               </p>
@@ -120,14 +159,37 @@ export function Storyboard({ id, tick }: { id: string; tick: number }) {
                     value={notes[s.sceneId] ?? ''}
                     onChange={(e) => setNotes((n) => ({ ...n, [s.sceneId]: e.target.value }))}
                   />
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    disabled={!notes[s.sceneId]?.trim() || busy !== null || editing.has(s.sceneId)}
-                    onClick={() => void comment(s.sceneId)}
-                  >
-                    {editing.has(s.sceneId) ? "O'zgartirilmoqda…" : 'Yuborish'}
-                  </button>
+                  <div className="board-cell-actions">
+                    {s.deleted ? (
+                      <button
+                        type="button"
+                        className="btn btn--dark btn--sm"
+                        disabled={busy !== null || editing.has(s.sceneId)}
+                        onClick={() => void regenerate(s.sceneId)}
+                      >
+                        {editing.has(s.sceneId) ? 'Yaratilmoqda…' : 'Qayta yaratish'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={!notes[s.sceneId]?.trim() || busy !== null || editing.has(s.sceneId)}
+                          onClick={() => void comment(s.sceneId)}
+                        >
+                          {editing.has(s.sceneId) ? "O'zgartirilmoqda…" : 'Yuborish'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={busy !== null || editing.has(s.sceneId)}
+                          onClick={() => void removeStill(s.sceneId, s.file)}
+                        >
+                          O'chirish
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </>
               )}
             </li>

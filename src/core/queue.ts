@@ -72,7 +72,7 @@ export async function listTasks(projectId: string): Promise<Task[]> {
 
 async function update(projectId: string, taskId: string, fn: (t: Task) => Task): Promise<Task> {
   const file = taskFile(projectId, taskId);
-  const next = fn(await readJson(file, TaskSchema));
+  const next = { ...fn(await readJson(file, TaskSchema)), updatedAt: new Date().toISOString() };
   await writeJson(file, TaskSchema, next);
   return next;
 }
@@ -87,7 +87,10 @@ export async function ownsLock(projectId: string, taskId: string, token: string 
   }
 }
 
-/** Throws when a token is given and the lock no longer carries it (task was reclaimed). */
+/** `error` of a task the user stopped in the Studio. */
+export const STOPPED = "to'xtatildi";
+
+/** Throws when a token is given and the lock no longer carries it (stopped, or taken over by another chat). */
 async function assertOwner(projectId: string, taskId: string, token?: string): Promise<void> {
   if (token === undefined) return;
   let held: string | null = null;
@@ -96,7 +99,26 @@ async function assertOwner(projectId: string, taskId: string, token?: string): P
   } catch {
     // missing lock counts as lost
   }
-  if (held !== token) throw new Error(`lock for task ${taskId} is no longer owned by this worker`);
+  if (held === token) return;
+  const t = await readJson(taskFile(projectId, taskId), TaskSchema).catch(() => null);
+  if (t?.status === 'failed' && t.error === STOPPED) {
+    throw new Error(`stopped: the user stopped task ${taskId} in the Studio. Stop work on it now, write nothing more.`);
+  }
+  throw new Error(`stopped: task ${taskId} was taken over by another worker (chat). Stop work on it now, write nothing more.`);
+}
+
+/** The user's Stop: a queued, waiting or running task ends as failed "to'xtatildi"; its lock goes, so the agent's next call fails. */
+export async function stop(projectId: string, taskId: string): Promise<Task> {
+  const t = await update(projectId, taskId, (x) =>
+    x.status === 'queued' || x.status === 'running' || x.status === 'awaiting_approval' ? { ...x, status: 'failed', error: STOPPED } : x,
+  );
+  if (t.error === STOPPED) await unlink(lockFile(projectId, taskId)).catch(() => {});
+  return t;
+}
+
+/** The user's Continue: a failed or stopped task goes back to the queue with the same input. */
+export async function retry(projectId: string, taskId: string): Promise<Task> {
+  return update(projectId, taskId, (x) => (x.status === 'failed' ? { ...x, status: 'queued', error: null, progress: [] } : x));
 }
 
 /** Unlink the lock only when it is ours (or when no token is supplied). */
@@ -181,8 +203,12 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** A running task's lock is stale when it is old or its owner process (pid in the token) has exited. */
-async function lockStale(projectId: string, taskId: string): Promise<boolean> {
+/**
+ * A running task's lock is stale when it is old, its owner process (pid in the token) has exited,
+ * or (with `session`) it belongs to another chat: the project now belongs to `session`, so the old
+ * chat's half-done work is taken over. Tokens are `<pid>-<session|x>-<hex>`.
+ */
+async function lockStale(projectId: string, taskId: string, session?: string): Promise<boolean> {
   const age = await lockAgeMs(projectId, taskId);
   if (age === null) return false;
   if (age > STALE_LOCK_MS) return true;
@@ -192,17 +218,18 @@ async function lockStale(projectId: string, taskId: string): Promise<boolean> {
   } catch {
     return false;
   }
+  if (session !== undefined && /^\d+-([a-z0-9]+)-/.exec(held)?.[1] !== session) return true;
   const pid = Number(/^(\d+)-/.exec(held)?.[1]);
   return Number.isInteger(pid) && pid > 0 && pid !== process.pid && !pidAlive(pid);
 }
 
 /** A task is claimable when queued, or running with a stale lock (dead worker). */
-async function claimable(projectId: string, t: Task, runningExclusive: boolean): Promise<'fresh' | 'stale' | null> {
+async function claimable(projectId: string, t: Task, runningExclusive: boolean, session?: string): Promise<'fresh' | 'stale' | null> {
   if (t.status === 'queued') {
     if (EXCLUSIVE.has(t.type) && runningExclusive) return null;
     return 'fresh';
   }
-  if (t.status === 'running' && (await lockStale(projectId, t.id))) return 'stale';
+  if (t.status === 'running' && (await lockStale(projectId, t.id, session))) return 'stale';
   return null;
 }
 
@@ -223,16 +250,16 @@ export async function claimNext(
   candidates.sort((a, b) => a.task.createdAt.localeCompare(b.task.createdAt) || a.task.id.localeCompare(b.task.id));
 
   for (const { projectId, task, running } of candidates) {
-    const kind = await claimable(projectId, task, running);
+    const kind = await claimable(projectId, task, running, opts.session);
     if (!kind) continue;
     const lock = lockFile(projectId, task.id);
-    const token = `${process.pid}-${randomBytes(8).toString('hex')}`;
+    const token = `${process.pid}-${opts.session ?? 'x'}-${randomBytes(8).toString('hex')}`;
     if (kind === 'stale') {
       // Reclaim under the project mutex and re-check the age there, so only one reclaimer wins.
       const m = join(tasksDir(projectId), '_exclusive.mutex');
       if (!(await takeMutex(m))) continue;
       try {
-        if (!(await lockStale(projectId, task.id))) continue;
+        if (!(await lockStale(projectId, task.id, opts.session))) continue;
         await unlink(lock).catch(() => {});
         if (!(await tryLock(lock, token))) continue;
       } finally {
@@ -270,7 +297,7 @@ export async function claimNext(
     }
     let running_: Task;
     try {
-      running_ = await update(projectId, task.id, (t) => ({ ...t, status: 'running' }));
+      running_ = await update(projectId, task.id, (t) => ({ ...t, status: 'running', startedAt: new Date().toISOString() }));
     } finally {
       if (mutex) await unlink(mutex).catch(() => {});
     }

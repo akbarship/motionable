@@ -1,11 +1,15 @@
 // Pure helpers for the pipeline screen: stage status, plan check, quote items, unknown-state detection.
 import type { ChatMsg, Task } from './api.js';
 
-export type StageId = 'study' | 'direct' | 'storyboard' | 'execute';
-export type StageState = 'idle' | 'queued' | 'running' | 'done' | 'failed';
+export type StageId = 'study' | 'cut' | 'direct' | 'storyboard' | 'execute';
+export type StageState = 'idle' | 'queued' | 'running' | 'done' | 'failed' | 'stopped';
+
+/** `error` of a task the user stopped (same text as the server's STOPPED). */
+export const STOPPED = "to'xtatildi";
 
 const STAGE_TYPES: Record<StageId, ReadonlySet<string>> = {
   study: new Set(['study_ref']),
+  cut: new Set(['roughcut']),
   direct: new Set(['direct']),
   storyboard: new Set(['storyboard', 'storyboard_edit']),
   execute: new Set(['execute', 'edit', 'render', 'generate']),
@@ -31,8 +35,19 @@ export function stageState(tasks: Task[], stage: StageId): StageState {
   if (!t) return 'idle';
   if (t.status === 'running') return 'running';
   if (t.status === 'done') return 'done';
-  if (t.status === 'failed') return 'failed';
+  if (t.status === 'failed') return t.error === STOPPED ? 'stopped' : 'failed';
   return 'queued'; // queued or awaiting_approval
+}
+
+/** The task a stage card acts on: its newest task (Stop, Continue, timer). */
+export function stageTask(tasks: Task[], stage: StageId): Task | null {
+  return newestTask(stageTasks(tasks, stage));
+}
+
+/** "3:07" for seconds. */
+export function clock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export const STATE_LABEL: Record<StageState, string> = {
@@ -41,6 +56,7 @@ export const STATE_LABEL: Record<StageState, string> = {
   running: 'ishlanmoqda',
   done: 'tayyor',
   failed: 'xato',
+  stopped: "to'xtatildi",
 };
 
 /** Last n progress lines across the stage's tasks (oldest task first). */

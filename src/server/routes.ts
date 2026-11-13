@@ -6,7 +6,7 @@ import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
 import { assertId, home, projectDir, styleDir } from '../core/paths.js';
-import { addTask, approve, fail, listTasks } from '../core/queue.js';
+import { addTask, approve, fail, listTasks, retry as retryTask, stop as stopTask } from '../core/queue.js';
 import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { prices } from '../providers/util.js';
 import { quoteItems } from '../providers/registry.js';
@@ -279,6 +279,23 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, file: string
   stream.pipe(res);
 }
 
+/** The last CLI calls agents made for this project (activity.jsonl), newest last: proof of work. */
+async function readActivity(id: string): Promise<{ t: string; cmd: string }[]> {
+  try {
+    const lines = (await readFile(join(projectDir(id), 'activity.jsonl'), 'utf8')).trim().split('\n').slice(-8);
+    return lines.flatMap((l) => {
+      try {
+        const x = JSON.parse(l) as { t?: unknown; cmd?: unknown };
+        return typeof x.t === 'string' && typeof x.cmd === 'string' ? [{ t: x.t, cmd: x.cmd }] : [];
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
 /** cut.json (rough cut), or null before the first cut. */
 async function readCut(id: string): Promise<Cut | null> {
   try {
@@ -342,9 +359,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         const session = sessionOf(req);
         const project = session ? await bindSession(id, session) : await getProject(id);
         await setLast(id);
-        const [tasks, planRead, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
-        if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
-        return send(res, 200, { project, tasks, plan: planRead, chat });
+        const [tasks, planRead, chat, activity] = await Promise.all([listTasks(id), readPlan(id), readChat(id), readActivity(id)]);
+        if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat, activity });
+        return send(res, 200, { project, tasks, plan: planRead, chat, activity });
       }
       if (seg[2] === 'footage' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await listFootage(id));
@@ -370,6 +387,15 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       if (seg[2] === 'storyboard' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await readBoard(id));
       }
+      if (seg[2] === 'storyboard' && seg.length === 4 && method === 'DELETE') {
+        const name = checkFilename(decodeURIComponent(seg[3]), false, new Set(Object.keys(STILL_TYPES)));
+        const board = await readBoard(id);
+        if (!board || !board.scenes.some((x) => x.file === name)) throw new HttpError(404, 'still not found');
+        await unlink(join(projectDir(id), 'storyboard', name)).catch(() => {});
+        const next = { ...board, scenes: board.scenes.map((x) => (x.file === name ? { ...x, deleted: true } : x)), updatedAt: new Date().toISOString() };
+        await writeJson(join(projectDir(id), 'storyboard', 'board.json'), StoryboardSchema, next);
+        return send(res, 200, next);
+      }
       if (seg[2] === 'storyboard' && seg.length === 4 && (method === 'GET' || method === 'HEAD')) {
         return serveStill(req, res, id, seg[3]);
       }
@@ -383,6 +409,12 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       }
       if (seg[2] === 'renders' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await listRenders(id));
+      }
+      if (seg[2] === 'renders' && seg.length === 4 && method === 'DELETE') {
+        const name = checkFilename(decodeURIComponent(seg[3]), false);
+        if (extname(name).toLowerCase() !== '.mp4') throw new HttpError(400, 'file type not allowed');
+        await unlink(join(projectDir(id), 'renders', name)); // ENOENT -> 404
+        return send(res, 200, { deleted: name });
       }
       if (seg[2] === 'renders' && seg.length === 4 && (method === 'GET' || method === 'HEAD')) {
         return serveRender(req, res, id, seg[3]);
@@ -470,6 +502,14 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
           return { kind: kind.data, params: params as Record<string, unknown> };
         });
         return send(res, 200, await quoteItems(items, await loadConfig(), join(projectDir(id), 'gen')));
+      }
+      if (seg[2] === 'tasks' && (seg[4] === 'stop' || seg[4] === 'retry') && seg.length === 5 && method === 'POST') {
+        const tid = assertId(seg[3]);
+        const before = (await listTasks(id)).find((t) => t.id === tid);
+        if (!before) throw new HttpError(404, 'task not found');
+        if (seg[4] === 'stop' && !['queued', 'running', 'awaiting_approval'].includes(before.status)) throw new HttpError(409, 'not_active');
+        if (seg[4] === 'retry' && before.status !== 'failed') throw new HttpError(409, 'not_failed');
+        return send(res, 200, seg[4] === 'stop' ? await stopTask(id, tid) : await retryTask(id, tid));
       }
       if (seg[2] === 'tasks' && seg[4] === 'approve' && seg.length === 5 && method === 'POST') {
         const tid = assertId(seg[3]);

@@ -35,7 +35,7 @@ export interface RefFile {
 }
 
 export interface Storyboard {
-  scenes: { sceneId: string; file: string; script: string; at: number }[];
+  scenes: { sceneId: string; file: string; script: string; at: number; deleted?: boolean }[];
   updatedAt: string;
 }
 
@@ -48,6 +48,8 @@ export interface Task {
   output: unknown;
   error: string | null;
   createdAt: string;
+  startedAt?: string;
+  updatedAt?: string;
 }
 
 export interface ChatMsg {
@@ -70,6 +72,8 @@ export interface ProjectView {
   plan: unknown;
   planError?: 'invalid';
   chat: ChatMsg[];
+  /** Last CLI calls agents made for this project: live proof of work. */
+  activity?: { t: string; cmd: string }[];
 }
 
 export interface StyleSummary {
@@ -170,6 +174,10 @@ export const api = {
   deleteRef: (id: string, name: string) => request<{ ok: true }>(`${p(id)}/refs/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   startStudy: (id: string) => request<{ task: Task }>(`${p(id)}/refs/study`, { method: 'POST', body: {} }),
   putStyleAnswers: (id: string, a: StyleAnswers) => request<Project>(`${p(id)}/style-answers`, { method: 'PUT', body: a }),
+  stopTask: (id: string, tid: string) => request<Task>(`${p(id)}/tasks/${tid}/stop`, { method: 'POST' }),
+  retryTask: (id: string, tid: string) => request<Task>(`${p(id)}/tasks/${tid}/retry`, { method: 'POST' }),
+  deleteStill: (id: string, file: string) => request<Storyboard>(`${p(id)}/storyboard/${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  deleteRender: (id: string, name: string) => request<{ deleted: string }>(`${p(id)}/renders/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   footage: (id: string) => request<FootageFile[]>(`${p(id)}/footage`),
   cut: (id: string) => request<Cut | null>(`${p(id)}/cut`),
   approveCut: (id: string) => request<Cut>(`${p(id)}/cut/approve`, { method: 'POST' }),
