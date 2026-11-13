@@ -186,6 +186,8 @@ const SceneSchema = z.object({
   purpose: z.string(),
   script: z.string(),
   layout: z.string().min(1),
+  /** The 2-5 words a viewer gets from this scene with the sound off; taken from `script`. */
+  message: z.string().min(1).optional(),
   /** Scene grammar from the style's `grammars` (icon carousel, stat card, chat bubbles...). */
   grammar: z.string().min(1).optional(),
   motion: z.string().min(1),
@@ -202,29 +204,21 @@ const SceneSchema = z.object({
 });
 
 export const MIN_SCENE_S = 0.8;
-/** Distinct grammars a video needs by default (fewer scenes: one per scene). The style can lower it. */
-export const MIN_GRAMMARS = 4;
-
-/** Grammars the plan must use: the default, lowered when the reference itself uses fewer kinds of scene. */
-export function minGrammars(scenes: number, styles: Pick<Style, 'grammars'>[] = []): number {
-  const known = styles.map((s) => s.grammars?.length ?? 0).filter((n) => n > 0);
-  const fromRef = known.length > 0 ? Math.max(...known) : MIN_GRAMMARS;
-  return Math.max(1, Math.min(MIN_GRAMMARS, fromRef, scenes));
-}
-
-/** Checks a plan needs its styles for: the grammar count follows what the reference uses. */
-export function planStyleIssues(plan: Plan, styles: Pick<Style, 'grammars'>[]): string[] {
-  const withGrammar = plan.scenes.filter((s) => s.grammar);
-  if (withGrammar.length === 0) return [];
-  const distinct = new Set(withGrammar.map((s) => s.grammar!.trim().toLowerCase())).size;
-  const need = minGrammars(plan.scenes.length, styles);
-  return distinct < need ? [`scenes: ${distinct} distinct grammars; use at least ${need}`] : [];
-}
+/** Words of the on-screen message. */
+export const MAX_MESSAGE_WORDS = 5;
+/** Things on screen at once: headline, hero, one helper. Running captions and transitions are not counted. */
+export const MAX_SCENE_ELEMENTS = 3;
 export const MAX_WORDS_PER_S = 3;
 const EPS = 0.01;
 
 export const wordCount = (s: string): number => s.split(/\s+/).filter(Boolean).length;
-const sameLayout = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
+/** Lower-case words with punctuation and apostrophe variants removed, for comparing on-screen text to speech. */
+const plainWords = (t: string): string[] =>
+  t
+    .toLowerCase()
+    .replace(/[\u02BB\u02BC\u2018\u2019'`]/g, '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 
 export const PlanSchema = z
   .object({
@@ -257,26 +251,31 @@ export const PlanSchema = z
       if (len > 0 && words / len > MAX_WORDS_PER_S + 1e-9) {
         issue(['scenes', i, 'script'], `${words} words in ${+len.toFixed(2)} s is over ${MAX_WORDS_PER_S} words/s; cut words or lengthen the scene`);
       }
-      if (i > 0 && sameLayout(s.layout, p.scenes[i - 1].layout)) {
-        issue(['scenes', i, 'layout'], `same layout as scene ${p.scenes[i - 1].id}; vary the grammar between neighbours`);
+      if (s.message) {
+        const msg = plainWords(s.message);
+        if (msg.length > MAX_MESSAGE_WORDS) {
+          issue(['scenes', i, 'message'], `${msg.length} words; the on-screen message is at most ${MAX_MESSAGE_WORDS}`);
+        }
+        const spoken = new Set(plainWords(s.script));
+        // digits may stand for a spoken number ("5" for "beshta")
+        const foreign = spoken.size > 0 ? msg.filter((w) => !spoken.has(w) && !/^\d+$/.test(w)) : [];
+        if (foreign.length > 0) {
+          issue(['scenes', i, 'message'], `"${foreign.join(' ')}" is not in this scene's script; use the spoken words, do not paraphrase`);
+        }
+      }
+      const onScreen = s.components.filter((c) => c.kind !== 'caption' && c.kind !== 'transition').length;
+      if (onScreen > MAX_SCENE_ELEMENTS) {
+        issue(['scenes', i, 'components'], `${onScreen} elements on screen; keep at most ${MAX_SCENE_ELEMENTS} (headline, hero, one helper)`);
       }
       s.assets.forEach((a, j) => {
         if (ids.has(a.id)) issue(['scenes', i, 'assets', j, 'id'], `asset id "${a.id}" is used twice; ids are unique in the plan`);
         ids.add(a.id);
       });
     });
-    const withGrammar = p.scenes.filter((s) => s.grammar);
-    if (withGrammar.length > 0) {
+    if (p.scenes.some((s) => s.grammar)) {
       p.scenes.forEach((s, i) => {
         if (!s.grammar) issue(['scenes', i, 'grammar'], 'every scene needs a grammar when one has it');
-        else if (i > 0 && p.scenes[i - 1].grammar && sameLayout(s.grammar, p.scenes[i - 1].grammar!)) {
-          issue(['scenes', i, 'grammar'], `same grammar as scene ${p.scenes[i - 1].id}; neighbours never share a grammar`);
-        }
       });
-      // The minimum count depends on the reference: see planStyleIssues (run by `validate plan`).
-      const distinct = new Set(withGrammar.map((s) => s.grammar!.trim().toLowerCase())).size;
-      const need = Math.min(2, p.scenes.length);
-      if (distinct < need) issue(['scenes'], `${distinct} distinct grammars; use at least ${need}`);
     }
     const last = p.scenes[p.scenes.length - 1];
     if (last && Math.abs(last.end - p.duration) > EPS) {

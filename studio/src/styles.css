@@ -992,6 +992,35 @@ textarea:disabled {
   color: var(--ink-2);
   font-size: 12.5px;
 }
+.lessons-scope {
+  margin: 14px 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.lessons-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lessons-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.lessons-list > li + li {
+  margin-top: 6px;
+}
+.lessons-list > li > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .balance {
   display: flex;
   align-items: center;

@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basename, extname, join } from 'node:path';
 import { ZodError } from 'zod';
 import { loadConfig, maskedConfig, saveConfig } from '../core/config.js';
+import { addLesson, allLessons, removeLesson } from '../core/lessons.js';
 import { assertId, home, projectDir, styleDir } from '../core/paths.js';
 import { addTask, approve, fail, listTasks, retry as retryTask, stop as stopTask } from '../core/queue.js';
 import { checkBotUrl, createBotProvider } from '../providers/bot.js';
@@ -569,6 +570,16 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
     if (method === 'PUT') {
       const b = await readBody(req);
       return send(res, 200, maskedConfig(await saveConfig(b as Parameters<typeof saveConfig>[0])));
+    }
+  } else if (seg[0] === 'lessons' && seg.length === 1) {
+    if (method === 'GET') return send(res, 200, await allLessons());
+    if (method === 'POST' || method === 'DELETE') {
+      const b = await readBody(req);
+      const scope = str(b.scope, 'scope');
+      if (scope !== 'global') assertId(scope);
+      if (method === 'POST') await addLesson(scope, str(b.text, 'text'));
+      else if (!(await removeLesson(scope, str(b.line, 'line')))) throw new HttpError(404, 'lesson not found');
+      return send(res, 200, await allLessons());
     }
   } else if (seg[0] === 'prices' && seg.length === 1 && method === 'GET') {
     return send(res, 200, prices);

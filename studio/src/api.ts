@@ -93,6 +93,12 @@ export interface Config {
   port: number;
 }
 
+/** Rules learnt from the user's feedback: `global` or one style id. */
+export interface LessonGroup {
+  scope: string;
+  lines: string[];
+}
+
 export type ConfigPatch = Partial<Omit<Config, 'providers'>> & {
   providers?: Partial<Record<Kind, { use: ProviderUse; key?: string }>>;
 };
@@ -198,6 +204,9 @@ export const api = {
   prices: () => request<{ stt: { perMinute: number } }>('/api/prices'),
   getConfig: () => request<Config>('/api/config'),
   putConfig: (patch: ConfigPatch) => request<Config>('/api/config', { method: 'PUT', body: patch }),
+  lessons: () => request<LessonGroup[]>('/api/lessons'),
+  addLesson: (scope: string, text: string) => request<LessonGroup[]>('/api/lessons', { method: 'POST', body: { scope, text } }),
+  deleteLesson: (scope: string, line: string) => request<LessonGroup[]>('/api/lessons', { method: 'DELETE', body: { scope, line } }),
   balance: () => request<Record<string, unknown>>('/api/bot/balance'),
   claude: () => request<{ connected: boolean }>('/api/claude'),
 };

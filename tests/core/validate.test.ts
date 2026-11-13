@@ -35,16 +35,18 @@ describe('motionable validate', () => {
     expect(r.out).toContain('scenes.1.assets.0.fallback');
   });
 
-  test('timing, word-rate and layout rules come back as short lines', async () => {
+  test('timing, word-rate and message rules come back as short lines', async () => {
     const p = await fixture();
     p.scenes[1].start = 3; // gap
     p.scenes[0].script = 'bir ikki uch tort besh olti yetti sakkiz'; // 3.2 words/s
-    p.scenes[2].layout = p.scenes[1].layout; // same as neighbour
+    p.scenes[2].layout = p.scenes[1].layout; // a repeated frame is allowed
+    p.scenes[2].message = 'ekranda boshqa gap'; // not the spoken words
     const r = await runValidate('plan', await put('bad-plan-2.json', p));
     expect(r.code).toBe(1);
     expect(r.out).toContain('scenes.1.start');
     expect(r.out).toContain('scenes.0.script');
-    expect(r.out).toContain('scenes.2.layout');
+    expect(r.out).not.toContain('scenes.2.layout');
+    expect(r.out).toContain('scenes.2.message');
   });
 
   test('old v1 plan (scene gen, no story) exits 1', async () => {

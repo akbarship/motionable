@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { PlanSchema, StyleSchema, minGrammars, planStyleIssues, type Plan } from '../../src/core/types.js';
+import { PlanSchema, StyleSchema } from '../../src/core/types.js';
 
 type Json = Record<string, any>;
 const fixture = (): Json => JSON.parse(readFileSync(new URL('../fixtures/plan-v2.json', import.meta.url), 'utf8'));
@@ -112,38 +112,48 @@ describe('PlanSchema v2', () => {
     expect(issues(p)).toEqual([]);
   });
 
-  test('adjacent scenes cannot share a layout (case and spaces ignored)', () => {
+  test('scenes may repeat a layout and a grammar (one frame for the whole video)', () => {
     const p = fixture();
-    p.scenes[1].layout = '  Presenter full frame centred,  caption on the centre line ';
-    expectIssue(p, 'scenes.1.layout', 'same layout as scene s1');
-    const q = fixture();
-    q.scenes[2].layout = q.scenes[0].layout; // not neighbours: allowed
-    expect(issues(q)).toEqual([]);
+    p.scenes[1].layout = p.scenes[0].layout;
+    p.scenes.forEach((s: Json) => (s.grammar = 'tip card'));
+    expect(issues(p)).toEqual([]);
   });
 
-  test('grammar: all or none, neighbours differ, enough distinct', () => {
+  test('grammar: all scenes or none', () => {
     const p = fixture();
     p.scenes[0].grammar = 'icon carousel';
     expectIssue(p, 'scenes.1.grammar', 'every scene needs a grammar');
-    const q = fixture();
-    q.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'chat bubbles', 'big type'][i]));
-    expect(issues(q)).toEqual([]);
-    q.scenes[1].grammar = 'Stat  Card';
-    expectIssue(q, 'scenes.1.grammar', 'same grammar as scene s1');
-    const r = fixture();
-    r.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'stat card x', 'stat card'][i]));
-    expect(issues(r)).toEqual([]); // the schema floor is 2; the style decides the rest
-    expect(planStyleIssues(r as Plan, [])).toEqual(['scenes: 2 distinct grammars; use at least 3']);
   });
 
-  test('grammar count follows the reference', () => {
-    expect(minGrammars(10)).toBe(4);
-    expect(minGrammars(10, [{ grammars: ['a', 'b'] }])).toBe(2);
-    expect(minGrammars(10, [{ grammars: ['a', 'b', 'c', 'd', 'e', 'f'] }])).toBe(4);
-    expect(minGrammars(3, [{}])).toBe(3);
+  test('message: at most 5 words, taken from the scene script', () => {
     const p = fixture();
-    p.scenes.forEach((s: Json, i: number) => (s.grammar = ['stat card', 'big type', 'stat card'][i]));
-    expect(planStyleIssues(p as Plan, [{ grammars: ['stat card', 'big type'] }])).toEqual([]);
+    p.scenes[0].script = 'Ikkinchisi, plan mode. Shift+Tab bosasiz, 5 ta qadam.';
+    p.scenes[0].end = 4;
+    p.scenes[1].start = 4;
+    p.scenes[0].message = 'Plan mode: shift+tab';
+    expect(issues(p)).toEqual([]);
+    p.scenes[0].message = '5 qadam'; // a digit may stand for a spoken number
+    expect(issues(p)).toEqual([]);
+    p.scenes[0].message = 'avval reja keyin kod';
+    expectIssue(p, 'scenes.0.message', 'not in this scene');
+    p.scenes[0].message = 'plan mode shift tab bosasiz ta qadam';
+    expectIssue(p, 'scenes.0.message', 'at most 5');
+  });
+
+  test('message ignores apostrophe variants', () => {
+    const p = fixture();
+    p.scenes[0].script = 'Claude uni oʻzi oʻqiydi';
+    p.scenes[0].message = "o'zi o'qiydi";
+    expect(issues(p)).toEqual([]);
+  });
+
+  test('at most 3 things on screen; captions and transitions are not counted', () => {
+    const p = fixture();
+    const c = (kind: string) => ({ kind, description: 'x', props: {} });
+    p.scenes[0].components = [c('title'), c('card'), c('overlay'), c('caption'), c('transition')];
+    expect(issues(p)).toEqual([]);
+    p.scenes[0].components.push(c('chart'));
+    expectIssue(p, 'scenes.0.components', '4 elements on screen');
   });
 
   test('audio voice may be a separate voiceover', () => {

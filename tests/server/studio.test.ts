@@ -441,3 +441,22 @@ describe('studio', () => {
     expect((await api(`/api/projects/${id}/tasks`, json({ type: 'storyboard_edit', input: { sceneId: 's1', text: 'x' } }))).status).toBe(200);
   });
 });
+
+describe('lessons API', () => {
+  const del = (body: unknown) => ({ method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+  test('add, list and delete a global lesson', async () => {
+    expect(await (await api('/api/lessons')).json()).toEqual([{ scope: 'global', lines: [] }]);
+    const added = (await (await api('/api/lessons', json({ scope: 'global', text: 'Fon bitta bo\'lsin' }))).json()) as { scope: string; lines: string[] }[];
+    expect(added[0].lines).toHaveLength(1);
+    expect(added[0].lines[0]).toMatch(/^\d{4}-\d{2}-\d{2}: Fon bitta bo'lsin$/);
+    expect(await readFile(join(tmp, 'lessons.md'), 'utf8')).toContain("Fon bitta bo'lsin");
+    const gone = await api('/api/lessons', del({ scope: 'global', line: added[0].lines[0] }));
+    expect(await gone.json()).toEqual([{ scope: 'global', lines: [] }]);
+  });
+
+  test('a missing lesson is 404 and a bad scope is 400', async () => {
+    expect((await api('/api/lessons', del({ scope: 'global', line: 'yoq' }))).status).toBe(404);
+    expect((await api('/api/lessons', json({ scope: '../x', text: 'a' }))).status).toBe(400);
+  });
+});

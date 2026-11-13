@@ -30,6 +30,22 @@ come only from the project, the HyperFrames registry or approved generation.
 Hard rule: never draw people, characters, buildings or complex objects in code (SVG/CSS
 shapes). Use footage, b-roll, a registry block or an approved gen asset; else typography.
 
+## Lessons (read first, write after feedback)
+
+The user's past corrections live in two files: `<home>/lessons.md` (every video) and
+`<home>/styles/<id>/lessons.md` (that style only). Read both before any other step
+(`node <cliPath> lesson list` prints all of them; a missing file means no lessons yet).
+Every line is a HARD rule. It beats style.json, the reference and the defaults in this file.
+
+A `storyboard_edit` or `edit` task carries the user's own words (`input.text`). After you make
+the change, decide if the comment holds a rule for future videos (a taste, a thing to never
+do, a thing to always do). If it does, save ONE general rule:
+`node <cliPath> lesson add global "<rule>. Sabab: <the user's words, short>"` (the style id
+instead of `global` when it is only about that style). Write it in Uzbek as a plain
+instruction, general enough to apply to another video. A one-off change ("bu so'zni
+almashtir", "0.5 s qisqartir") is not a lesson: save nothing. Add `Saboq: <rule>` to the
+`task_done` summary when you saved one.
+
 ## Gate (used by execute, edit, generate)
 
 1. `hf lint`, then `hf check --json`. Fix every error and run again,
@@ -84,9 +100,13 @@ spacing, logo/UI fidelity) in a `task_progress` line, fix it once, re-snapshot. 
 - `gen` assets: their `fallback` until the approved file arrives. A scene may hold several
   (the reference's `composition.genPerScene`): place each as `layout` says (stacked cards,
   a fan, a grid), never just the first one.
-- Density: build every asset and component the scene lists. A scene that ends up as
-  "background + one element" while the reference sheet shows more is a bug: add the missing
-  layers from the plan (cards, logos, UI rows, captions) before the Gate.
+- Build what the scene lists and nothing more: the headline is the scene's `message` (when the
+  plan has it), then the hero, then the one helper. Never add a card, glow, icon, subline or
+  extra layer the plan does not name to "fill" a frame. If a still looks empty, make the hero
+  and the headline larger and centre the block on the frame; do not add things.
+- Frame: the middle of the headline + hero block sits at y 45-50%; a block pushed into the
+  top half with the bottom 40% empty is a bug. The same element sits in the same place in every scene
+  that shares a `grammar`, with the same entrance.
 - No placeholder text anywhere. If `what` or `script` lacks the real content, write the real
   content a user would see (real CLAUDE.md lines, the real command and reply).
 
@@ -128,8 +148,8 @@ where it ends up after its entrance), no animation yet.
 
 1. Read the comment (`input.text`, Uzbek) and that scene's file. Change only that scene.
    If that scene has `"deleted": true` in board.json, the user deleted the still because it
-   missed: build it again with a clearly different design (another grammar from the style, a
-   different hero or layout, still within the plan's script and the style), then remove
+   missed: build it again with a clearly different hero (still the plan's `message`, script,
+   frame and style; do not change the background or the card material), then remove
    `deleted` from that scene in board.json after the new snapshot.
 2. Gate on that scene, then re-snapshot only it with the same `--at` as in board.json
    (`--no-end --keep --output <projectDir>/storyboard`). Set `updatedAt` in board.json to now.
@@ -203,7 +223,8 @@ the storyboard stage; skip step 9.
 
 - Reference first: follow the plan's style. Never fall back to a generic look or another
   job's style.
-- No generic kit, no fake UI, not every scene with the same grammar, no placeholder copy.
+- No generic kit, no fake UI, no placeholder copy. Backgrounds and card materials only as
+  the reference uses them; scenes that share a `grammar` share their frame.
 - Captions: kinetic, with a bounce on list words, unless the style says otherwise.
 - Edits that add a visual follow the same asset rule: no people or objects drawn in code.
 - Footage and voiceover cuts sit in silence with natural pauses; add a short audio crossfade

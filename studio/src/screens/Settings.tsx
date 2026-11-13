@@ -1,5 +1,6 @@
 import { errorText } from '../errors';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Lessons } from '../ui/Lessons';
 import { api, type Config, type ConfigPatch, type Kind, type ProviderUse } from '../api';
 
 type Choice = 'off' | 'own' | 'bot';
@@ -243,6 +244,8 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      <Lessons />
 
       <div className="actions actions--sticky">
         <button type="submit" className="btn btn--dark btn--lg" disabled={saving}>

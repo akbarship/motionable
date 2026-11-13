@@ -6,9 +6,10 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import type { ZodType } from 'zod';
 import { doctorReportOk, npxCommand, validateHfArgs } from './core/hf-cmd.js';
+import { addLesson, allLessons, readLessons } from './core/lessons.js';
 import { appendBinDir } from './core/path-env.js';
 import { assertId, assertInHome, home } from './core/paths.js';
-import { CutSchema, PlanSchema, ProjectSchema, WordsSchema as WordsList, StoryboardSchema, StyleSchema, WordsSchema, planStyleIssues, type Plan, type Style } from './core/types.js';
+import { CutSchema, PlanSchema, ProjectSchema, WordsSchema as WordsList, StoryboardSchema, StyleSchema, WordsSchema, type Plan, type Style } from './core/types.js';
 import { alignScript } from './media/align.js';
 import { assemble } from './media/assemble.js';
 import { decodePcm, findHits, findSilences } from './media/audio.js';
@@ -72,8 +73,7 @@ export async function doctor() {
 const SCHEMAS: Record<string, ZodType> = { style: StyleSchema, plan: PlanSchema, words: WordsSchema, storyboard: StoryboardSchema, cut: CutSchema };
 const MAX_ISSUES = 8;
 
-/** `motionable validate <style|plan|words|storyboard> <file>`: code 0 + "ok", or 1 + a short issue list. */
-/** The plan's styles from <home>/styles/<id>/style.json; unreadable ones are skipped. */
+/** Styles from <home>/styles/<id>/style.json; unreadable ones are skipped. */
 async function readStyles(ids: string[]): Promise<Style[]> {
   const out: Style[] = [];
   for (const id of ids) {
@@ -87,6 +87,7 @@ async function readStyles(ids: string[]): Promise<Style[]> {
   return out;
 }
 
+/** `motionable validate <style|plan|words|storyboard|cut> <file>`: code 0 + "ok", or 1 + a short issue list. */
 export async function runValidate(kind: string | undefined, file: string | undefined): Promise<{ code: number; out: string }> {
   const schema = kind ? SCHEMAS[kind] : undefined;
   if (!schema || !file) return { code: 1, out: 'usage: motionable validate <style|plan|words|storyboard|cut> <file>' };
@@ -97,10 +98,6 @@ export async function runValidate(kind: string | undefined, file: string | undef
     return { code: 1, out: `cannot read JSON: ${(e as Error).message.split('\n')[0]}` };
   }
   const r = schema.safeParse(data);
-  if (r.success && kind === 'plan') {
-    const issues = planStyleIssues(r.data as Plan, await readStyles((r.data as Plan).styleIds));
-    if (issues.length > 0) return { code: 1, out: issues.map((i) => `- ${i}`).join('\n') };
-  }
   if (r.success) return { code: 0, out: 'ok' };
   const lines = r.error.issues.slice(0, MAX_ISSUES).map((i) => `- ${i.path.join('.') || '(root)'}: ${i.message}`);
   const more = r.error.issues.length - lines.length;
@@ -282,6 +279,17 @@ async function main(cmd: string | undefined): Promise<void> {
     const r = await runPaletteCheck(process.argv[3]);
     console.log(JSON.stringify({ ok: r.code === 0, offenders: r.offenders.slice(0, 20), allowed: r.allowed }));
     process.exitCode = r.code;
+  } else if (cmd === 'lesson') {
+    // lesson add <global|styleId> <rule...> | lesson list [global|styleId]
+    const [sub, scope, ...rest] = process.argv.slice(3);
+    try {
+      if (sub === 'add' && scope && rest.length > 0) console.log(JSON.stringify(await addLesson(scope, rest.join(' '))));
+      else if (sub === 'list') console.log(JSON.stringify(scope ? [{ scope, lines: await readLessons(scope) }] : await allLessons()));
+      else throw new Error('usage: motionable lesson <add <global|styleId> <rule>|list [global|styleId]>');
+    } catch (e) {
+      console.log(JSON.stringify({ error: (e as Error).message.split('\n')[0] }));
+      process.exitCode = 1;
+    }
   } else if (cmd === 'sheet' && process.argv[3] && process.argv[4]) {
     console.log(await runSheet(process.argv[3], process.argv[4]));
   } else if (cmd === 'copy-sheets' || cmd === 'copy-file' || cmd === 'probe' || cmd === 'hf') {
@@ -305,7 +313,7 @@ async function main(cmd: string | undefined): Promise<void> {
       process.exitCode = 1;
     }
   } else {
-    console.error('usage: motionable <studio|doctor|validate <style|plan|words|storyboard> <file>|sheet <video> <outDir>|hf <projectDir> <args...>|copy-sheets <sheetDir> <styleId> [prefix]|probe <file>|copy-file <src> <dest>>');
+    console.error('usage: motionable <studio|doctor|validate <style|plan|words|storyboard> <file>|sheet <video> <outDir>|hf <projectDir> <args...>|copy-sheets <sheetDir> <styleId> [prefix]|probe <file>|copy-file <src> <dest>|lesson <add <global|styleId> <rule>|list [scope]>>');
     process.exitCode = 1;
   }
 }

@@ -41,6 +41,10 @@ Claude Code'ni qayta ishga tushiring va yozing:
 /motionable:motionable
 ```
 
+### Saboqlar
+
+Storyboard yoki chatda qoldirgan izohingiz umumiy qoida bo'lsa, u saboq sifatida saqlanadi (`~/Motionable/lessons.md`, uslubga xosi `~/Motionable/styles/<id>/lessons.md`). Har bir keyingi video shu qoidalar bilan rejalashtiriladi. Sozlamalar sahifasida saboqlarni ko'rasiz, qo'lda qo'shasiz va noto'g'risini o'chirasiz.
+
 ### Kalitlarsiz nima ishlaydi
 
 Kalitsiz ham deyarli butun jarayon ishlaydi. Istisno: subtitr (caption) so'zlar vaqtini talab qiladi, shuning uchun STT provayderi yoki o'zingiz yopishtirgan matn kerak. Qolgan hammasi kalitsiz ishlaydi: namuna tahlili, uslub, rejissyor rejasi, preview, chat orqali tahrir va render. Faqat AI generatsiya (rasm/video) o'chiq turadi.
@@ -124,6 +128,10 @@ The script downloads ffmpeg and yt-dlp into `~/.motionable/bin` if missing and c
 ### Start
 
 Restart Claude Code and run `/motionable:motionable`.
+
+### Lessons
+
+When a comment you leave on the storyboard or in the chat holds a general rule, it is saved as a lesson (`~/Motionable/lessons.md`; style-specific ones in `~/Motionable/styles/<id>/lessons.md`). Every later video is planned with these rules. The Settings page lists the lessons, lets you add one by hand and delete a wrong one.
 
 ### What works with no keys
 
