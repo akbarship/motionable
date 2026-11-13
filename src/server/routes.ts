@@ -11,6 +11,7 @@ import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { prices } from '../providers/util.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
+import { ensurePreview } from './preview.js';
 import { bindSession, createProject, getProject, listProjects, readJson, setLast, slugId, writeJson } from '../core/store.js';
 import { ChatMsgSchema, PlanSchema, ProjectSchema, SessionIdSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
@@ -306,6 +307,9 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
         const [tasks, planRead, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
         if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
         return send(res, 200, { project, tasks, plan: planRead, chat });
+      }
+      if (seg[2] === 'player' && seg.length === 3 && method === 'GET') {
+        return send(res, 200, await ensurePreview(id));
       }
       if (seg[2] === 'storyboard' && seg.length === 3 && method === 'GET') {
         return send(res, 200, await readBoard(id));

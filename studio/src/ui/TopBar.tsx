@@ -28,6 +28,7 @@ export const ICON = {
   settings:
     'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4',
   chat: 'M5 5h14v10H9l-4 4V5z',
+  menu: 'M4 7h16M4 12h16M4 17h16',
   upload: 'M12 16V5M7 10l5-5 5 5M5 19h14',
   check: 'M5 12.5l4.5 4.5L19 7',
   close: 'M6 6l12 12M18 6L6 18',
@@ -36,73 +37,83 @@ export const ICON = {
 
 export { Icon };
 
-export function TopBar({ route }: { route: Route }) {
-  const onSettings = route.name === 'settings';
+const TITLES: Partial<Record<Route['name'], string>> = { new: 'Yangi video', settings: 'Sozlamalar', home: 'Motionable' };
+
+/** The one bar above the work area: menu (phone), project name, its stages and status. */
+export function TopBar({ route, project, onMenu }: { route: Route; project: Project | null; onMenu: () => void }) {
+  const id = 'id' in route ? route.id : '';
+  const status = project ? (STATUS[project.status] ?? project.status) : '';
   return (
     <header className="topbar">
       <a className="skip" href="#main">Asosiy qismga o'tish</a>
       <div className="topbar-left">
-        <a className="brand" href="#/" aria-label="Motionable, bosh sahifa">
-          <span className="brand-mark" aria-hidden="true" />
-          Motionable
-        </a>
-        <nav className="seg" aria-label="Bo'limlar">
-          <a href="#/" aria-current={!onSettings && route.name !== 'new' ? 'page' : undefined}>
-            Bosh sahifa
-          </a>
-          <a href="#/settings" aria-current={onSettings ? 'page' : undefined}>
-            Sozlamalar
-          </a>
-        </nav>
-      </div>
-      <div className="topbar-right">
-        <ClaudePill />
-        <button type="button" className="btn btn--dark" onClick={() => go('#/new')}>
-          <Icon d={ICON.plus} size={14} />
-          Yangi video
+        <button type="button" className="icon-btn menu-btn" aria-label="Loyihalar menyusi" onClick={onMenu}>
+          <Icon d={ICON.menu} size={18} />
         </button>
-        <a className="icon-btn" href="#/settings" aria-label="Sozlamalar" title="Sozlamalar">
-          <Icon d={ICON.settings} size={18} />
-        </a>
+        <h1 className="topbar-title">{id ? (project?.name ?? id) : (TITLES[route.name] ?? '')}</h1>
+        {id && (
+          <nav className="seg" aria-label="Bosqichlar">
+            {stageLinks(id).map((l) => (
+              <a key={l.key} href={l.href} aria-current={route.name === l.key ? 'page' : undefined}>
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        )}
       </div>
-    </header>
-  );
-}
-
-export function ProjectBar({ project, projects, route }: { project: Project | null; projects: Project[]; route: Route }) {
-  const id = 'id' in route ? route.id : '';
-  const status = project ? (STATUS[project.status] ?? project.status) : '';
-  return (
-    <div className="projectbar">
-      <label className="sr-only" htmlFor="project-switch">Loyiha</label>
-      <div className="select-wrap select-wrap--bare">
-        <select
-          id="project-switch"
-          value={id}
-          onChange={(e) => go(`#/p/${e.target.value}`)}
-        >
-          {!project && <option value={id}>{id}</option>}
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <nav className="seg" aria-label="Bosqichlar">
-        {stageLinks(id).map((l) => (
-          <a key={l.key} href={l.href} aria-current={route.name === l.key ? 'page' : undefined}>
-            {l.label}
-          </a>
-        ))}
-      </nav>
       {status && (
         <span className={project && ['ready', 'done'].includes(project.status) ? 'chip chip--done' : 'chip'}>
           <span className="dot" aria-hidden="true" />
           {status}
         </span>
       )}
-    </div>
+    </header>
+  );
+}
+
+/** Left column: brand, new video, every project (current one marked), settings and Claude status. */
+export function Sidebar({ route, projects, open, onClose }: { route: Route; projects: Project[]; open: boolean; onClose: () => void }) {
+  const id = 'id' in route ? route.id : '';
+  return (
+    <>
+      <nav className={open ? 'sidebar is-open' : 'sidebar'} aria-label="Loyihalar">
+        <a className="brand" href="#/new" aria-label="Motionable, yangi video" onClick={onClose}>
+          <span className="brand-mark" aria-hidden="true" />
+          Motionable
+        </a>
+        <button
+          type="button"
+          className="btn btn--dark sidebar-new"
+          onClick={() => {
+            onClose();
+            go('#/new');
+          }}
+        >
+          <Icon d={ICON.plus} size={14} />
+          Yangi video
+        </button>
+        <p className="sidebar-label">Loyihalar</p>
+        <ul className="sidebar-list">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <a href={`#/p/${p.id}`} aria-current={p.id === id ? 'page' : undefined} onClick={onClose}>
+                <span className={['ready', 'done'].includes(p.status) ? 'dot dot--done' : 'dot'} aria-hidden="true" />
+                <span className="sidebar-name">{p.name}</span>
+              </a>
+            </li>
+          ))}
+          {projects.length === 0 && <li className="muted small sidebar-empty">Hali loyiha yo'q</li>}
+        </ul>
+        <div className="sidebar-foot">
+          <a href="#/settings" className="sidebar-link" aria-current={route.name === 'settings' ? 'page' : undefined} onClick={onClose}>
+            <Icon d={ICON.settings} size={16} />
+            Sozlamalar
+          </a>
+          <ClaudePill />
+        </div>
+      </nav>
+      {open && <button type="button" className="sidebar-scrim" aria-label="Menyuni yopish" onClick={onClose} />}
+    </>
   );
 }
 

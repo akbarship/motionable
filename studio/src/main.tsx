@@ -7,7 +7,7 @@ import { Pipeline } from './screens/Pipeline';
 import { References } from './screens/References';
 import { Settings } from './screens/Settings';
 import { Storyboard } from './screens/Storyboard';
-import { ChatPanel, ProjectBar, TopBar } from './ui/TopBar';
+import { ChatPanel, Sidebar, TopBar } from './ui/TopBar';
 import { parseRoute, type Route } from './router';
 import { useEvents } from './useEvents';
 import './styles.css';
@@ -45,12 +45,11 @@ function App() {
     void loadProjects();
   }, [loadProjects, projectId]);
 
-  // No hash: open the newest project, or onboarding when there is none.
+  // No hash: a fresh start is a new video; old projects are one click away in the sidebar.
   useEffect(() => {
-    if (route.name !== 'home' || projects === null) return;
-    if (projects.length > 0) location.replace(`#/p/${projects[0].id}`);
-    else location.replace('#/new');
-  }, [route.name, projects]);
+    if (route.name === 'home') location.replace('#/new');
+  }, [route.name]);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEvents(
     (id) => {
@@ -114,13 +113,15 @@ function App() {
 
   return (
     <div className="app">
-      <TopBar route={route} />
-      {projectId && <ProjectBar project={project} projects={projects ?? []} route={route} />}
-      <div className={withChat ? 'workspace' : 'workspace workspace--solo'}>
-        <main id="main" className="main">
-          {body}
-        </main>
-        {withChat && <ChatPanel />}
+      <Sidebar route={route} projects={projects ?? []} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <div className="shell">
+        <TopBar route={route} project={project} onMenu={() => setMenuOpen((o) => !o)} />
+        <div className={withChat ? 'workspace' : 'workspace workspace--solo'}>
+          <main id="main" className="main">
+            {body}
+          </main>
+          {withChat && <ChatPanel />}
+        </div>
       </div>
     </div>
   );

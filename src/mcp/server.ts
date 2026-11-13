@@ -141,20 +141,6 @@ export async function ensureStudio(spawnFn: () => void = spawnStudio, build: str
   throw new Error('studio did not start within 10 s');
 }
 
-/** Types whose finished work changes the video: the Editor shows a fresh draft render after each. */
-const AUTO_RENDER: ReadonlySet<TaskType> = new Set<TaskType>(['execute', 'edit', 'generate']);
-
-/** After execute/edit/generate, queue one draft render unless one is already waiting. */
-export async function queueAutoRender(projectId: string, taskId: string): Promise<void> {
-  const tasks = await listTasks(projectId);
-  const t = tasks.find((x) => x.id === taskId);
-  if (!t || !AUTO_RENDER.has(t.type)) return;
-  // A generate during the storyboard stage only updates a still; the video is built by execute later.
-  if (t.type === 'generate' && !tasks.some((x) => x.type === 'execute' && x.status === 'done')) return;
-  if (tasks.some((x) => x.type === 'render' && x.status === 'queued')) return;
-  await addTask(projectId, 'render', { quality: 'draft', auto: true });
-}
-
 export function createMcpServer(
   opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor; session?: string } = {},
 ): McpServer {
@@ -172,7 +158,7 @@ export function createMcpServer(
         'Start Motionable Studio if needed and open it in the browser on the project list, bound to this chat. Returns {url}.',
     },
     async () => {
-      const url = `${await ensureStudio(opts.spawnStudio)}&s=${session}`;
+      const url = `${await ensureStudio(opts.spawnStudio)}&s=${session}#/new`;
       openBrowser(url);
       return text({ url });
     },
@@ -229,7 +215,6 @@ export function createMcpServer(
       await touchHeartbeat(session);
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
       tokens.delete(taskId);
-      await queueAutoRender(projectId, taskId);
       return text({ ok: true });
     },
   );

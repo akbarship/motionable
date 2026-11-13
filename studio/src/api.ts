@@ -170,6 +170,7 @@ export const api = {
   deleteRef: (id: string, name: string) => request<{ ok: true }>(`${p(id)}/refs/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   startStudy: (id: string) => request<{ task: Task }>(`${p(id)}/refs/study`, { method: 'POST', body: {} }),
   putStyleAnswers: (id: string, a: StyleAnswers) => request<Project>(`${p(id)}/style-answers`, { method: 'PUT', body: a }),
+  player: (id: string) => request<{ url: string }>(`${p(id)}/player`),
   storyboard: (id: string) => request<Storyboard | null>(`${p(id)}/storyboard`),
   addTask: (id: string, type: TaskType, input: Record<string, unknown> = {}) =>
     request<Task>(`${p(id)}/tasks`, { method: 'POST', body: { type, input } }),
