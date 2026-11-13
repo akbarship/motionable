@@ -2,6 +2,8 @@
 
 const KEY = 'motionable.token';
 let token: string | null = null;
+const SESSION_KEY = 'motionable.session';
+let session: string | null = null;
 
 export type TaskStatus = 'queued' | 'awaiting_approval' | 'running' | 'done' | 'failed';
 export type TaskType = 'study_ref' | 'direct' | 'storyboard' | 'storyboard_edit' | 'execute' | 'edit' | 'render' | 'generate';
@@ -91,16 +93,15 @@ export type ConfigPatch = Partial<Omit<Config, 'providers'>> & {
   providers?: Partial<Record<Kind, { use: ProviderUse; key?: string }>>;
 };
 
-/** Token from the page URL (first call) or sessionStorage; empty string if neither has one. */
-export function getToken(): string {
-  if (token !== null) return token;
-  let t = '';
+/** Read `name` from the page URL once (then drop it from the address bar) or from sessionStorage. */
+function urlOnce(name: string, storageKey: string): string {
+  let v = '';
   try {
     const params = new URLSearchParams(location.search);
-    t = params.get('t') ?? '';
-    if (t) {
-      // Keep the token out of the address bar, history and screenshots.
-      params.delete('t');
+    v = params.get(name) ?? '';
+    if (v) {
+      // Keep it out of the address bar, history and screenshots.
+      params.delete(name);
       const rest = params.toString();
       history.replaceState(null, '', location.pathname + (rest ? `?${rest}` : '') + location.hash);
     }
@@ -108,22 +109,35 @@ export function getToken(): string {
     // no location/history (non-browser) or replaceState refused
   }
   try {
-    if (t) sessionStorage.setItem(KEY, t);
-    else t = sessionStorage.getItem(KEY) ?? '';
+    if (v) sessionStorage.setItem(storageKey, v);
+    else v = sessionStorage.getItem(storageKey) ?? '';
   } catch {
-    // storage blocked: keep the in-memory token only
+    // storage blocked: keep the in-memory value only
   }
-  token = t;
-  return t;
+  return v;
+}
+
+/** Token from the page URL (first call) or sessionStorage; empty string if neither has one. */
+export function getToken(): string {
+  if (token === null) token = urlOnce('t', KEY);
+  return token;
+}
+
+/** Chat id from studio_open (?s=): projects opened in this tab are worked by that chat's /motionable loop. */
+export function getSession(): string {
+  if (session === null) session = urlOnce('s', SESSION_KEY);
+  return session;
 }
 
 /** Test hook: forget the cached token. */
 export function resetTokenForTests(): void {
   token = null;
+  session = null;
 }
 
 async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = { 'x-motionable-token': getToken() };
+  if (getSession()) headers['x-motionable-session'] = getSession();
   let body: string | undefined;
   if (init.body !== undefined) {
     headers['content-type'] = 'application/json';

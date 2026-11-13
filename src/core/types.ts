@@ -22,6 +22,9 @@ export const StyleAnswersSchema = z.object({
 });
 export type StyleAnswers = z.infer<typeof StyleAnswersSchema>;
 
+/** One Claude Code chat: a random id made by its MCP server at start. */
+export const SessionIdSchema = z.string().regex(/^[a-f0-9]{16}$/);
+
 export const ProjectSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -30,6 +33,8 @@ export const ProjectSchema = z.object({
   styleIds: z.array(z.string()),
   createdAt: z.string(),
   styleAnswers: StyleAnswersSchema.optional(),
+  /** Claude Code chat (MCP process) that works this project's queue; the last chat to open it wins. */
+  session: SessionIdSchema.optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 

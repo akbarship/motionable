@@ -46,6 +46,16 @@ describe('studio api client', () => {
     for (const c of calls) expect(header(c, 'x-motionable-token')).toBe('tok123');
   });
 
+  test('sends the chat id from ?s= as x-motionable-session, and none without it', async () => {
+    await api.listProjects();
+    expect(header(calls[0], 'x-motionable-session')).toBeNull();
+    resetTokenForTests();
+    vi.stubGlobal('location', { search: '?t=tok123&s=0123456789abcdef', hash: '', pathname: '/' });
+    await api.listProjects();
+    expect(header(calls[1], 'x-motionable-session')).toBe('0123456789abcdef');
+    expect(store.get('motionable.session')).toBe('0123456789abcdef');
+  });
+
   test('reads the token from ?t= once and stores it in sessionStorage', async () => {
     await api.listProjects();
     expect(store.get('motionable.token')).toBe('tok123');

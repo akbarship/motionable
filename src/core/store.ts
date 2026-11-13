@@ -58,7 +58,7 @@ export async function getLast(): Promise<string | null> {
   }
 }
 
-export async function createProject(input: { name: string; brief: string }): Promise<Project> {
+export async function createProject(input: { name: string; brief: string; session?: string }): Promise<Project> {
   const project: Project = {
     id: slugId(input.name),
     name: input.name,
@@ -66,6 +66,7 @@ export async function createProject(input: { name: string; brief: string }): Pro
     status: 'new',
     styleIds: [],
     createdAt: new Date().toISOString(),
+    ...(input.session ? { session: input.session } : {}),
   };
   const dir = projectDir(project.id);
   for (const d of ['broll', 'refs', 'tasks', 'gen', 'renders']) {
@@ -78,6 +79,15 @@ export async function createProject(input: { name: string; brief: string }): Pro
 
 export async function getProject(id: string): Promise<Project> {
   return readJson(join(projectDir(id), 'project.json'), ProjectSchema);
+}
+
+/** Bind a project to the chat that opened it, so only that chat's /motionable loop works its queue. */
+export async function bindSession(id: string, session: string): Promise<Project> {
+  const project = await getProject(id);
+  if (project.session === session) return project;
+  const next = { ...project, session };
+  await writeJson(join(projectDir(id), 'project.json'), ProjectSchema, next);
+  return next;
 }
 
 export async function listProjects(): Promise<Project[]> {

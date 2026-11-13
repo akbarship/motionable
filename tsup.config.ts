@@ -10,5 +10,7 @@ export default defineConfig({
   // Self-contained bundle: dist/*.js run without node_modules (plugin installs ship dist only).
   noExternal: [/.*/],
   // Bundled CommonJS deps (e.g. ajv under the MCP SDK) call require(); give ESM output one.
+  // One id per build, shared by dist/mcp.js and dist/cli.js, so studio_open can spot a Studio left from an older build.
+  define: { __BUILD_ID__: JSON.stringify(Date.now().toString(36)) },
   banner: { js: "import { createRequire as __mcr } from 'node:module'; const require = __mcr(import.meta.url);" },
 });

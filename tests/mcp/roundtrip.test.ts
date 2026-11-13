@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { listTasks } from '../../src/core/queue.js';
-import { createMcpServer } from '../../src/mcp/server.js';
+import { createMcpServer, ensureStudio } from '../../src/mcp/server.js';
 import { startStudio } from '../../src/server/studio.js';
 
 const saved: Record<string, string | undefined> = {};
@@ -15,6 +15,8 @@ let token: string;
 let studioUrl: string;
 let closeStudio: () => Promise<void>;
 let client: Client;
+/** This test chat; projects created with its header are worked by its next_task. */
+const SID = '0123456789abcdef';
 
 beforeEach(async () => {
   for (const k of ['MOTIONABLE_HOME', 'MOTIONABLE_WAIT_S', 'MOTIONABLE_NO_OPEN']) saved[k] = process.env[k];
@@ -27,7 +29,7 @@ beforeEach(async () => {
   base = new URL(s.url).origin;
   token = new URL(s.url).searchParams.get('t')!;
   const [a, b] = InMemoryTransport.createLinkedPair();
-  await createMcpServer().connect(a);
+  await createMcpServer({ session: SID }).connect(a);
   client = new Client({ name: 'test', version: '0' });
   await client.connect(b);
 });
@@ -45,7 +47,7 @@ afterEach(async () => {
 const post = (path: string, body: unknown) =>
   fetch(`${base}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-motionable-token': token },
+    headers: { 'content-type': 'application/json', 'x-motionable-token': token, 'x-motionable-session': SID },
     body: JSON.stringify(body),
   });
 async function call(name: string, args: Record<string, unknown> = {}) {
@@ -127,10 +129,51 @@ describe('mcp roundtrip', () => {
     expect(Date.now() - (await stat(hbFile)).mtimeMs).toBeLessThan(5000);
   });
 
-  test('studio_open reuses running studio', async () => {
+  test('studio_open reuses running studio and binds the tab to this chat', async () => {
     const r = (await call('studio_open')).data;
-    expect(r.url).toBe(studioUrl);
-    expect(r.projectId).toBeNull();
+    expect(r.url).toBe(`${studioUrl}&s=${SID}`);
+  });
+
+  test('a Studio from another build is shut down and replaced', async () => {
+    let next: Awaited<ReturnType<typeof startStudio>> | null = null;
+    const spawn = () => {
+      void (async () => {
+        next = await startStudio({ port: 0, staticDir: tmp });
+        // Same test process: record another live pid so ensureStudio sees a new Studio.
+        const f = join(tmp, 'studio.json');
+        const info = JSON.parse(await readFile(f, 'utf8'));
+        await writeFile(f, JSON.stringify({ ...info, pid: process.ppid }));
+      })();
+    };
+    const url = await ensureStudio(spawn, 'newer-build');
+    expect(url).not.toBe(studioUrl);
+    expect(await fetch(`${base}/api/claude?t=${token}`).catch(() => null)).toBeNull(); // old one is gone
+    await next!.close();
+  });
+
+  test('next_task only takes projects bound to this chat', async () => {
+    process.env.MOTIONABLE_WAIT_S = '1';
+    const other = (await (
+      await fetch(`${base}/api/projects`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-motionable-token': token, 'x-motionable-session': 'fedcba9876543210' },
+        body: JSON.stringify({ name: 'Other', brief: '' }),
+      })
+    ).json()) as { id: string };
+    const plain = (await (
+      await fetch(`${base}/api/projects`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-motionable-token': token },
+        body: JSON.stringify({ name: 'Plain', brief: '' }),
+      })
+    ).json()) as { id: string };
+    await post(`/api/projects/${other.id}/tasks`, { type: 'study_ref', input: {} });
+    await post(`/api/projects/${plain.id}/tasks`, { type: 'study_ref', input: {} });
+    expect((await call('next_task')).data).toEqual({ idle: true });
+    // Opening the project in this chat's tab takes it over.
+    await fetch(`${base}/api/projects/${other.id}`, { headers: { 'x-motionable-token': token, 'x-motionable-session': SID } });
+    const t = (await call('next_task')).data;
+    expect(t.projectId).toBe(other.id);
   });
 
   test('rejects path-like ids and touches nothing outside tasks/', async () => {

@@ -11,8 +11,8 @@ import { checkBotUrl, createBotProvider } from '../providers/bot.js';
 import { prices } from '../providers/util.js';
 import { quoteItems } from '../providers/registry.js';
 import { KindSchema } from '../core/types.js';
-import { createProject, getProject, listProjects, readJson, setLast, slugId, writeJson } from '../core/store.js';
-import { ChatMsgSchema, PlanSchema, ProjectSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
+import { bindSession, createProject, getProject, listProjects, readJson, setLast, slugId, writeJson } from '../core/store.js';
+import { ChatMsgSchema, PlanSchema, ProjectSchema, SessionIdSchema, StoryboardSchema, StyleAnswersSchema, StyleSchema, type ChatMsg, type TaskType } from '../core/types.js';
 import { RefDownloadError, RefUrlError, downloadRef, normalizeRefUrl } from '../media/ingest.js';
 import { buildRefSheet } from '../media/refsheet.js';
 import { HttpError, VIDEO_EXTS, checkFilename, handleUpload } from './upload.js';
@@ -274,6 +274,13 @@ async function serveRender(req: IncomingMessage, res: ServerResponse, id: string
   stream.pipe(res);
 }
 
+/** The chat id the Studio tab got from studio_open (x-motionable-session), or undefined. */
+function sessionOf(req: IncomingMessage): string | undefined {
+  const h = req.headers['x-motionable-session'];
+  const v = Array.isArray(h) ? h[0] : h;
+  return v && SessionIdSchema.safeParse(v).success ? v : undefined;
+}
+
 async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const method = req.method ?? 'GET';
   const seg = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
@@ -283,13 +290,18 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
       if (method === 'GET') return send(res, 200, await listProjects());
       if (method === 'POST') {
         const b = await readBody(req);
-        const p = await createProject({ name: str(b.name, 'name'), brief: typeof b.brief === 'string' ? b.brief : '' });
+        const p = await createProject({
+          name: str(b.name, 'name'),
+          brief: typeof b.brief === 'string' ? b.brief : '',
+          session: sessionOf(req),
+        });
         return send(res, 200, p);
       }
     } else {
       const id = assertId(seg[1]);
       if (seg.length === 2 && method === 'GET') {
-        const project = await getProject(id);
+        const session = sessionOf(req);
+        const project = session ? await bindSession(id, session) : await getProject(id);
         await setLast(id);
         const [tasks, planRead, chat] = await Promise.all([listTasks(id), readPlan(id), readChat(id)]);
         if (planRead === 'invalid') return send(res, 200, { project, tasks, plan: null, planError: 'invalid', chat });
@@ -472,7 +484,10 @@ async function route(req: IncomingMessage, res: ServerResponse, url: URL): Promi
   } else if (seg[0] === 'claude' && seg.length === 1 && method === 'GET') {
     let connected = false;
     try {
-      connected = Date.now() - (await stat(join(home(), 'heartbeat'))).mtimeMs < HEARTBEAT_MAX_MS;
+      // A tab opened by a chat asks about that chat only; an old tab of a closed chat shows "ulanmagan".
+      const session = sessionOf(req);
+      const file = session ? join(home(), 'heartbeats', session) : join(home(), 'heartbeat');
+      connected = Date.now() - (await stat(file)).mtimeMs < HEARTBEAT_MAX_MS;
     } catch {
       // no heartbeat file
     }

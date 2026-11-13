@@ -6,13 +6,14 @@ import type { AddressInfo } from 'node:net';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { BUILD_ID } from '../core/build.js';
 import { loadConfig } from '../core/config.js';
 import { home } from '../core/paths.js';
 import { readJson, writeJson } from '../core/store.js';
 import { handleApi, send } from './routes.js';
 import { createSse } from './sse.js';
 
-const StudioInfoSchema = z.object({ port: z.number(), token: z.string(), pid: z.number() });
+const StudioInfoSchema = z.object({ port: z.number(), token: z.string(), pid: z.number(), build: z.string().optional() });
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -70,7 +71,7 @@ function tokenOk(given: string | null | undefined, token: string): boolean {
 }
 
 export async function startStudio(
-  opts: { port?: number; token?: string; staticDir?: string } = {},
+  opts: { port?: number; token?: string; staticDir?: string; onShutdown?: () => void } = {},
 ): Promise<{ url: string; close(): Promise<void> }> {
   const token = opts.token ?? randomBytes(32).toString('hex');
   const port = opts.port ?? (await loadConfig()).port;
@@ -84,6 +85,12 @@ export async function startStudio(
       const given = url.searchParams.get('t') ?? (Array.isArray(h) ? h[0] : h);
       if (!tokenOk(given, token)) return send(res, 401, { error: 'unauthorized' });
       if (url.pathname === '/api/events' && req.method === 'GET') return sse.handle(req, res);
+      if (url.pathname === '/api/shutdown' && req.method === 'POST') {
+        // studio_open from a newer build replaces this Studio.
+        send(res, 200, { ok: true });
+        setImmediate(() => void close().finally(() => opts.onShutdown?.()));
+        return;
+      }
       void handleApi(req, res, url);
       return;
     }
@@ -97,20 +104,19 @@ export async function startStudio(
   });
   const actual = (server.address() as AddressInfo).port;
   const info = join(home(), 'studio.json');
-  await writeJson(info, StudioInfoSchema, { port: actual, token, pid: process.pid }, 0o600);
+  await writeJson(info, StudioInfoSchema, { port: actual, token, pid: process.pid, build: BUILD_ID }, 0o600);
 
-  return {
-    url: `http://127.0.0.1:${actual}/?t=${token}`,
-    async close() {
-      sse.close();
-      const closed = new Promise<void>((r) => server.close(() => r()));
-      server.closeAllConnections();
-      await closed;
-      try {
-        if ((await readJson(info, StudioInfoSchema)).pid === process.pid) await unlink(info);
-      } catch {
-        // already gone
-      }
-    },
-  };
+  async function close(): Promise<void> {
+    sse.close();
+    const closed = new Promise<void>((r) => server.close(() => r()));
+    server.closeAllConnections();
+    await closed;
+    try {
+      if ((await readJson(info, StudioInfoSchema)).pid === process.pid) await unlink(info);
+    } catch {
+      // already gone
+    }
+  }
+
+  return { url: `http://127.0.0.1:${actual}/?t=${token}`, close };
 }

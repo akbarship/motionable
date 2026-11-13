@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { appendFile, mkdir, readFile, realpath, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve, isAbsolute } from 'node:path';
@@ -5,11 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { BUILD_ID } from '../core/build.js';
 import { loadConfig } from '../core/config.js';
 import { appendBinDir } from '../core/path-env.js';
 import { home, projectDir } from '../core/paths.js';
-import { addTask, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
-import { getLast, getProject, readJson, writeJson } from '../core/store.js';
+import { addTask, claimNext, fail, finish, listTasks, progress, waitForTask } from '../core/queue.js';
+import { getProject, readJson, writeJson } from '../core/store.js';
 import { KindSchema, WordsSchema, type TaskType } from '../core/types.js';
 import { providerFor as defaultProviderFor } from '../providers/registry.js';
 
@@ -24,7 +26,7 @@ const AGENTS: Record<TaskType, string> = {
   generate: 'executor',
 };
 
-const StudioInfoSchema = z.object({ port: z.number(), token: z.string(), pid: z.number() });
+const StudioInfoSchema = z.object({ port: z.number(), token: z.string(), pid: z.number(), build: z.string().optional() });
 const waitSeconds = (): number => {
   const n = Number(process.env.MOTIONABLE_WAIT_S);
   return Number.isFinite(n) && n > 0 ? n : 240;
@@ -36,14 +38,16 @@ const PRICE_SLACK = 1.2;
 const idStr = z.string().regex(/^[a-z0-9-]+$/);
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
 
-async function touchHeartbeat(): Promise<void> {
-  const f = join(home(), 'heartbeat');
-  try {
-    const now = new Date();
-    await utimes(f, now, now);
-  } catch {
-    await mkdir(home(), { recursive: true });
-    await writeFile(f, '');
+/** Global heartbeat (any chat) plus heartbeats/<session> so a Studio tab can tell if ITS chat is alive. */
+async function touchHeartbeat(session: string): Promise<void> {
+  for (const f of [join(home(), 'heartbeat'), join(home(), 'heartbeats', session)]) {
+    try {
+      const now = new Date();
+      await utimes(f, now, now);
+    } catch {
+      await mkdir(dirname(f), { recursive: true });
+      await writeFile(f, '');
+    }
   }
 }
 
@@ -92,11 +96,41 @@ function spawnStudio(): void {
   child.unref();
 }
 
-/** Returns the Studio url (with token), starting it when needed. `spawnFn` is injectable for tests. */
-export async function ensureStudio(spawnFn: () => void = spawnStudio): Promise<string> {
+/** Ask a Studio from another build to exit (POST /api/shutdown; SIGTERM for builds without it) and wait until it is gone. */
+async function stopStudio(info: z.infer<typeof StudioInfoSchema>): Promise<void> {
+  try {
+    await fetch(`http://127.0.0.1:${info.port}/api/shutdown?t=${info.token}`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(2000),
+    });
+  } catch {
+    // older build or already closing
+  }
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline && (await studioAlive(info))) await new Promise((r) => setTimeout(r, 150));
+  if (await studioAlive(info)) {
+    try {
+      process.kill(info.pid, 'SIGTERM');
+    } catch {
+      // gone meanwhile
+    }
+    const end = Date.now() + 3000;
+    while (Date.now() < end && (await studioAlive(info))) await new Promise((r) => setTimeout(r, 150));
+  }
+}
+
+/**
+ * Returns the Studio url (with token), starting it when needed. A running Studio from another build
+ * (old plugin cache, older install) is replaced, so the browser never shows stale code.
+ * `spawnFn` and `build` are injectable for tests.
+ */
+export async function ensureStudio(spawnFn: () => void = spawnStudio, build: string = BUILD_ID): Promise<string> {
   const urlOf = (i: z.infer<typeof StudioInfoSchema>) => `http://127.0.0.1:${i.port}/?t=${i.token}`;
   const cur = await readStudio();
-  if (cur && (await studioAlive(cur))) return urlOf(cur);
+  if (cur && (await studioAlive(cur))) {
+    if (cur.build === build) return urlOf(cur);
+    await stopStudio(cur);
+  }
   spawnFn();
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
@@ -122,21 +156,25 @@ export async function queueAutoRender(projectId: string, taskId: string): Promis
 }
 
 export function createMcpServer(
-  opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor } = {},
+  opts: { spawnStudio?: () => void; providerFor?: typeof defaultProviderFor; session?: string } = {},
 ): McpServer {
   const providerFor = opts.providerFor ?? defaultProviderFor;
   const server = new McpServer({ name: 'motionable', version: '0.1.0' });
   /** taskId -> claim token from waitForTask. */
   const tokens = new Map<string, string>();
+  /** This chat. Projects opened from the Studio tab this chat opened are bound to it. */
+  const session = opts.session ?? randomBytes(8).toString('hex');
 
   server.registerTool(
     'studio_open',
-    { description: 'Start Motionable Studio if needed and open it in the browser. Returns {url, projectId|null}.' },
+    {
+      description:
+        'Start Motionable Studio if needed and open it in the browser on the project list, bound to this chat. Returns {url}.',
+    },
     async () => {
-      const url = await ensureStudio(opts.spawnStudio);
-      const last = await getLast();
-      openBrowser(last ? `${url}#/p/${last}` : url);
-      return text({ url, projectId: last });
+      const url = `${await ensureStudio(opts.spawnStudio)}&s=${session}`;
+      openBrowser(url);
+      return text({ url });
     },
   );
 
@@ -147,10 +185,10 @@ export function createMcpServer(
         'Wait for the next queued task. Returns {projectId, taskId, type, input, projectDir, agent, cliPath} or {idle:true}.',
     },
     async (extra) => {
-      await touchHeartbeat();
-      const timer = setInterval(() => void touchHeartbeat().catch(() => {}), HEARTBEAT_EVERY_MS);
+      await touchHeartbeat(session);
+      const timer = setInterval(() => void touchHeartbeat(session).catch(() => {}), HEARTBEAT_EVERY_MS);
       try {
-        const c = await waitForTask(waitSeconds(), 1000, extra.signal);
+        const c = await waitForTask(waitSeconds(), 1000, extra.signal, () => claimNext({ session }));
         if (!c) return text({ idle: true });
         tokens.set(c.task.id, c.token);
         return text({
@@ -175,7 +213,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, line: z.string() },
     },
     async ({ projectId, taskId, line }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       await progress(projectId, taskId, line, tokens.get(taskId));
       return text({ ok: true });
     },
@@ -188,7 +226,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, summary: z.string() },
     },
     async ({ projectId, taskId, summary }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       await finish(projectId, taskId, { summary }, tokens.get(taskId));
       tokens.delete(taskId);
       await queueAutoRender(projectId, taskId);
@@ -203,7 +241,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr, error: z.string() },
     },
     async ({ projectId, taskId, error }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       await fail(projectId, taskId, error, tokens.get(taskId));
       tokens.delete(taskId);
       return text({ ok: true });
@@ -217,7 +255,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr },
     },
     async ({ projectId }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       const p = await getProject(projectId);
       const dir = projectDir(projectId);
       const tasks = await listTasks(projectId);
@@ -249,7 +287,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, sceneId: z.string(), kind: KindSchema, params: z.record(z.string(), z.unknown()) },
     },
     async ({ projectId, sceneId, kind, params }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       await getProject(projectId);
       const cfg = await loadConfig();
       const p = providerFor(kind, cfg);
@@ -269,7 +307,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, taskId: idStr },
     },
     async ({ projectId, taskId }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       const task = (await listTasks(projectId)).find((t) => t.id === taskId);
       if (!task || task.type !== 'generate' || task.status !== 'running') return text({ error: 'not_approved' });
       const kind = KindSchema.safeParse(task.input.kind);
@@ -366,7 +404,7 @@ export function createMcpServer(
       inputSchema: { projectId: idStr, file: z.string().min(1) },
     },
     async ({ projectId, file }) => {
-      await touchHeartbeat();
+      await touchHeartbeat(session);
       const dir = projectDir(projectId);
       const abs = resolve(dir, file);
       const inside = (base: string, p: string) => {

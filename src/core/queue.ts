@@ -161,22 +161,51 @@ async function takeMutex(file: string): Promise<boolean> {
   return false;
 }
 
+/** False only when the pid surely no longer exists (EPERM means it lives under another user). */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
+/** A running task's lock is stale when it is old or its owner process (pid in the token) has exited. */
+async function lockStale(projectId: string, taskId: string): Promise<boolean> {
+  const age = await lockAgeMs(projectId, taskId);
+  if (age === null) return false;
+  if (age > STALE_LOCK_MS) return true;
+  let held = '';
+  try {
+    held = await readFile(lockFile(projectId, taskId), 'utf8');
+  } catch {
+    return false;
+  }
+  const pid = Number(/^(\d+)-/.exec(held)?.[1]);
+  return Number.isInteger(pid) && pid > 0 && pid !== process.pid && !pidAlive(pid);
+}
+
 /** A task is claimable when queued, or running with a stale lock (dead worker). */
 async function claimable(projectId: string, t: Task, runningExclusive: boolean): Promise<'fresh' | 'stale' | null> {
   if (t.status === 'queued') {
     if (EXCLUSIVE.has(t.type) && runningExclusive) return null;
     return 'fresh';
   }
-  if (t.status === 'running') {
-    const age = await lockAgeMs(projectId, t.id);
-    if (age !== null && age > STALE_LOCK_MS) return 'stale';
-  }
+  if (t.status === 'running' && (await lockStale(projectId, t.id))) return 'stale';
   return null;
 }
 
-export async function claimNext(): Promise<{ projectId: string; task: Task; token: string } | null> {
+/**
+ * Claim the oldest claimable task. With `session`, only projects bound to that chat are looked at,
+ * so a new chat never picks up another chat's (or an unopened old project's) work.
+ */
+export async function claimNext(
+  opts: { session?: string } = {},
+): Promise<{ projectId: string; task: Task; token: string } | null> {
   const candidates: { projectId: string; task: Task; running: boolean }[] = [];
   for (const project of await listProjects()) {
+    if (opts.session !== undefined && project.session !== opts.session) continue;
     const tasks = await listTasks(project.id);
     const running = tasks.some((t) => t.status === 'running' && EXCLUSIVE.has(t.type));
     for (const task of tasks) candidates.push({ projectId: project.id, task, running });
@@ -193,8 +222,7 @@ export async function claimNext(): Promise<{ projectId: string; task: Task; toke
       const m = join(tasksDir(projectId), '_exclusive.mutex');
       if (!(await takeMutex(m))) continue;
       try {
-        const age = await lockAgeMs(projectId, task.id);
-        if (age === null || age <= STALE_LOCK_MS) continue;
+        if (!(await lockStale(projectId, task.id))) continue;
         await unlink(lock).catch(() => {});
         if (!(await tryLock(lock, token))) continue;
       } finally {

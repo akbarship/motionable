@@ -1,9 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { projectDir } from '../../src/core/paths.js';
-import { createProject } from '../../src/core/store.js';
+import { bindSession, createProject, getProject } from '../../src/core/store.js';
 import { addTask, approve, claimNext, fail, finish, listTasks, progress, waitForTask } from '../../src/core/queue.js';
 
 let prev: string | undefined;
@@ -231,4 +232,36 @@ test('post-abort requeue leaves a reclaimed task alone', async () => {
   expect(await waitForTask(30, 10, ctl.signal, late)).toBeNull();
   expect((await listTasks(p))[0]!.status).toBe('running');
   expect(await readFile(lock, 'utf8')).toBe('other-owner');
+});
+
+describe('chat sessions', () => {
+  test('claimNext({session}) takes only projects bound to that chat', async () => {
+    const a = (await createProject({ name: 'A', brief: '', session: 'aaaaaaaaaaaaaaaa' })).id;
+    const b = (await createProject({ name: 'B', brief: '', session: 'bbbbbbbbbbbbbbbb' })).id;
+    await addTask(p, 'study_ref', {}); // no session: an old project
+    await addTask(b, 'study_ref', {});
+    const ta = await addTask(a, 'study_ref', {});
+    const c = await claimNext({ session: 'aaaaaaaaaaaaaaaa' });
+    expect(c!.task.id).toBe(ta.id);
+    expect(await claimNext({ session: 'aaaaaaaaaaaaaaaa' })).toBeNull();
+  });
+
+  test('bindSession moves a project to the chat that opened it', async () => {
+    await addTask(p, 'study_ref', {});
+    expect(await claimNext({ session: 'cccccccccccccccc' })).toBeNull();
+    await bindSession(p, 'cccccccccccccccc');
+    expect((await getProject(p)).session).toBe('cccccccccccccccc');
+    expect(await claimNext({ session: 'cccccccccccccccc' })).not.toBeNull();
+  });
+
+  test('a running task whose owner process exited is reclaimed at once', async () => {
+    const t = await addTask(p, 'study_ref', {});
+    await claimNext();
+    const dead = spawnSync(process.execPath, ['-e', '0']).pid!;
+    await writeFile(lockPath(t.id), `${dead}-deadbeef`);
+    const c = await claimNext();
+    expect(c!.task.id).toBe(t.id);
+    // A live owner (this process) keeps its task.
+    expect(await claimNext()).toBeNull();
+  });
 });

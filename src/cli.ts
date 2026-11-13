@@ -164,7 +164,7 @@ export async function runHf(
 
 async function main(cmd: string | undefined): Promise<void> {
   if (cmd === 'studio') {
-    const s = await startStudio();
+    const s = await startStudio({ onShutdown: () => process.exit(0) });
     console.error(s.url);
     const stop = () => void s.close().finally(() => process.exit(0));
     process.on('SIGINT', stop);

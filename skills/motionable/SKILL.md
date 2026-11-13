@@ -15,7 +15,9 @@ MCP tools come from the plugin server `motionable`. Their full names are
 
 ## Start
 
-1. Call `studio_open`. It returns `{url, projectId}`.
+1. Call `studio_open`. It returns `{url}` and opens the project list in a tab bound to this
+   chat. Only projects created or opened in that tab are worked by this loop; other chats'
+   and old unopened projects never reach `next_task` here.
 2. Print exactly two lines in Uzbek, nothing else:
    `Studio ochildi: <url>`
    `Ruxsat so'rovlari shu terminalda chiqadi. Tezroq ishlash uchun auto yoki accept-edits rejimini yoqing (yoki README'dagi allowlist: `Bash(node:*)`, Read, Write, Edit, Glob, Grep, `mcp__plugin_motionable_motionable__*` va `additionalDirectories: ["~/Motionable"]`).`
