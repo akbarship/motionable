@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8" />
+<title>O'z video montaj loyihangiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #F4F1EA;
+    --card: #FBF9F4;
+    --ink: #1E1B16;
+    --soft: #6B645A;
+    --line: #DDD6C8;
+    --coral: #C9643F;
+    --coral-soft: #F1DDD2;
+  }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--paper); }
+  body {
+    font-family: "Manrope", sans-serif;
+    color: var(--ink);
+    font-size: 13pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 22mm 20mm 18mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+  }
+  .foot {
+    margin-top: auto;
+    padding-top: 6mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    color: var(--soft);
+    border-top: 1px solid var(--line);
+  }
+  .tag {
+    font-size: 9pt;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--coral);
+    margin-bottom: 4mm;
+  }
+  h1 { font-size: 35pt; line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 6mm; }
+  h2 { font-size: 15pt; font-weight: 800; margin: 8mm 0 3mm; }
+  p { margin-bottom: 3mm; }
+  .lead { font-size: 15.5pt; line-height: 1.5; color: var(--soft); margin-bottom: 6mm; max-width: 150mm; }
+  strong { font-weight: 800; }
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.86em;
+    background: var(--coral-soft);
+    padding: 0.5pt 4pt;
+    border-radius: 3pt;
+  }
+  ul, ol { padding-left: 6mm; margin-bottom: 3mm; }
+  li { margin-bottom: 1.6mm; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 4mm;
+    padding: 5mm 6mm;
+    margin-bottom: 4mm;
+  }
+  .card h3 { font-size: 13pt; font-weight: 800; margin-bottom: 1.5mm; }
+  .card p:last-child, .card ul:last-child, .card ol:last-child { margin-bottom: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .do {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 4mm;
+    padding: 5mm 6mm;
+    margin-bottom: 4mm;
+  }
+  .do .label { font-size: 8.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #E9A58A; margin-bottom: 1.5mm; }
+  .do p { margin-bottom: 1.5mm; }
+  .do p:last-child { margin-bottom: 0; }
+  .do code { background: #3A342B; color: #F4F1EA; }
+  .link { color: var(--coral); font-weight: 600; text-decoration: none; }
+  .num {
+    width: 15mm; height: 15mm; border-radius: 50%;
+    background: var(--coral); color: #fff;
+    font-size: 19pt; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 5mm;
+  }
+  .say {
+    border-left: 3px solid var(--coral);
+    padding: 1mm 0 1mm 5mm;
+    margin: 3mm 0 4mm;
+    font-size: 13pt;
+    font-weight: 600;
+  }
+  .frames { display: flex; gap: 5mm; margin: 3mm 0 2mm; }
+  .frames img { width: 40mm; border-radius: 2.5mm; border: 1px solid var(--line); display: block; }
+  .cap { font-size: 10pt; color: var(--soft); }
+  table { width: 100%; border-collapse: collapse; font-size: 12pt; }
+  td { padding: 3mm 3mm 3mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { width: 38%; font-weight: 800; }
+  tr:last-child td { border-bottom: 0; }
+
+  /* cover */
+  .cover { justify-content: space-between; padding: 26mm 20mm 20mm; }
+  .cover h1 { font-size: 50pt; line-height: 1; margin-bottom: 8mm; }
+  .cover h1 em { font-style: normal; color: var(--coral); }
+  .cover .lead { font-size: 15pt; max-width: 135mm; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+  .steps div { background: var(--card); border: 1px solid var(--line); border-radius: 3mm; padding: 4mm; font-size: 10pt; font-weight: 600; }
+  .steps b { display: block; color: var(--coral); font-size: 15pt; font-weight: 800; margin-bottom: 1mm; }
+  .brand { font-weight: 800; font-size: 12pt; letter-spacing: -0.01em; }
+
+  /* appendix: flowing pages */
+  .appendix { padding: 0 20mm; }
+  .appendix table { width: 100%; font-size: inherit; }
+  .appendix td { padding: 0; border: 0; font-weight: inherit; width: auto; }
+  .appendix .gap td { height: 16mm; }
+  .appendix h1 { margin-bottom: 3mm; }
+  .appendix .ptitle { font-size: 12.5pt; font-weight: 800; margin: 8mm 0 1mm; break-after: avoid; }
+  .appendix .pfile { font-size: 9pt; margin-bottom: 3mm; break-after: avoid; }
+  pre {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 8.4pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 3mm;
+    padding: 5mm 6mm;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Cover -->
+<section class="page cover">
+  <div class="brand">Motionable</div>
+  <div>
+    <div class="tag">Qo'llanma</div>
+    <h1>O'z video montaj <em>loyihangiz</em></h1>
+    <p class="lead">Claude sizning uslubingizda video yasaydi. Buning uchun dasturchi bo'lish shart emas. 4 ta tayyor prompt va 30 daqiqa vaqt kerak.</p>
+  </div>
+  <div>
+    <div class="steps">
+      <div><b>1</b>O'rnatish</div>
+      <div><b>2</b>O'z uslubingiz</div>
+      <div><b>3</b>Birinchi video</div>
+      <div><b>4</b>Saboqlar</div>
+    </div>
+    <p class="cap" style="margin-top:6mm">Bepul va ochiq. github.com/akbarship/motionable</p>
+  </div>
+</section>
+
+<!-- 2. How it works -->
+<section class="page">
+  <div class="tag">Qanday ishlaydi</div>
+  <h1>Bitta papka, to'rtta qadam</h1>
+  <p class="lead">Kompyuteringizda oddiy papka bo'ladi. Claude shu papka ichida ishlaydi: uslubingizni yozib oladi, video yasaydi va sizning izohlaringizni eslab qoladi.</p>
+
+  <svg viewBox="0 0 680 190" width="100%" style="margin: 2mm 0 5mm">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#C9643F"/></marker>
+    </defs>
+    <g font-family="Manrope, sans-serif" text-anchor="middle">
+      <g>
+        <rect x="4" y="30" width="140" height="78" rx="14" fill="#FBF9F4" stroke="#DDD6C8"/>
+        <text x="74" y="64" font-size="17" font-weight="800" fill="#1E1B16">Namuna</text>
+        <text x="74" y="88" font-size="12" fill="#6B645A">yoqqan videolar</text>
+      </g>
+      <g>
+        <rect x="182" y="30" width="140" height="78" rx="14" fill="#FBF9F4" stroke="#DDD6C8"/>
+        <text x="252" y="64" font-size="17" font-weight="800" fill="#1E1B16">Uslub</text>
+        <text x="252" y="88" font-size="12" fill="#6B645A">style.md fayli</text>
+      </g>
+      <g>
+        <rect x="360" y="30" width="140" height="78" rx="14" fill="#1E1B16"/>
+        <text x="430" y="64" font-size="17" font-weight="800" fill="#F4F1EA">Video</text>
+        <text x="430" y="88" font-size="12" fill="#CFC8BA">tayyor MP4</text>
+      </g>
+      <g>
+        <rect x="538" y="30" width="138" height="78" rx="14" fill="#F1DDD2" stroke="#C9643F"/>
+        <text x="607" y="64" font-size="17" font-weight="800" fill="#1E1B16">Saboq</text>
+        <text x="607" y="88" font-size="12" fill="#6B645A">lessons.md fayli</text>
+      </g>
+      <path d="M148 69H176" stroke="#C9643F" stroke-width="2.5" marker-end="url(#a)"/>
+      <path d="M326 69H354" stroke="#C9643F" stroke-width="2.5" marker-end="url(#a)"/>
+      <path d="M504 69H532" stroke="#C9643F" stroke-width="2.5" marker-end="url(#a)"/>
+      <path d="M607 112V150H430V116" fill="none" stroke="#C9643F" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#a)"/>
+      <text x="518" y="174" font-size="12" font-weight="600" fill="#C9643F">keyingi video shu saboqlar bilan yasaladi</text>
+    </g>
+  </svg>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Uslub bir marta aniqlanadi</h3>
+      <p>Yoqqan 2 yoki 3 ta videoni berasiz. Claude ulardan rang, shrift va ritmni o'rganib, <code>style.md</code> fayliga yozadi.</p>
+    </div>
+    <div class="card">
+      <h3>Video sizning tasdig'ingiz bilan</h3>
+      <p>Avval reja, keyin kadrlar, oxirida tayyor fayl. Har bosqichda "ha" yoki "o'zgartir" deysiz.</p>
+    </div>
+    <div class="card">
+      <h3>Saboqlar to'planadi</h3>
+      <p>"Matn doim kattaroq bo'lsin" desangiz, bu <code>lessons.md</code> ga yoziladi. Ikkinchi marta aytish shart emas.</p>
+    </div>
+    <div class="card">
+      <h3>Hammasi sizniki</h3>
+      <p>Fayllar oddiy matn. Xohlagan payt ochib, o'zingiz o'zgartirasiz. Hech narsa yashirin emas.</p>
+    </div>
+  </div>
+
+  <p class="cap">Video qanday paydo bo'ladi: Claude videoni veb sahifa sifatida yozadi, HyperFrames nomli bepul dastur uni MP4 faylga aylantiradi.</p>
+  <div class="foot"><span>Motionable qo'llanma</span><span>2</span></div>
+</section>
+
+<!-- 3. What you need -->
+<section class="page">
+  <div class="tag">Tayyorgarlik</div>
+  <h1>Nima kerak</h1>
+
+  <div class="card">
+    <table>
+      <tr><td>Kompyuter</td><td>Windows, macOS yoki Linux. Telefon to'g'ri kelmaydi.</td></tr>
+      <tr><td>Claude ilovasi</td><td>Kompyuter uchun Claude ilovasi: <span class="link">claude.com/download</span></td></tr>
+      <tr><td>Claude obunasi</td><td>Pullik obuna (Pro yoki undan yuqori). Bepul tarifda papka bilan ishlash yo'q.</td></tr>
+      <tr><td>Namunalar</td><td>Sizga yoqqan 2 yoki 3 ta qisqa video fayl. Bo'lmasa ham boshlasa bo'ladi.</td></tr>
+    </table>
+  </div>
+
+  <h2>Boshlashdan oldin 3 ta ish</h2>
+  <ol>
+    <li>Claude ilovasini o'rnating va akkauntingizga kiring.</li>
+    <li>Kompyuterda bo'sh papka yarating. Masalan: <code>video-loyiha</code>.</li>
+    <li>Ilovada <strong>Code</strong> bo'limini oching va shu papkani tanlang.</li>
+  </ol>
+
+  <div class="do">
+    <div class="label">Bilib qo'ying</div>
+    <p>Claude kompyuterda biror ish qilishdan oldin ruxsat so'raydi. Bu oddiy holat. Buyruq shu papka ichida bo'lsa, ruxsat bering.</p>
+    <p>Boshqa dasturlar (Node.js, FFmpeg, HyperFrames) kerak bo'ladi, lekin ularni Claude o'zi o'rnatadi.</p>
+  </div>
+
+  <div class="card">
+    <h3>Promptlarni qayerdan olasiz</h3>
+    <p>Shu qo'llanma oxirida to'liq berilgan. Nusxalash uchun qulay manzil: <span class="link">github.com/akbarship/motionable/tree/main/prompts</span></p>
+  </div>
+
+  <div class="foot"><span>Motionable qo'llanma</span><span>3</span></div>
+</section>
+
+<!-- 4. Step 1 -->
+<section class="page">
+  <div class="num">1</div>
+  <div class="tag">Birinchi qadam, bir marta bajariladi</div>
+  <h1>O'rnatish</h1>
+  <p class="lead">Claude kerakli dasturlarni o'rnatadi, papkalarni yaratadi va siz bilan tanishadi.</p>
+
+  <div class="do">
+    <div class="label">Nima qilasiz</div>
+    <p><code>1-ornatish.md</code> promptini to'liq nusxalab, chatga tashlang.</p>
+  </div>
+
+  <h2>Nima bo'ladi</h2>
+  <ol>
+    <li>Claude kompyuteringizni tekshiradi va yetishmagan dasturlarni o'rnatadi.</li>
+    <li>Uchta papka paydo bo'ladi: <code>refs</code> (namunalar), <code>footage</code> (sizning kadrlaringiz), <code>videos</code> (tayyor videolar).</li>
+    <li>Claude sizga 6 ta savol beradi: mavzu, til, davomiylik, kadrda kim bor, nima yoqadi, nima yoqmaydi.</li>
+    <li>Javoblaringiz <code>CLAUDE.md</code> fayliga yoziladi. Bu Claude har safar o'qiydigan qoidalar varag'i.</li>
+  </ol>
+
+  <h2>Tayyor bo'lganini qanday bilasiz</h2>
+  <p>Papkada <code>CLAUDE.md</code>, <code>style.md</code>, <code>lessons.md</code> fayllari va uchta papka ko'rinadi. Claude keyingi qadamni aytadi.</p>
+
+  <div class="card">
+    <h3>Keyin</h3>
+    <p>Yoqqan videolaringizni <code>refs</code> papkasiga tashlang va <strong>yangi chat oching</strong>. Yangi chat shart: o'rnatilgan ko'nikmalar faqat yangi chatda ishga tushadi.</p>
+  </div>
+
+  <div class="foot"><span>Motionable qo'llanma</span><span>4</span></div>
+</section>
+
+<!-- 5. Step 2 -->
+<section class="page">
+  <div class="num">2</div>
+  <div class="tag">Ikkinchi qadam, bir marta bajariladi</div>
+  <h1>O'z uslubingiz</h1>
+  <p class="lead">Claude namunalaringizni ko'rib chiqadi va uslubingizni aniq raqamlar bilan yozib oladi.</p>
+
+  <div class="do">
+    <div class="label">Nima qilasiz</div>
+    <p>Namunaviy videolar <code>refs</code> papkasida ekanini tekshiring.</p>
+    <p>Yangi chatda <code>2-uslub.md</code> promptini tashlang.</p>
+  </div>
+
+  <h2>Nima bo'ladi</h2>
+  <ol>
+    <li>Claude har videodan kadrlar oladi va ularga qaraydi.</li>
+    <li><code>style.md</code> fayli yoziladi: ranglar, shriftlar, matn o'lchami, subtitr, ritm, harakat.</li>
+    <li>Claude bitta sinov kadr yasab ko'rsatadi va so'raydi: "Shu sizning uslubingizmi?"</li>
+    <li>Yoqmagan joyini ayting. Claude uslubni tuzatadi va kadrni yangilaydi.</li>
+  </ol>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Namuna yo'qmi?</h3>
+      <p>"Namunasiz" deb yozing. Claude 5 ta savol beradi va uslubni javoblaringizdan tuzadi.</p>
+    </div>
+    <div class="card">
+      <h3>Namunani qanday tanlash kerak</h3>
+      <p>Bir xil ko'rinishdagi videolarni tanlang. Uch xil uslub aralashsa, natija ham aralash chiqadi.</p>
+    </div>
+  </div>
+
+  <p class="cap">Claude namunadan faqat uslubni oladi. Birovning logotipi, yuzi, matni yoki musiqasi ko'chirilmaydi.</p>
+  <div class="foot"><span>Motionable qo'llanma</span><span>5</span></div>
+</section>
+
+<!-- 6. Step 3 -->
+<section class="page">
+  <div class="num">3</div>
+  <div class="tag">Uchinchi qadam, har video uchun</div>
+  <h1>Video yasash</h1>
+  <p class="lead">Mavzuni yozasiz, qolganini Claude bajaradi. Har video yangi chatda.</p>
+
+  <div class="do">
+    <div class="label">Nima qilasiz</div>
+    <p><code>3-video.md</code> promptidagi kvadrat qavslarni to'ldiring: mavzu, davomiylik, kadr va ovoz.</p>
+    <p>O'z kadringiz yoki ovozingiz bo'lsa, oldin <code>footage</code> papkasiga tashlang.</p>
+  </div>
+
+  <h2>Nima bo'ladi</h2>
+  <ol>
+    <li><strong>Reja.</strong> Claude har sahnani yozadi: qaysi matn, ekranda nima, necha soniya. Siz tasdiqlaysiz.</li>
+    <li><strong>Kadrlar.</strong> Har sahnadan bitta rasm ko'rasiz. Shu yerda tuzatish eng arzon.</li>
+    <li><strong>Tuzatish.</strong> Oddiy tilda yozing: "ikkinchi sahnada matn kattaroq bo'lsin".</li>
+    <li><strong>Render.</strong> "Render" deb yozing. Tayyor <code>out.mp4</code> fayli video papkasida paydo bo'ladi.</li>
+  </ol>
+
+  <div class="frames">
+    <img src="img/kadr-1.jpg" alt="" />
+    <img src="img/kadr-2.jpg" alt="" />
+    <img src="img/kadr-3.jpg" alt="" />
+    <div style="flex:1; align-self:center">
+      <p class="cap">Misol: shu promptlar bilan yasalgan 9 soniyali sinov videodan uchta kadr. Sizning videongiz sizning uslubingizda chiqadi.</p>
+    </div>
+  </div>
+
+  <p class="cap">Kadr va ovoz bo'lmasa ham video chiqadi: matn va grafika bilan.</p>
+  <div class="foot"><span>Motionable qo'llanma</span><span>6</span></div>
+</section>
+
+<!-- 7. Step 4 -->
+<section class="page">
+  <div class="num">4</div>
+  <div class="tag">To'rtinchi qadam, kerak bo'lganda</div>
+  <h1>Saboqlar</h1>
+  <p class="lead">Bir marta aytgan izohingiz keyingi barcha videolarda ishlaydi. Loyiha shu tarzda sizga moslashadi.</p>
+
+  <div class="do">
+    <div class="label">Nima qilasiz</div>
+    <p><code>4-saboq.md</code> promptiga izohingizni yozib, chatga tashlang.</p>
+  </div>
+
+  <h2>Qaysi izoh saboq bo'ladi</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Saqlanadi</h3>
+      <p class="say">"Birinchi kadrda doim sarlavha turgan bo'lsin."</p>
+      <p>Bu har videoga tegishli qoida.</p>
+    </div>
+    <div class="card">
+      <h3>Saqlanmaydi</h3>
+      <p class="say">"Shu videoda uchinchi so'zni qizil qiling."</p>
+      <p>Bu bir martalik tuzatish.</p>
+    </div>
+  </div>
+
+  <h2>Nima bo'ladi</h2>
+  <ul>
+    <li>Umumiy qoida <code>lessons.md</code> ga bitta qisqa qator bo'lib yoziladi.</li>
+    <li>Rang, shrift yoki o'lcham haqidagi izoh <code>style.md</code> ga yoziladi.</li>
+    <li>O'xshash saboq bo'lsa, yangisi qo'shilmaydi, eskisi yangilanadi.</li>
+    <li>Claude qaysi faylga nima yozganini ko'rsatadi.</li>
+  </ul>
+
+  <div class="card">
+    <h3>Noto'g'ri saboqni o'chirish</h3>
+    <p><code>lessons.md</code> faylini oching va o'sha qatorni o'chiring. Yoki Claudega yozing: "shu saboqni o'chiring".</p>
+  </div>
+
+  <div class="foot"><span>Motionable qo'llanma</span><span>7</span></div>
+</section>
+
+<!-- 8. Tokens + customise -->
+<section class="page">
+  <div class="tag">Tejash va moslash</div>
+  <h1>Limitni tejash</h1>
+  <p class="lead">Claude obunasida foydalanish chegarasi bor. Shu odatlar bilan bitta obuna ko'proq videoga yetadi.</p>
+
+  <div class="card">
+    <table>
+      <tr><td>Har video yangi chatda</td><td>Uzun chatda Claude eski yozishmalarni qayta o'qiydi. Yangi chat arzonroq.</td></tr>
+      <tr><td>Kadrda tuzating</td><td>Xatoni rasmda ko'rib tuzatish, tayyor videoni qayta yasashdan ancha arzon.</td></tr>
+      <tr><td>Aniq yozing</td><td>"Yaxshiroq qiling" o'rniga "sarlavha kattaroq, fon ochroq" deb yozing.</td></tr>
+      <tr><td>Fayllar qisqa bo'lsin</td><td><code>CLAUDE.md</code> 60 qator, <code>lessons.md</code> 40 qator atrofida qolsin.</td></tr>
+    </table>
+  </div>
+
+  <h2>Loyihani o'zingizga moslang</h2>
+  <p>Bu tayyor dastur emas, sizning loyihangiz. Uchta faylni xohlagancha o'zgartiring:</p>
+  <ul>
+    <li><code>CLAUDE.md</code>: ish tartibi. Masalan, "reja so'ramang, darhol kadrlarni ko'rsating" deb yozsangiz, Claude shunday ishlaydi.</li>
+    <li><code>style.md</code>: uslub. Yangi rang yoki shrift kerak bo'lsa, shu yerda almashtiring.</li>
+    <li><code>lessons.md</code>: saboqlar. Eskirganini o'chiring.</li>
+  </ul>
+
+  <div class="do">
+    <div class="label">Pullik xizmatlar</div>
+    <p>Bu yo'lda hech qanday qo'shimcha kalit yoki to'lov shart emas. AI rasm, video yoki ovoz qo'shmoqchi bo'lsangiz, Claude avval sizdan ruxsat so'raydi.</p>
+  </div>
+
+  <div class="foot"><span>Motionable qo'llanma</span><span>8</span></div>
+</section>
+
+<!-- 9. Troubleshooting -->
+<section class="page">
+  <div class="tag">Yordam</div>
+  <h1>Biror narsa ishlamasa</h1>
+  <p class="lead">Ko'p muammo bitta yo'l bilan hal bo'ladi: xatoni Claudega ko'rsating va "tuzating" deb yozing.</p>
+
+  <div class="card">
+    <table>
+      <tr><td>Claude dastur o'rnata olmadi</td><td>U sizga havola va qisqa ko'rsatma beradi. O'rnatib, "tayyor" deb yozing.</td></tr>
+      <tr><td>Claude uslubga amal qilmayapti</td><td>Yangi chat oching. Birinchi qadamdan keyin yangi chat ochilmagan bo'lishi mumkin.</td></tr>
+      <tr><td>Kadrda matn kesilgan</td><td>Qaysi sahna ekanini ayting. Umumiy muammo bo'lsa, saboq sifatida saqlang.</td></tr>
+      <tr><td>Subtitrda so'zlar xato</td><td>Kompyuter o'zbek nutqini doim ham to'g'ri eshitmaydi. To'g'ri matnni chatga yozing, Claude almashtiradi.</td></tr>
+      <tr><td>Uslub yoqmay qoldi</td><td>Yangi namunalar bilan ikkinchi qadamni qayta bajaring.</td></tr>
+      <tr><td>Limit tez tugayapti</td><td>8-betdagi odatlarni tekshiring. Eng ko'p yordam beradigani: har video yangi chatda.</td></tr>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h3>Bir marta</h3><p>1. O'rnatish<br>2. O'z uslubingiz</p></div>
+    <div class="card"><h3>Har safar</h3><p>3. Video yasash<br>4. Saboq, kerak bo'lsa</p></div>
+  </div>
+
+  <p class="cap">Savol va takliflar: github.com/akbarship/motionable sahifasida "Issues" bo'limi.</p>
+  <div class="foot"><span>Motionable qo'llanma</span><span>9</span></div>
+</section>
+
+<!-- Appendix -->
+<section class="appendix">
+<table><thead class="gap"><tr><td></td></tr></thead><tfoot class="gap"><tr><td></td></tr></tfoot><tbody><tr><td>
+  <div class="tag">Ilova</div>
+  <h1>Promptlar</h1>
+  <p>Nusxalash uchun qulay manzil: <span class="link">github.com/akbarship/motionable/tree/main/prompts</span></p>
+
+  <p class="ptitle">1. O'rnatish</p>
+  <p class="pfile cap">prompts/1-ornatish.md</p>
+  <pre>{{P1}}</pre>
+
+  <p class="ptitle">2. O'z uslubingiz</p>
+  <p class="pfile cap">prompts/2-uslub.md</p>
+  <pre>{{P2}}</pre>
+
+  <p class="ptitle">3. Video yasash</p>
+  <p class="pfile cap">prompts/3-video.md</p>
+  <pre>{{P3}}</pre>
+
+  <p class="ptitle">4. Saboq</p>
+  <p class="pfile cap">prompts/4-saboq.md</p>
+  <pre>{{P4}}</pre>
+</td></tr></tbody></table>
+</section>
+
+</body>
+</html>
