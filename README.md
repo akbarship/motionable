@@ -1,4 +1,8 @@
-# Motionable
+# Motionable (plagin)
+
+> Bu `plugin` branchi: Claude Code plagini (Studio, MCP server, agentlar). Yangi va yengilroq yo'l `main` branchida: [PDF qo'llanma va 4 ta prompt](https://github.com/akbarship/motionable).
+>
+> This is the `plugin` branch: the Claude Code plugin (Studio, MCP server, agents). The newer, lighter path lives on `main`: [a PDF guide and 4 prompts](https://github.com/akbarship/motionable).
 
 ## O'zbekcha
 
@@ -11,7 +15,7 @@ Avval Node.js 22 yoki yangisini o'rnating: https://nodejs.org. Keyin repozitoriy
 Linux / macOS:
 
 ```bash
-git clone https://github.com/akbarship/motionable.git
+git clone -b plugin https://github.com/akbarship/motionable.git
 cd motionable
 bash scripts/install.sh
 ```
@@ -19,7 +23,7 @@ bash scripts/install.sh
 Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/akbarship/motionable.git
+git clone -b plugin https://github.com/akbarship/motionable.git
 cd motionable
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
@@ -110,7 +114,7 @@ Install Node.js 22 or newer first: https://nodejs.org. Then clone this repo and 
 Linux / macOS:
 
 ```bash
-git clone https://github.com/akbarship/motionable.git
+git clone -b plugin https://github.com/akbarship/motionable.git
 cd motionable
 bash scripts/install.sh
 ```
@@ -118,7 +122,7 @@ bash scripts/install.sh
 Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/akbarship/motionable.git
+git clone -b plugin https://github.com/akbarship/motionable.git
 cd motionable
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
